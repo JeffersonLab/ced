@@ -11,13 +11,16 @@ import edu.cnu.ced.geometry.cache.GeometryCacheCoordinator;
 public final class GeometryService {
 
 	private final CTOFGeometry ctof = new CTOFGeometry();
+	private final FTCALGeometry ftcal = new FTCALGeometry();
 
 	public CTOFGeometry ctof() {
 		return ctof;
 	}
 
+	public FTCALGeometry ftcal() { return ftcal; }
+
 	public GeometryStatus initialize(String variation) {
-		List<CacheableGeometry> geometries = List.of(ctof);
+		List<CacheableGeometry> geometries = List.of(ctof, ftcal);
 		try {
 			List<String> cached = new GeometryCacheCoordinator(
 					GeometryCacheCoordinator.defaultCachePath(), CedVersion.VERSION, variation)
