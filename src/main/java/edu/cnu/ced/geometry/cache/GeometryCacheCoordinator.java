@@ -36,7 +36,7 @@ public final class GeometryCacheCoordinator {
 				if (cache.read(geometry)) {
 					cached.add(geometry.name());
 				} else {
-					geometry.initializeFromSource();
+					geometry.initializeFromSource(geometryVariation);
 					cache.write(geometry);
 				}
 			}

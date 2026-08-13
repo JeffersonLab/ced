@@ -42,6 +42,14 @@ class GeometryCacheCoordinatorTest {
 		assertEquals(22, changed.value);
 	}
 
+	@Test
+	void passesVariationToSourceInitialization() throws Exception {
+		Path path = temp.resolve("variation.sqlite");
+		VariationGeometry geometry = new VariationGeometry();
+		new GeometryCacheCoordinator(path, "2.0", "special").initialize(List.of(geometry));
+		assertEquals("special", geometry.variation);
+	}
+
 	private static final class FakeGeometry implements CacheableGeometry {
 		private int value;
 		private int sourceLoads;
@@ -51,5 +59,15 @@ class GeometryCacheCoordinatorTest {
 		@Override public void initializeFromSource() { sourceLoads++; }
 		@Override public void read(DataInput input) throws IOException { value = input.readInt(); }
 		@Override public void write(DataOutput output) throws IOException { output.writeInt(value); }
+	}
+
+	private static final class VariationGeometry implements CacheableGeometry {
+		private String variation;
+		@Override public String name() { return "variation"; }
+		@Override public int formatVersion() { return 1; }
+		@Override public void initializeFromSource() { variation = "default"; }
+		@Override public void initializeFromSource(String value) { variation = value; }
+		@Override public void read(DataInput input) { }
+		@Override public void write(DataOutput output) throws IOException { output.writeInt(1); }
 	}
 }

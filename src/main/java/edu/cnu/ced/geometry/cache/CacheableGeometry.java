@@ -13,6 +13,11 @@ public interface CacheableGeometry {
 
 	void initializeFromSource();
 
+	/** Initialize using a named geometry variation when the source supports it. */
+	default void initializeFromSource(String variation) {
+		initializeFromSource();
+	}
+
 	void read(DataInput input) throws IOException;
 
 	void write(DataOutput output) throws IOException;
