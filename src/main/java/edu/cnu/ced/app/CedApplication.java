@@ -22,6 +22,7 @@ public final class CedApplication extends BaseMDIApplication {
 	public static final String BACKGROUND_RESOURCE = "images/cnu.png";
 
 	private static CedApplication instance;
+	private static CedLaunchOptions launchOptions = CedLaunchOptions.parse(null);
 
 	private LogView logView;
 	private JsonView jsonView;
@@ -39,6 +40,11 @@ public final class CedApplication extends BaseMDIApplication {
 			instance = new CedApplication();
 		}
 		return instance;
+	}
+
+	/** @return immutable options selected for this application launch */
+	public static CedLaunchOptions getLaunchOptions() {
+		return launchOptions;
 	}
 
 	@Override
@@ -59,6 +65,9 @@ public final class CedApplication extends BaseMDIApplication {
 
 		Log.getInstance().config("CED MDI application shell initialized with "
 				+ VIRTUAL_DESKTOP_COLUMNS + " virtual desktop columns.");
+		Log.getInstance().config("CED launch configuration: geometry variation="
+				+ launchOptions.geometryVariation() + ", 3D=" + launchOptions.enable3D()
+				+ ", experimental=" + launchOptions.experimental());
 	}
 
 	@Override
@@ -69,6 +78,7 @@ public final class CedApplication extends BaseMDIApplication {
 
 	/** Launches the MDI application on the Swing event-dispatch thread. */
 	public static void main(String[] args) {
+		launchOptions = CedLaunchOptions.parse(args);
 		BaseMDIApplication.launch(CedApplication::getInstance);
 	}
 }
