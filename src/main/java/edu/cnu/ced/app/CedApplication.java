@@ -9,12 +9,14 @@ import javax.swing.JMenu;
 import javax.swing.JMenuItem;
 import javax.swing.JOptionPane;
 import javax.swing.SwingWorker;
+import javax.swing.Timer;
 
 import edu.cnu.ced.CedVersion;
 import edu.cnu.ced.event.EventNavigator;
 import edu.cnu.ced.event.EventSource;
 import edu.cnu.ced.event.EventStore;
 import edu.cnu.ced.event.HipoEventSource;
+import edu.cnu.ced.geometry.GeometryService;
 import edu.cnu.ced.magfield.MagneticFieldService;
 import edu.cnu.ced.resources.Clas12ResourceLocator;
 import edu.cnu.ced.resources.Clas12Resources;
@@ -48,7 +50,9 @@ public final class CedApplication extends BaseMDIApplication {
 
 	private EventNavigator eventNavigator;
 	private MagneticFieldService magneticFieldService;
+	private GeometryService geometryService;
 	private ExecutorService initializationExecutor;
+	private boolean servicesStarted;
 	private LogView logView;
 	private JsonView jsonView;
 	private CurrentEventView currentEventView;
@@ -96,6 +100,7 @@ public final class CedApplication extends BaseMDIApplication {
 		// subclass field initializers run. Construct application services here.
 		eventNavigator = new EventNavigator(new EventStore());
 		magneticFieldService = new MagneticFieldService();
+		geometryService = new GeometryService();
 		initializationExecutor = Executors.newSingleThreadExecutor(runnable -> {
 			Thread thread = new Thread(runnable, "ced-initialization");
 			thread.setDaemon(true);
@@ -106,13 +111,33 @@ public final class CedApplication extends BaseMDIApplication {
         jsonView = new JsonView();
 		currentEventView = new CurrentEventView(eventNavigator);
 		initializeClas12Resources();
-		initializeMagneticFields();
 
 		Log.getInstance().config("CED MDI application shell initialized with "
 				+ VIRTUAL_DESKTOP_COLUMNS + " virtual desktop columns.");
 		Log.getInstance().config("CED launch configuration: geometry variation="
 				+ launchOptions.geometryVariation() + ", 3D=" + launchOptions.enable3D()
 				+ ", experimental=" + launchOptions.experimental());
+	}
+
+	@Override
+	protected void onVirtualDesktopReady() {
+		// Let MDI complete and paint its initial hierarchy before starting heavy
+		// coatjava I/O. The one-shot timer deliberately crosses a native paint/event
+		// boundary; invokeLater alone remains in the same saturated startup queue.
+		super.onVirtualDesktopReady();
+		Timer startupBarrier = new Timer(1000, event -> startApplicationServices());
+		startupBarrier.setRepeats(false);
+		startupBarrier.start();
+	}
+
+	private void startApplicationServices() {
+		if (servicesStarted) {
+			return;
+		}
+		servicesStarted = true;
+		Log.getInstance().config("Starting background CED services after initial paint");
+		initializeMagneticFields();
+		initializeGeometry();
 	}
 
 	private void addCedFileActions() {
@@ -165,14 +190,38 @@ public final class CedApplication extends BaseMDIApplication {
 	}
 
 	private void initializeMagneticFields() {
+		long started = System.nanoTime();
 		magneticFieldService.initializeAsync(initializationExecutor).thenAccept(status -> {
+			long elapsed = elapsedMillis(started);
 			if (status.initialized()) {
 				Log.getInstance().config("Magnetic fields: " + status.description()
-						+ " [torus=" + status.torusMap() + ", solenoid=" + status.solenoidMap() + "]");
+						+ " [torus=" + status.torusMap() + ", solenoid=" + status.solenoidMap()
+						+ ", " + elapsed + " ms]");
 			} else {
 				Log.getInstance().warning("Magnetic fields unavailable: " + status.error());
 			}
 		});
+	}
+
+	private void initializeGeometry() {
+		long started = System.nanoTime();
+		java.util.concurrent.CompletableFuture
+				.supplyAsync(() -> geometryService.initialize(launchOptions.geometryVariation()),
+						initializationExecutor)
+				.thenAccept(status -> {
+					long elapsed = elapsedMillis(started);
+					if (status.initialized()) {
+						Log.getInstance().config("Geometry initialized [cache="
+								+ status.cachedDetectors() + ", source=" + status.sourceDetectors()
+								+ ", " + elapsed + " ms]");
+					} else {
+						Log.getInstance().warning("Geometry unavailable: " + status.error());
+					}
+				});
+	}
+
+	private static long elapsedMillis(long started) {
+		return java.util.concurrent.TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - started);
 	}
 
 	@Override

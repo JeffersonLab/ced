@@ -9,7 +9,7 @@ import java.util.List;
 /** Coordinates cold/source and warm/cache detector initialization. */
 public final class GeometryCacheCoordinator {
 
-	private static final String CACHE_FILE = "geometry-cache.sqlite";
+	private static final String CACHE_FILE = "mdi-geometry-cache.sqlite";
 	private final Path cachePath;
 	private final String applicationVersion;
 	private final String geometryVariation;
