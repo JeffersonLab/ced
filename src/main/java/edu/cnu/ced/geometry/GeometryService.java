@@ -20,6 +20,7 @@ public final class GeometryService {
 	private final BMTGeometry bmt = new BMTGeometry();
 	private final DCGeometry dc = new DCGeometry();
 	private final FMTGeometry fmt = new FMTGeometry();
+	private final AlertGeometry alert = new AlertGeometry();
 
 	public CTOFGeometry ctof() {
 		return ctof;
@@ -37,9 +38,10 @@ public final class GeometryService {
 	public BMTGeometry bmt() { return bmt; }
 	public DCGeometry dc() { return dc; }
 	public FMTGeometry fmt() { return fmt; }
+	public AlertGeometry alert() { return alert; }
 
 	public GeometryStatus initialize(String variation) {
-		List<CacheableGeometry> geometries = List.of(ctof, ftcal, cnd, ftof, pcal, ec, bst, bmt, dc, fmt);
+		List<CacheableGeometry> geometries = List.of(ctof, ftcal, cnd, ftof, pcal, ec, bst, bmt, dc, fmt, alert);
 		try {
 			List<String> cached = new GeometryCacheCoordinator(
 					GeometryCacheCoordinator.defaultCachePath(), CedVersion.VERSION, variation)
