@@ -1,6 +1,10 @@
 package edu.cnu.ced.app;
 
+import java.io.IOException;
+
 import edu.cnu.ced.CedVersion;
+import edu.cnu.ced.resources.Clas12ResourceLocator;
+import edu.cnu.ced.resources.Clas12Resources;
 import edu.cnu.mdi.app.BaseMDIApplication;
 import edu.cnu.mdi.log.Log;
 import edu.cnu.mdi.util.PropertyUtils;
@@ -26,6 +30,7 @@ public final class CedApplication extends BaseMDIApplication {
 
 	private LogView logView;
 	private JsonView jsonView;
+	private Clas12Resources clas12Resources;
 
 	private CedApplication() {
 		super(PropertyUtils.TITLE, CedVersion.title(),
@@ -47,6 +52,11 @@ public final class CedApplication extends BaseMDIApplication {
 		return launchOptions;
 	}
 
+	/** @return validated CLAS12 resources, or {@code null} when discovery failed */
+	public Clas12Resources getClas12Resources() {
+		return clas12Resources;
+	}
+
 	@Override
 	protected String getApplicationId() {
 		return APPLICATION_ID;
@@ -62,12 +72,23 @@ public final class CedApplication extends BaseMDIApplication {
 		logView = new LogView();
 
         jsonView = new JsonView();
+		initializeClas12Resources();
 
 		Log.getInstance().config("CED MDI application shell initialized with "
 				+ VIRTUAL_DESKTOP_COLUMNS + " virtual desktop columns.");
 		Log.getInstance().config("CED launch configuration: geometry variation="
 				+ launchOptions.geometryVariation() + ", 3D=" + launchOptions.enable3D()
 				+ ", experimental=" + launchOptions.experimental());
+	}
+
+	private void initializeClas12Resources() {
+		try {
+			clas12Resources = Clas12ResourceLocator.locate();
+			System.setProperty("CLAS12DIR", clas12Resources.root().toString());
+			Log.getInstance().config("CLAS12 resources: " + clas12Resources.root());
+		} catch (IOException exception) {
+			Log.getInstance().warning(exception.getMessage());
+		}
 	}
 
 	@Override
