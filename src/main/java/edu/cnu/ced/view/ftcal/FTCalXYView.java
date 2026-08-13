@@ -92,6 +92,7 @@ public final class FTCalXYView extends CedXYView {
 				g.drawPolygon(polygon);
 			}
 			if (!accumulated && isDisplayed(CedDisplayOption.RECON_HITS)) drawReconHits(g, container);
+			drawXYAxes(g, container);
 		} finally {
 			g.dispose();
 		}
