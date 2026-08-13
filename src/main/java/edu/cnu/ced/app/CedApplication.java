@@ -17,6 +17,7 @@ import edu.cnu.ced.geometry.GeometryService;
 import edu.cnu.ced.magfield.MagneticFieldService;
 import edu.cnu.ced.resources.Clas12Resources;
 import edu.cnu.ced.view.CurrentEventView;
+import edu.cnu.ced.view.ftcal.FTCalXYView;
 import edu.cnu.mdi.app.BaseMDIApplication;
 import edu.cnu.mdi.app.StartupInfo;
 import edu.cnu.mdi.app.StartupWindow;
@@ -29,6 +30,8 @@ import edu.cnu.mdi.ui.menu.MenuId;
 import edu.cnu.mdi.util.PropertyUtils;
 import edu.cnu.mdi.view.JsonView;
 import edu.cnu.mdi.view.LogView;
+import edu.cnu.mdi.view.ViewConfiguration;
+import edu.cnu.mdi.view.ViewManager;
 import edu.cnu.mdi.view.VirtualView;
 
 /** Initial MDI application shell for CED 2.0. */
@@ -51,6 +54,7 @@ public final class CedApplication extends BaseMDIApplication {
 	private static final MenuId OPTIONS_MENU_ID = new MenuId("ced.options");
 
 	private EventNavigator eventNavigator;
+	private EventStore eventStore;
 	private MagneticFieldService magneticFieldService;
 	private GeometryService geometryService;
 	private LogView logView;
@@ -132,7 +136,8 @@ public final class CedApplication extends BaseMDIApplication {
 	protected void addInitialViews() {
 		// BaseMDIApplication invokes this callback from its constructor, before
 		// subclass field initializers run. Construct application services here.
-		eventNavigator = new EventNavigator(new EventStore());
+		eventStore = new EventStore();
+		eventNavigator = new EventNavigator(eventStore);
 		if (bootstrap != null) {
 			magneticFieldService = bootstrap.magneticFields();
 			geometryService = bootstrap.geometry();
@@ -145,6 +150,9 @@ public final class CedApplication extends BaseMDIApplication {
 
         jsonView = new JsonView();
 		currentEventView = new CurrentEventView(eventNavigator);
+		ViewManager.getInstance().addConfiguration(ViewConfiguration.lazy(
+				"FTCal XY", () -> new FTCalXYView(geometryService.ftcal(), eventStore),
+				8, 0, 0, VirtualView.CENTER));
 		Log.getInstance().config("CED MDI application shell initialized with "
 				+ VIRTUAL_DESKTOP_COLUMNS + " virtual desktop columns.");
 		Log.getInstance().config("CED launch configuration: geometry variation="
