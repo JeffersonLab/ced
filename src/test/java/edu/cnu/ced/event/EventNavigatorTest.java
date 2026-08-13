@@ -41,6 +41,20 @@ class EventNavigatorTest {
 		assertEquals(List.of(1, 2, 1, 3, 0), observed);
 	}
 
+	@Test
+	void scanPublishesOnlyItsFinalEvent() {
+		EventNavigator navigator = new EventNavigator(new EventStore());
+		navigator.open(new FakeSource(6));
+		List<Integer> observed = new ArrayList<>();
+		navigator.addListener(state -> observed.add(state.sequenceNumber()));
+		List<EventSnapshot> accumulated = new ArrayList<>();
+
+		assertEquals(4, navigator.scanNext(4, accumulated::add));
+		assertEquals(4, accumulated.size());
+		assertEquals(5, navigator.state().sequenceNumber());
+		assertEquals(List.of(5), observed);
+	}
+
 	private static final class FakeSource implements EventSource {
 		private final List<DataEvent> events;
 		private int index = -1;

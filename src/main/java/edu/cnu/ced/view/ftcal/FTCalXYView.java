@@ -1,9 +1,7 @@
 package edu.cnu.ced.view.ftcal;
 
 import java.awt.BasicStroke;
-import java.awt.BorderLayout;
 import java.awt.Color;
-import java.awt.Dimension;
 import java.awt.Graphics2D;
 import java.awt.Point;
 import java.awt.Polygon;
@@ -11,48 +9,41 @@ import java.awt.RenderingHints;
 import java.awt.geom.Point2D;
 import java.awt.geom.Rectangle2D;
 import java.util.HashMap;
+import java.util.EnumSet;
 import java.util.List;
 import java.util.Map;
-import java.util.function.Consumer;
-
-import javax.swing.BorderFactory;
-import javax.swing.JCheckBox;
-import javax.swing.JPanel;
-import javax.swing.SwingUtilities;
-
+import edu.cnu.ced.component.CedDisplayOption;
+import edu.cnu.ced.data.FTCalAccumulation;
 import edu.cnu.ced.data.FTCalEventData;
 import edu.cnu.ced.data.FTCalEventData.AdcHit;
 import edu.cnu.ced.data.FTCalEventData.ReconHit;
-import edu.cnu.ced.event.EventSnapshot;
-import edu.cnu.ced.event.EventStore;
+import edu.cnu.ced.event.EventNavigationState;
+import edu.cnu.ced.event.EventNavigator;
 import edu.cnu.ced.geometry.FTCALGeometry;
 import edu.cnu.ced.geometry.GridIndex;
 import edu.cnu.ced.geometry.Point3;
+import edu.cnu.ced.view.CedXYView;
 import edu.cnu.mdi.container.IContainer;
-import edu.cnu.mdi.feedback.FeedbackPane;
 import edu.cnu.mdi.graphics.toolbar.ToolBits;
 import edu.cnu.mdi.ui.colors.ScientificColorMap;
 import edu.cnu.mdi.util.PropertyUtils;
-import edu.cnu.mdi.view.BaseView;
 
 /** Forward Tagger calorimeter XY view backed directly by event banks. */
 @SuppressWarnings("serial")
-public final class FTCalXYView extends BaseView {
+public final class FTCalXYView extends CedXYView {
 
 	private static final Color EMPTY_FILL = new Color(245, 248, 248);
 	private static final int HIT_HALF_SIZE = 4;
 
 	private final FTCALGeometry geometry;
-	private final EventStore eventStore;
-	private final Consumer<EventSnapshot> eventListener = this::acceptSnapshot;
+	private final FTCalAccumulation accumulation;
 	private final Map<Integer, Polygon> componentPolygons = new HashMap<>();
 	private final Map<ReconHit, Point> reconLocations = new HashMap<>();
-	private final JCheckBox showAdc = new JCheckBox("ADC data", true);
-	private final JCheckBox showHits = new JCheckBox("Reconstructed hits", true);
-	private volatile FTCalEventData eventData = FTCalEventData.from(EventSnapshot.empty());
+	private volatile FTCalEventData eventData = FTCalEventData.from(null);
 
-	public FTCalXYView(FTCALGeometry geometry, EventStore eventStore) {
-		super(PropertyUtils.TITLE, "FTCal XY",
+	public FTCalXYView(FTCALGeometry geometry, EventNavigator navigator,
+			FTCalAccumulation accumulation) {
+		super(navigator, PropertyUtils.TITLE, "FTCal XY",
 				PropertyUtils.WIDTH, 820,
 				PropertyUtils.HEIGHT, 720,
 				PropertyUtils.WORLDSYSTEM, new Rectangle2D.Double(20, -20, -40, 40),
@@ -61,35 +52,17 @@ public final class FTCalXYView extends BaseView {
 				PropertyUtils.WHEELZOOM, true,
 				PropertyUtils.VISIBLE, true);
 		this.geometry = geometry;
-		this.eventStore = eventStore;
+		this.accumulation = accumulation;
 		setAfterDraw(this::drawDetector);
-		initSidePanel();
-		eventStore.addListener(eventListener);
+		initializeCedView(EnumSet.of(CedDisplayOption.SINGLE_EVENT,
+				CedDisplayOption.ACCUMULATION, CedDisplayOption.RAW_DATA,
+				CedDisplayOption.RECON_HITS), List.of("FTCAL::"),
+				ScientificColorMap.TURBO, "Relative ADC / accumulation");
 	}
 
-	private void initSidePanel() {
-		JPanel side = new JPanel(new BorderLayout(4, 8));
-		side.setPreferredSize(new Dimension(235, 300));
-		JPanel choices = new JPanel();
-		choices.setBorder(BorderFactory.createTitledBorder("Display"));
-		choices.add(showAdc);
-		choices.add(showHits);
-		showAdc.addActionListener(event -> refresh());
-		showHits.addActionListener(event -> refresh());
-		side.add(choices, BorderLayout.NORTH);
-		FeedbackPane feedback = initFeedback(Color.CYAN, Color.BLACK, 10);
-		side.add(feedback, BorderLayout.CENTER);
-		add(side, BorderLayout.EAST);
-	}
-
-	private void acceptSnapshot(EventSnapshot snapshot) {
-		FTCalEventData next = FTCalEventData.from(snapshot);
-		if (SwingUtilities.isEventDispatchThread()) {
-			eventData = next;
-			refresh();
-		} else {
-			SwingUtilities.invokeLater(() -> { eventData = next; refresh(); });
-		}
+	@Override
+	protected void eventChanged(EventNavigationState state) {
+		eventData = FTCalEventData.from(state.snapshot());
 	}
 
 	private void drawDetector(Graphics2D graphics, IContainer container) {
@@ -99,21 +72,26 @@ public final class FTCalXYView extends BaseView {
 			componentPolygons.clear();
 			reconLocations.clear();
 			Map<Integer, AdcHit> adcByComponent = new HashMap<>();
-			if (showAdc.isSelected()) {
+			boolean accumulated = isDisplayed(CedDisplayOption.ACCUMULATION);
+			if (isDisplayed(CedDisplayOption.RAW_DATA) && !accumulated) {
 				for (AdcHit hit : eventData.adcHits()) adcByComponent.put(hit.component(), hit);
 			}
 			for (int component : geometry.componentIds()) {
 				Polygon polygon = polygon(container, component);
 				componentPolygons.put(component, polygon);
 				AdcHit hit = adcByComponent.get(component);
-				double fraction = eventData.maximumAdc() == 0 || hit == null ? 0
-						: (double) hit.adc() / eventData.maximumAdc();
-				g.setColor(hit == null ? EMPTY_FILL : ScientificColorMap.TURBO.colorAt(fraction));
+				int count = accumulated ? accumulation.count(component) : 0;
+				double fraction = accumulated
+						? (accumulation.maximumCount() == 0 ? 0.0 : (double) count / accumulation.maximumCount())
+						: (eventData.maximumAdc() == 0 || hit == null ? 0.0
+								: (double) hit.adc() / eventData.maximumAdc());
+				boolean active = accumulated ? count > 0 : hit != null;
+				g.setColor(active ? ScientificColorMap.TURBO.colorAt(fraction) : EMPTY_FILL);
 				g.fillPolygon(polygon);
 				g.setColor(Color.DARK_GRAY);
 				g.drawPolygon(polygon);
 			}
-			if (showHits.isSelected()) drawReconHits(g, container);
+			if (!accumulated && isDisplayed(CedDisplayOption.RECON_HITS)) drawReconHits(g, container);
 		} finally {
 			g.dispose();
 		}
@@ -154,9 +132,7 @@ public final class FTCalXYView extends BaseView {
 	@Override
 	public void getFeedbackStrings(IContainer container, Point screenPoint,
 			Point2D.Double worldPoint, List<String> feedback) {
-		if (worldPoint != null) {
-			feedback.add(String.format("$yellow$(x, y) = (%6.2f, %6.2f) cm", worldPoint.x, worldPoint.y));
-		}
+		super.getFeedbackStrings(container, screenPoint, worldPoint, feedback);
 		for (Map.Entry<ReconHit, Point> entry : reconLocations.entrySet()) {
 			Point p = entry.getValue();
 			if (Math.abs(p.x - screenPoint.x) <= HIT_HALF_SIZE + 2
@@ -171,8 +147,14 @@ public final class FTCalXYView extends BaseView {
 			int component = entry.getKey();
 			feedback.add("$red$FTCAL component " + component);
 			geometry.gridIndex(component).ifPresent(grid -> addGridFeedback(grid, feedback));
-			if (showAdc.isSelected()) {
-				for (AdcHit hit : eventData.adcHits()) if (hit.component() == component) {
+			if (isDisplayed(CedDisplayOption.RAW_DATA)) {
+				if (isDisplayed(CedDisplayOption.ACCUMULATION)
+						&& accumulation.count(component) > 0) {
+					feedback.add("$cyan$FTCAL occupancy " + accumulation.count(component)
+							+ " / " + accumulation.eventCount() + " events");
+				}
+				for (AdcHit hit : eventData.adcHits()) if (!isDisplayed(CedDisplayOption.ACCUMULATION)
+						&& hit.component() == component) {
 					feedback.add(String.format("$cyan$FTCAL adc %d time %6.3f order %d",
 							hit.adc(), hit.time(), hit.order()));
 				}
@@ -185,9 +167,4 @@ public final class FTCalXYView extends BaseView {
 		feedback.add("$red$grid indices [" + grid.x() + ", " + grid.y() + "]");
 	}
 
-	@Override
-	public void dispose() {
-		eventStore.removeListener(eventListener);
-		super.dispose();
-	}
 }

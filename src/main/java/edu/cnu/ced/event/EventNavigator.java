@@ -4,6 +4,8 @@ import java.util.Objects;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.function.Consumer;
 
+import org.jlab.io.base.DataEvent;
+
 /** Coordinates one event source and publishes complete navigation states. */
 public final class EventNavigator implements AutoCloseable {
 
@@ -49,6 +51,29 @@ public final class EventNavigator implements AutoCloseable {
 		}
 		publish(source.next());
 		return true;
+	}
+
+	/**
+	 * Consume following events without publishing intermediate navigation states.
+	 * Only the final consumed event becomes the current event.
+	 *
+	 * @param count maximum number of following events to consume
+	 * @param accumulator receives a complete snapshot for each consumed event
+	 * @return number of events consumed
+	 */
+	public int scanNext(int count, Consumer<EventSnapshot> accumulator) {
+		Objects.requireNonNull(accumulator, "accumulator");
+		if (source == null || count < 1) return 0;
+		int processed = 0;
+		DataEvent last = null;
+		while (processed < count && source.hasNext()) {
+			last = source.next();
+			if (last == null) break;
+			accumulator.accept(EventSnapshot.of(last));
+			processed++;
+		}
+		if (last != null) publish(last);
+		return processed;
 	}
 
 	public boolean previous() {

@@ -5,11 +5,17 @@ import java.nio.file.Path;
 import javax.swing.JMenu;
 import javax.swing.JMenuItem;
 import javax.swing.JOptionPane;
+import javax.swing.JCheckBox;
+import javax.swing.JTextField;
+import javax.swing.JPanel;
+import javax.swing.JLabel;
 import javax.swing.SwingUtilities;
 import javax.swing.SwingWorker;
 
 import edu.cnu.ced.CedVersion;
 import edu.cnu.ced.event.EventNavigator;
+import edu.cnu.ced.event.AccumulationService;
+import edu.cnu.ced.event.EventNavigationState;
 import edu.cnu.ced.event.EventSource;
 import edu.cnu.ced.event.EventStore;
 import edu.cnu.ced.event.HipoEventSource;
@@ -52,6 +58,7 @@ public final class CedApplication extends BaseMDIApplication {
 	private static CedBootstrapResult bootstrap;
 	private static final FileType HIPO_FILES = FileType.of("HIPO event files (*.hipo)", "hipo");
 	private static final MenuId OPTIONS_MENU_ID = new MenuId("ced.options");
+	private static final MenuId EVENTS_MENU_ID = new MenuId("ced.events");
 
 	private EventNavigator eventNavigator;
 	private EventStore eventStore;
@@ -61,6 +68,7 @@ public final class CedApplication extends BaseMDIApplication {
 	private JsonView jsonView;
 	private CurrentEventView currentEventView;
 	private Clas12Resources clas12Resources;
+	private AccumulationService accumulationService;
 
 	private CedApplication() {
 		super(PropertyUtils.TITLE, CedVersion.title(),
@@ -68,6 +76,7 @@ public final class CedApplication extends BaseMDIApplication {
 				PropertyUtils.FRACTION, 0.9,
 				PropertyUtils.CONSOLELOG, true);
 		addCedFileActions();
+		addCedEventActions();
 		addCedOptions();
 	}
 
@@ -138,6 +147,7 @@ public final class CedApplication extends BaseMDIApplication {
 		// subclass field initializers run. Construct application services here.
 		eventStore = new EventStore();
 		eventNavigator = new EventNavigator(eventStore);
+		accumulationService = new AccumulationService();
 		if (bootstrap != null) {
 			magneticFieldService = bootstrap.magneticFields();
 			geometryService = bootstrap.geometry();
@@ -151,13 +161,59 @@ public final class CedApplication extends BaseMDIApplication {
         jsonView = new JsonView();
 		currentEventView = new CurrentEventView(eventNavigator);
 		ViewManager.getInstance().addConfiguration(ViewConfiguration.lazy(
-				"FTCal XY", () -> new FTCalXYView(geometryService.ftcal(), eventStore),
+				"FTCal XY", () -> new FTCalXYView(geometryService.ftcal(), eventNavigator,
+						accumulationService.ftcal()),
 				8, 0, 0, VirtualView.CENTER));
 		Log.getInstance().config("CED MDI application shell initialized with "
 				+ VIRTUAL_DESKTOP_COLUMNS + " virtual desktop columns.");
 		Log.getInstance().config("CED launch configuration: geometry variation="
 				+ launchOptions.geometryVariation() + ", 3D=" + launchOptions.enable3D()
 				+ ", experimental=" + launchOptions.experimental());
+	}
+
+	private void addCedEventActions() {
+		JMenu events = new JMenu("Events");
+		JMenuItem accumulate = new JMenuItem("Accumulate Events…");
+		accumulate.addActionListener(event -> accumulateEvents());
+		events.add(accumulate);
+		MenuManager.getInstance().addContribution(new MenuContribution(EVENTS_MENU_ID, events, 150));
+	}
+
+	private void accumulateEvents() {
+		EventNavigationState state = eventNavigator.state();
+		if (!state.isOpen() || !state.canGoNext()) {
+			JOptionPane.showMessageDialog(this, "There are no remaining events to accumulate.",
+					"Accumulate Events", JOptionPane.INFORMATION_MESSAGE);
+			return;
+		}
+		int remaining = state.eventCount() - state.sequenceNumber();
+		JTextField count = new JTextField(Integer.toString(Math.min(1000, remaining)), 8);
+		JCheckBox clear = new JCheckBox("Clear existing accumulated data", true);
+		JPanel panel = new JPanel(new java.awt.GridLayout(0, 1, 3, 3));
+		panel.add(new JLabel("Number of following events to accumulate (maximum " + remaining + "):"));
+		panel.add(count);
+		panel.add(clear);
+		if (JOptionPane.showConfirmDialog(this, panel, "Accumulate Events",
+				JOptionPane.OK_CANCEL_OPTION, JOptionPane.PLAIN_MESSAGE) != JOptionPane.OK_OPTION) return;
+		final int requested;
+		try {
+			requested = Math.min(remaining, Integer.parseInt(count.getText().trim()));
+			if (requested < 1) throw new NumberFormatException();
+		} catch (NumberFormatException exception) {
+			JOptionPane.showMessageDialog(this, "Enter a positive number of events.",
+					"Accumulate Events", JOptionPane.ERROR_MESSAGE);
+			return;
+		}
+		accumulationService.begin(clear.isSelected());
+		new SwingWorker<Integer, Void>() {
+			@Override protected Integer doInBackground() {
+				return eventNavigator.scanNext(requested, accumulationService::accumulate);
+			}
+			@Override protected void done() {
+				try { Log.getInstance().info("Accumulated " + get() + " events."); }
+				catch (Exception exception) { Log.getInstance().exception(exception); }
+			}
+		}.execute();
 	}
 
 	private void addCedFileActions() {
