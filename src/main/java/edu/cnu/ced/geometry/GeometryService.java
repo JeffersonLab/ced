@@ -13,6 +13,7 @@ public final class GeometryService {
 	private final CTOFGeometry ctof = new CTOFGeometry();
 	private final FTCALGeometry ftcal = new FTCALGeometry();
 	private final CNDGeometry cnd = new CNDGeometry();
+	private final FTOFGeometry ftof = new FTOFGeometry();
 
 	public CTOFGeometry ctof() {
 		return ctof;
@@ -22,8 +23,10 @@ public final class GeometryService {
 
 	public CNDGeometry cnd() { return cnd; }
 
+	public FTOFGeometry ftof() { return ftof; }
+
 	public GeometryStatus initialize(String variation) {
-		List<CacheableGeometry> geometries = List.of(ctof, ftcal, cnd);
+		List<CacheableGeometry> geometries = List.of(ctof, ftcal, cnd, ftof);
 		try {
 			List<String> cached = new GeometryCacheCoordinator(
 					GeometryCacheCoordinator.defaultCachePath(), CedVersion.VERSION, variation)
