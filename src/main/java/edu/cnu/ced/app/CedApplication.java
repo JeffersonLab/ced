@@ -1,5 +1,6 @@
 package edu.cnu.ced.app;
 
+import java.io.IOException;
 import java.nio.file.Path;
 import javax.swing.JMenu;
 import javax.swing.JMenuItem;
@@ -23,6 +24,8 @@ import edu.cnu.mdi.dialog.FileDialogs;
 import edu.cnu.mdi.dialog.FileType;
 import edu.cnu.mdi.log.Log;
 import edu.cnu.mdi.ui.menu.MenuManager;
+import edu.cnu.mdi.ui.menu.MenuContribution;
+import edu.cnu.mdi.ui.menu.MenuId;
 import edu.cnu.mdi.util.PropertyUtils;
 import edu.cnu.mdi.view.JsonView;
 import edu.cnu.mdi.view.LogView;
@@ -45,6 +48,7 @@ public final class CedApplication extends BaseMDIApplication {
 	private static CedLaunchOptions launchOptions = CedLaunchOptions.parse(null);
 	private static CedBootstrapResult bootstrap;
 	private static final FileType HIPO_FILES = FileType.of("HIPO event files (*.hipo)", "hipo");
+	private static final MenuId OPTIONS_MENU_ID = new MenuId("ced.options");
 
 	private EventNavigator eventNavigator;
 	private MagneticFieldService magneticFieldService;
@@ -60,6 +64,40 @@ public final class CedApplication extends BaseMDIApplication {
 				PropertyUtils.FRACTION, 0.9,
 				PropertyUtils.CONSOLELOG, true);
 		addCedFileActions();
+		addCedOptions();
+	}
+
+	private void addCedOptions() {
+		JMenu options = new JMenu("Options");
+		JMenuItem deleteCache = new JMenuItem("Delete Geometry Cache…");
+		deleteCache.addActionListener(event -> deleteGeometryCache());
+		options.add(deleteCache);
+		MenuManager.getInstance().addContribution(new MenuContribution(OPTIONS_MENU_ID, options, 200));
+	}
+
+	private void deleteGeometryCache() {
+		int answer = JOptionPane.showConfirmDialog(this,
+				"Delete the persistent geometry cache?\n"
+				+ "CED will reload geometry from its sources the next time it starts.",
+				"Delete Geometry Cache", JOptionPane.OK_CANCEL_OPTION,
+				JOptionPane.WARNING_MESSAGE);
+		if (answer != JOptionPane.OK_OPTION) {
+			return;
+		}
+		try {
+			boolean deleted = GeometryService.deletePersistentCache();
+			String message = deleted
+					? "Geometry cache deleted. It will be rebuilt on the next launch."
+					: "No geometry cache was present.";
+			Log.getInstance().info(message);
+			JOptionPane.showMessageDialog(this, message, "Geometry Cache",
+					JOptionPane.INFORMATION_MESSAGE);
+		} catch (IOException exception) {
+			String message = "Could not delete the geometry cache: " + exception.getMessage();
+			Log.getInstance().error(message);
+			JOptionPane.showMessageDialog(this, message, "Geometry Cache",
+					JOptionPane.ERROR_MESSAGE);
+		}
 	}
 
 	/** @return the singleton CED application */

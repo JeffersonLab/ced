@@ -2,6 +2,7 @@ package edu.cnu.ced.geometry.cache;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 
 import java.io.DataInput;
 import java.io.DataOutput;
@@ -48,6 +49,21 @@ class GeometryCacheCoordinatorTest {
 		VariationGeometry geometry = new VariationGeometry();
 		new GeometryCacheCoordinator(path, "2.0", "special").initialize(List.of(geometry));
 		assertEquals("special", geometry.variation);
+	}
+
+	@Test
+	void deleteRemovesDatabaseAndSQLiteSidecars() throws Exception {
+		Path path = temp.resolve("delete.sqlite");
+		GeometryCacheCoordinator coordinator = new GeometryCacheCoordinator(path, "2.0", "default");
+		coordinator.initialize(List.of(new FakeGeometry(7)));
+		java.nio.file.Files.createFile(Path.of(path + "-wal"));
+		java.nio.file.Files.createFile(Path.of(path + "-shm"));
+
+		assertTrue(coordinator.delete());
+		assertFalse(java.nio.file.Files.exists(path));
+		assertFalse(java.nio.file.Files.exists(Path.of(path + "-wal")));
+		assertFalse(java.nio.file.Files.exists(Path.of(path + "-shm")));
+		assertFalse(coordinator.delete());
 	}
 
 	private static final class FakeGeometry implements CacheableGeometry {

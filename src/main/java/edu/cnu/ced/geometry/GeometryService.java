@@ -1,5 +1,6 @@
 package edu.cnu.ced.geometry;
 
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -58,6 +59,12 @@ public final class GeometryService {
 		} catch (Exception exception) {
 			return new GeometryStatus(false, List.of(), List.of(), message(exception));
 		}
+	}
+
+	/** Delete the persistent cache; initialized in-memory geometry is unchanged. */
+	public static boolean deletePersistentCache() throws IOException {
+		return new GeometryCacheCoordinator(GeometryCacheCoordinator.defaultCachePath(),
+				CedVersion.VERSION, "default").delete();
 	}
 
 	private static String message(Exception exception) {
