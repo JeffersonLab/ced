@@ -1,15 +1,11 @@
 package edu.cnu.ced.app;
 
-import java.io.IOException;
 import java.nio.file.Path;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-
 import javax.swing.JMenu;
 import javax.swing.JMenuItem;
 import javax.swing.JOptionPane;
+import javax.swing.SwingUtilities;
 import javax.swing.SwingWorker;
-import javax.swing.Timer;
 
 import edu.cnu.ced.CedVersion;
 import edu.cnu.ced.event.EventNavigator;
@@ -18,10 +14,11 @@ import edu.cnu.ced.event.EventStore;
 import edu.cnu.ced.event.HipoEventSource;
 import edu.cnu.ced.geometry.GeometryService;
 import edu.cnu.ced.magfield.MagneticFieldService;
-import edu.cnu.ced.resources.Clas12ResourceLocator;
 import edu.cnu.ced.resources.Clas12Resources;
 import edu.cnu.ced.view.CurrentEventView;
 import edu.cnu.mdi.app.BaseMDIApplication;
+import edu.cnu.mdi.app.StartupInfo;
+import edu.cnu.mdi.app.StartupWindow;
 import edu.cnu.mdi.dialog.FileDialogs;
 import edu.cnu.mdi.dialog.FileType;
 import edu.cnu.mdi.log.Log;
@@ -46,13 +43,12 @@ public final class CedApplication extends BaseMDIApplication {
 
 	private static CedApplication instance;
 	private static CedLaunchOptions launchOptions = CedLaunchOptions.parse(null);
+	private static CedBootstrapResult bootstrap;
 	private static final FileType HIPO_FILES = FileType.of("HIPO event files (*.hipo)", "hipo");
 
 	private EventNavigator eventNavigator;
 	private MagneticFieldService magneticFieldService;
 	private GeometryService geometryService;
-	private ExecutorService initializationExecutor;
-	private boolean servicesStarted;
 	private LogView logView;
 	private JsonView jsonView;
 	private CurrentEventView currentEventView;
@@ -99,45 +95,23 @@ public final class CedApplication extends BaseMDIApplication {
 		// BaseMDIApplication invokes this callback from its constructor, before
 		// subclass field initializers run. Construct application services here.
 		eventNavigator = new EventNavigator(new EventStore());
-		magneticFieldService = new MagneticFieldService();
-		geometryService = new GeometryService();
-		initializationExecutor = Executors.newSingleThreadExecutor(runnable -> {
-			Thread thread = new Thread(runnable, "ced-initialization");
-			thread.setDaemon(true);
-			return thread;
-		});
+		if (bootstrap != null) {
+			magneticFieldService = bootstrap.magneticFields();
+			geometryService = bootstrap.geometry();
+			clas12Resources = bootstrap.resources();
+		} else {
+			magneticFieldService = new MagneticFieldService();
+			geometryService = new GeometryService();
+		}
 		logView = new LogView();
 
         jsonView = new JsonView();
 		currentEventView = new CurrentEventView(eventNavigator);
-		initializeClas12Resources();
-
 		Log.getInstance().config("CED MDI application shell initialized with "
 				+ VIRTUAL_DESKTOP_COLUMNS + " virtual desktop columns.");
 		Log.getInstance().config("CED launch configuration: geometry variation="
 				+ launchOptions.geometryVariation() + ", 3D=" + launchOptions.enable3D()
 				+ ", experimental=" + launchOptions.experimental());
-	}
-
-	@Override
-	protected void onVirtualDesktopReady() {
-		// Let MDI complete and paint its initial hierarchy before starting heavy
-		// coatjava I/O. The one-shot timer deliberately crosses a native paint/event
-		// boundary; invokeLater alone remains in the same saturated startup queue.
-		super.onVirtualDesktopReady();
-		Timer startupBarrier = new Timer(1000, event -> startApplicationServices());
-		startupBarrier.setRepeats(false);
-		startupBarrier.start();
-	}
-
-	private void startApplicationServices() {
-		if (servicesStarted) {
-			return;
-		}
-		servicesStarted = true;
-		Log.getInstance().config("Starting background CED services after initial paint");
-		initializeMagneticFields();
-		initializeGeometry();
 	}
 
 	private void addCedFileActions() {
@@ -179,51 +153,6 @@ public final class CedApplication extends BaseMDIApplication {
 		}.execute();
 	}
 
-	private void initializeClas12Resources() {
-		try {
-			clas12Resources = Clas12ResourceLocator.locate();
-			System.setProperty("CLAS12DIR", clas12Resources.root().toString());
-			Log.getInstance().config("CLAS12 resources: " + clas12Resources.root());
-		} catch (IOException exception) {
-			Log.getInstance().warning(exception.getMessage());
-		}
-	}
-
-	private void initializeMagneticFields() {
-		long started = System.nanoTime();
-		magneticFieldService.initializeAsync(initializationExecutor).thenAccept(status -> {
-			long elapsed = elapsedMillis(started);
-			if (status.initialized()) {
-				Log.getInstance().config("Magnetic fields: " + status.description()
-						+ " [torus=" + status.torusMap() + ", solenoid=" + status.solenoidMap()
-						+ ", " + elapsed + " ms]");
-			} else {
-				Log.getInstance().warning("Magnetic fields unavailable: " + status.error());
-			}
-		});
-	}
-
-	private void initializeGeometry() {
-		long started = System.nanoTime();
-		java.util.concurrent.CompletableFuture
-				.supplyAsync(() -> geometryService.initialize(launchOptions.geometryVariation()),
-						initializationExecutor)
-				.thenAccept(status -> {
-					long elapsed = elapsedMillis(started);
-					if (status.initialized()) {
-						Log.getInstance().config("Geometry initialized [cache="
-								+ status.cachedDetectors() + ", source=" + status.sourceDetectors()
-								+ ", " + elapsed + " ms]");
-					} else {
-						Log.getInstance().warning("Geometry unavailable: " + status.error());
-					}
-				});
-	}
-
-	private static long elapsedMillis(long started) {
-		return java.util.concurrent.TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - started);
-	}
-
 	@Override
 	protected void defaultViewLayout() {
 		virtualViewMove(currentEventView, 0, VirtualView.CENTER);
@@ -234,13 +163,34 @@ public final class CedApplication extends BaseMDIApplication {
 	@Override
 	protected void prepareForShutdown() {
 		eventNavigator.close();
-		initializationExecutor.shutdownNow();
 		super.prepareForShutdown();
 	}
 
 	/** Launches the MDI application on the Swing event-dispatch thread. */
 	public static void main(String[] args) {
 		launchOptions = CedLaunchOptions.parse(args);
+		StartupWindow[] holder = new StartupWindow[1];
+		try {
+			SwingUtilities.invokeAndWait(() -> {
+				holder[0] = new StartupWindow(StartupInfo.builder("CED")
+						.version(CedVersion.VERSION)
+						.organization("Developed at Christopher Newport University")
+						.logo(new CedStartupIcon())
+						.build());
+				holder[0].show();
+			});
+			bootstrap = CedBootstrap.initialize(launchOptions, holder[0]);
+			SwingUtilities.invokeAndWait(holder[0]::close);
+		} catch (Exception exception) {
+			Log.getInstance().exception(exception);
+			if (holder[0] != null) {
+				try {
+					SwingUtilities.invokeAndWait(holder[0]::close);
+				} catch (Exception closeException) {
+					Log.getInstance().exception(closeException);
+				}
+			}
+		}
 		BaseMDIApplication.launch(CedApplication::getInstance);
 	}
 }

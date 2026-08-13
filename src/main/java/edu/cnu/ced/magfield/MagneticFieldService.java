@@ -39,6 +39,11 @@ public final class MagneticFieldService {
 		return initialization.compareAndSet(null, created) ? created : initialization.get();
 	}
 
+	/** Initialize on the calling thread; intended for pre-UI application bootstrap. */
+	public MagneticFieldStatus initialize() {
+		return initializeSafely();
+	}
+
 	private MagneticFieldStatus initializeSafely() {
 		try {
 			return initializer.initialize();
