@@ -2,6 +2,8 @@ package edu.cnu.ced.app;
 
 import java.io.IOException;
 import java.nio.file.Path;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 
 import javax.swing.JMenu;
 import javax.swing.JMenuItem;
@@ -13,6 +15,7 @@ import edu.cnu.ced.event.EventNavigator;
 import edu.cnu.ced.event.EventSource;
 import edu.cnu.ced.event.EventStore;
 import edu.cnu.ced.event.HipoEventSource;
+import edu.cnu.ced.magfield.MagneticFieldService;
 import edu.cnu.ced.resources.Clas12ResourceLocator;
 import edu.cnu.ced.resources.Clas12Resources;
 import edu.cnu.ced.view.CurrentEventView;
@@ -44,6 +47,8 @@ public final class CedApplication extends BaseMDIApplication {
 	private static final FileType HIPO_FILES = FileType.of("HIPO event files (*.hipo)", "hipo");
 
 	private EventNavigator eventNavigator;
+	private MagneticFieldService magneticFieldService;
+	private ExecutorService initializationExecutor;
 	private LogView logView;
 	private JsonView jsonView;
 	private CurrentEventView currentEventView;
@@ -90,11 +95,18 @@ public final class CedApplication extends BaseMDIApplication {
 		// BaseMDIApplication invokes this callback from its constructor, before
 		// subclass field initializers run. Construct application services here.
 		eventNavigator = new EventNavigator(new EventStore());
+		magneticFieldService = new MagneticFieldService();
+		initializationExecutor = Executors.newSingleThreadExecutor(runnable -> {
+			Thread thread = new Thread(runnable, "ced-initialization");
+			thread.setDaemon(true);
+			return thread;
+		});
 		logView = new LogView();
 
         jsonView = new JsonView();
 		currentEventView = new CurrentEventView(eventNavigator);
 		initializeClas12Resources();
+		initializeMagneticFields();
 
 		Log.getInstance().config("CED MDI application shell initialized with "
 				+ VIRTUAL_DESKTOP_COLUMNS + " virtual desktop columns.");
@@ -152,6 +164,17 @@ public final class CedApplication extends BaseMDIApplication {
 		}
 	}
 
+	private void initializeMagneticFields() {
+		magneticFieldService.initializeAsync(initializationExecutor).thenAccept(status -> {
+			if (status.initialized()) {
+				Log.getInstance().config("Magnetic fields: " + status.description()
+						+ " [torus=" + status.torusMap() + ", solenoid=" + status.solenoidMap() + "]");
+			} else {
+				Log.getInstance().warning("Magnetic fields unavailable: " + status.error());
+			}
+		});
+	}
+
 	@Override
 	protected void defaultViewLayout() {
 		virtualViewMove(currentEventView, 0, VirtualView.CENTER);
@@ -162,6 +185,7 @@ public final class CedApplication extends BaseMDIApplication {
 	@Override
 	protected void prepareForShutdown() {
 		eventNavigator.close();
+		initializationExecutor.shutdownNow();
 		super.prepareForShutdown();
 	}
 
