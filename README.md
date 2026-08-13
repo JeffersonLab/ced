@@ -10,6 +10,7 @@ partially migrated state.
 - Java 21 or newer (required by coatjava 14.1.2)
 - Maven 3.9 or newer
 - MDI `1.2.2-SNAPSHOT` installed in the local Maven repository
+- coatjava `org.jlab.coat:coat-libs:14.1.2` installed in the local Maven repository
 
 ## Build and run
 

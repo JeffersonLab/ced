@@ -15,6 +15,7 @@
 		<project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
 		<maven.compiler.release>21</maven.compiler.release>
 		<mdi.version>1.2.2-SNAPSHOT</mdi.version>
+		<coat-libs.version>14.1.2</coat-libs.version>
 		<junit.version>5.11.4</junit.version>
 	</properties>
 
@@ -29,6 +30,12 @@
 					<artifactId>xml-apis</artifactId>
 				</exclusion>
 			</exclusions>
+		</dependency>
+
+		<dependency>
+			<groupId>org.jlab.coat</groupId>
+			<artifactId>coat-libs</artifactId>
+			<version>${coat-libs.version}</version>
 		</dependency>
 
 		<dependency>
