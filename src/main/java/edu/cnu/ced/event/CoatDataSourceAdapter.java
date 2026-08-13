@@ -10,6 +10,7 @@ final class CoatDataSourceAdapter implements EventSource {
 
 	private final DataSource source;
 	private final String description;
+	private int index = -1;
 
 	CoatDataSourceAdapter(DataSource source, String description) {
 		this.source = Objects.requireNonNull(source, "source");
@@ -28,7 +29,7 @@ final class CoatDataSourceAdapter implements EventSource {
 
 	@Override
 	public int index() {
-		return source.getCurrentIndex();
+		return index;
 	}
 
 	@Override
@@ -38,17 +39,25 @@ final class CoatDataSourceAdapter implements EventSource {
 
 	@Override
 	public DataEvent next() {
-		return source.getNextEvent();
+		DataEvent event = source.getNextEvent();
+		if (event != null) {
+			index++;
+		}
+		return event;
 	}
 
 	@Override
 	public DataEvent previous() {
-		return source.getPreviousEvent();
+		return goTo(index - 1);
 	}
 
 	@Override
 	public DataEvent goTo(int zeroBasedIndex) {
-		return source.gotoEvent(zeroBasedIndex);
+		DataEvent event = source.gotoEvent(zeroBasedIndex);
+		if (event != null) {
+			index = zeroBasedIndex;
+		}
+		return event;
 	}
 
 	@Override
