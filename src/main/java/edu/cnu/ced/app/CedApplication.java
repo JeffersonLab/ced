@@ -5,20 +5,16 @@ import java.nio.file.Path;
 import javax.swing.JMenu;
 import javax.swing.JMenuItem;
 import javax.swing.JOptionPane;
-import javax.swing.JCheckBox;
-import javax.swing.JTextField;
-import javax.swing.JPanel;
-import javax.swing.JLabel;
 import javax.swing.SwingUtilities;
 import javax.swing.SwingWorker;
 
 import edu.cnu.ced.CedVersion;
 import edu.cnu.ced.event.EventNavigator;
 import edu.cnu.ced.event.AccumulationService;
-import edu.cnu.ced.event.EventNavigationState;
 import edu.cnu.ced.event.EventSource;
 import edu.cnu.ced.event.EventStore;
 import edu.cnu.ced.event.HipoEventSource;
+import edu.cnu.ced.dialog.AccumulationDialog;
 import edu.cnu.ced.geometry.GeometryService;
 import edu.cnu.ced.magfield.MagneticFieldService;
 import edu.cnu.ced.resources.Clas12Resources;
@@ -180,40 +176,12 @@ public final class CedApplication extends BaseMDIApplication {
 	}
 
 	private void accumulateEvents() {
-		EventNavigationState state = eventNavigator.state();
-		if (!state.isOpen() || !state.canGoNext()) {
+		if (!eventNavigator.state().isOpen() || !eventNavigator.state().canGoNext()) {
 			JOptionPane.showMessageDialog(this, "There are no remaining events to accumulate.",
 					"Accumulate Events", JOptionPane.INFORMATION_MESSAGE);
 			return;
 		}
-		int remaining = state.eventCount() - state.sequenceNumber();
-		JTextField count = new JTextField(Integer.toString(Math.min(1000, remaining)), 8);
-		JCheckBox clear = new JCheckBox("Clear existing accumulated data", true);
-		JPanel panel = new JPanel(new java.awt.GridLayout(0, 1, 3, 3));
-		panel.add(new JLabel("Number of following events to accumulate (maximum " + remaining + "):"));
-		panel.add(count);
-		panel.add(clear);
-		if (JOptionPane.showConfirmDialog(this, panel, "Accumulate Events",
-				JOptionPane.OK_CANCEL_OPTION, JOptionPane.PLAIN_MESSAGE) != JOptionPane.OK_OPTION) return;
-		final int requested;
-		try {
-			requested = Math.min(remaining, Integer.parseInt(count.getText().trim()));
-			if (requested < 1) throw new NumberFormatException();
-		} catch (NumberFormatException exception) {
-			JOptionPane.showMessageDialog(this, "Enter a positive number of events.",
-					"Accumulate Events", JOptionPane.ERROR_MESSAGE);
-			return;
-		}
-		accumulationService.begin(clear.isSelected());
-		new SwingWorker<Integer, Void>() {
-			@Override protected Integer doInBackground() {
-				return eventNavigator.scanNext(requested, accumulationService::accumulate);
-			}
-			@Override protected void done() {
-				try { Log.getInstance().info("Accumulated " + get() + " events."); }
-				catch (Exception exception) { Log.getInstance().exception(exception); }
-			}
-		}.execute();
+		new AccumulationDialog(this, eventNavigator, accumulationService).setVisible(true);
 	}
 
 	private void addCedFileActions() {

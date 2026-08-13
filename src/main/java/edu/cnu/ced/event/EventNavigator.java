@@ -3,6 +3,8 @@ package edu.cnu.ced.event;
 import java.util.Objects;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.function.Consumer;
+import java.util.function.IntConsumer;
+import java.util.function.BooleanSupplier;
 
 import org.jlab.io.base.DataEvent;
 
@@ -62,15 +64,24 @@ public final class EventNavigator implements AutoCloseable {
 	 * @return number of events consumed
 	 */
 	public int scanNext(int count, Consumer<EventSnapshot> accumulator) {
+		return scanNext(count, accumulator, processed -> { }, () -> false);
+	}
+
+	/** Consume following events silently, with progress and cancellation hooks. */
+	public int scanNext(int count, Consumer<EventSnapshot> accumulator,
+			IntConsumer progress, BooleanSupplier cancelled) {
 		Objects.requireNonNull(accumulator, "accumulator");
+		Objects.requireNonNull(progress, "progress");
+		Objects.requireNonNull(cancelled, "cancelled");
 		if (source == null || count < 1) return 0;
 		int processed = 0;
 		DataEvent last = null;
-		while (processed < count && source.hasNext()) {
+		while (processed < count && source.hasNext() && !cancelled.getAsBoolean()) {
 			last = source.next();
 			if (last == null) break;
 			accumulator.accept(EventSnapshot.of(last));
 			processed++;
+			progress.accept(processed);
 		}
 		if (last != null) publish(last);
 		return processed;

@@ -55,6 +55,18 @@ class EventNavigatorTest {
 		assertEquals(List.of(5), observed);
 	}
 
+	@Test
+	void scanReportsProgressAndHonorsCancellation() {
+		EventNavigator navigator = new EventNavigator(new EventStore());
+		navigator.open(new FakeSource(6));
+		List<Integer> progress = new ArrayList<>();
+		int processed = navigator.scanNext(5, snapshot -> { }, progress::add,
+				() -> progress.size() >= 2);
+		assertEquals(2, processed);
+		assertEquals(List.of(1, 2), progress);
+		assertEquals(3, navigator.state().sequenceNumber());
+	}
+
 	private static final class FakeSource implements EventSource {
 		private final List<DataEvent> events;
 		private int index = -1;
