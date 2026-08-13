@@ -29,7 +29,10 @@ public abstract class CedXYView extends CedView {
 
 	protected CedXYView(EventNavigator navigator, Object... properties) {
 		super(navigator, properties);
-		installAspectRatioCanvas(1.0);
+		Rectangle2D.Double world = getIContainer() == null ? null : getIContainer().getWorldSystem();
+		double aspect = world == null || Math.abs(world.height) < 1.0e-12 ? 1.0
+				: Math.abs(world.width / world.height);
+		installAspectRatioCanvas(aspect);
 	}
 
 	private void installAspectRatioCanvas(double aspectRatio) {
@@ -70,10 +73,19 @@ public abstract class CedXYView extends CedView {
 			g.drawRect(screen.x, screen.y, screen.width, screen.height);
 			drawXTicks(g, container, screen, world, metrics);
 			drawYTicks(g, container, screen, world, metrics);
-			drawOrientation(g, screen, metrics, world.width < 0);
+			drawOrientation(g, screen, metrics, xAxisPointsLeft(world));
 		} finally {
 			g.dispose();
 		}
+	}
+
+	/**
+	 * Controls the small orientation compass independently of the world-to-screen
+	 * transform. Most views infer it from the world rectangle; specialized views
+	 * may override this when their historical display projection is mirrored.
+	 */
+	protected boolean xAxisPointsLeft(Rectangle2D.Double world) {
+		return world != null && world.width < 0;
 	}
 
 	private static void drawXTicks(Graphics2D g, IContainer container, Rectangle screen,

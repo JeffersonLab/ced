@@ -5,7 +5,11 @@ public enum CedDisplayOption {
 	SINGLE_EVENT("Single", true, "event-mode"),
 	ACCUMULATION("Accum.", false, "event-mode"),
 	RAW_DATA("Raw Data", true, null),
-	RECON_HITS("Recon Hits", true, null);
+	RECON_HITS("Recon Hits", true, null),
+	RECON_CAL("Recon Cal", true, null),
+	U_STRIPS("U Strips", true, null),
+	V_STRIPS("V Strips", true, null),
+	W_STRIPS("W Strips", true, null);
 
 	private final String label;
 	private final boolean initiallySelected;
