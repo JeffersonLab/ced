@@ -25,6 +25,7 @@ import edu.cnu.ced.view.ftcal.FTCalXYView;
 import edu.cnu.ced.view.ftof.FTOFView;
 import edu.cnu.ced.view.pcal.PCalView;
 import edu.cnu.ced.view.ecal.ECalView;
+import edu.cnu.ced.view.central.CentralXYView;
 import edu.cnu.mdi.app.BaseMDIApplication;
 import edu.cnu.mdi.app.StartupInfo;
 import edu.cnu.mdi.app.StartupWindow;
@@ -182,6 +183,11 @@ public final class CedApplication extends BaseMDIApplication {
 				"FTOF", () -> new FTOFView(geometryService.ftof(), eventNavigator,
 						accumulationService.ftof()),
 				6, 0, 0, VirtualView.CENTER));
+		ViewManager.getInstance().addConfiguration(ViewConfiguration.eager(
+				"Central XY", () -> new CentralXYView(geometryService.bst(), geometryService.bmt(),
+						geometryService.cnd(), geometryService.ctof(), eventNavigator,
+						accumulationService.central()),
+				7, 0, 0, VirtualView.CENTER));
 		Log.getInstance().config("CED MDI application shell initialized with "
 				+ VIRTUAL_DESKTOP_COLUMNS + " virtual desktop columns.");
 		Log.getInstance().config("CED launch configuration: geometry variation="

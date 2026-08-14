@@ -8,6 +8,8 @@ public enum CedDisplayOption {
 	RECON_HITS("Recon Hits", true, null),
 	RECON_CAL("Recon Cal", true, null),
 	CLUSTERS("Clusters", true, null),
+	CROSSES("Crosses", true, null),
+	CONNECT_CLUSTER_ENDPOINTS("Connect endpoints", false, null),
 	PANEL_1A("Panel 1A", true, "ftof-panel"),
 	PANEL_1B("Panel 1B", false, "ftof-panel"),
 	PANEL_2("Panel 2", false, "ftof-panel"),

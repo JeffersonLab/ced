@@ -8,6 +8,8 @@ import edu.cnu.ced.data.PCalAccumulation;
 import edu.cnu.ced.data.PCalEventData;
 import edu.cnu.ced.data.FTOFAccumulation;
 import edu.cnu.ced.data.FTOFEventData;
+import edu.cnu.ced.data.CentralAccumulation;
+import edu.cnu.ced.data.CentralEventData;
 
 /** Collects detector occupancy only during an explicitly requested accumulation run. */
 public final class AccumulationService {
@@ -16,12 +18,14 @@ public final class AccumulationService {
 	private final PCalAccumulation pcal = new PCalAccumulation();
 	private final ECalAccumulation ecal = new ECalAccumulation();
 	private final FTOFAccumulation ftof = new FTOFAccumulation();
+	private final CentralAccumulation central = new CentralAccumulation();
 
 	public void begin(boolean clearExisting) {
 		if (clearExisting) ftcal.clear();
 		if (clearExisting) pcal.clear();
 		if (clearExisting) ecal.clear();
 		if (clearExisting) ftof.clear();
+		if (clearExisting) central.clear();
 	}
 
 	public void accumulate(EventSnapshot snapshot) {
@@ -29,10 +33,12 @@ public final class AccumulationService {
 		pcal.add(PCalEventData.from(snapshot));
 		ecal.add(ECalEventData.from(snapshot));
 		ftof.add(FTOFEventData.from(snapshot));
+		central.add(CentralEventData.from(snapshot));
 	}
 
 	public FTCalAccumulation ftcal() { return ftcal; }
 	public PCalAccumulation pcal() { return pcal; }
 	public ECalAccumulation ecal() { return ecal; }
 	public FTOFAccumulation ftof() { return ftof; }
+	public CentralAccumulation central() { return central; }
 }
