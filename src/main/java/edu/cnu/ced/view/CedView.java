@@ -8,6 +8,7 @@ import java.util.function.Consumer;
 
 import javax.swing.JButton;
 import javax.swing.SwingUtilities;
+import javax.swing.JToolBar;
 
 import edu.cnu.ced.component.CedControlPanel;
 import edu.cnu.ced.component.CedDisplayOption;
@@ -77,8 +78,8 @@ public abstract class CedView extends BaseView {
 		JButton next = new JButton("Next");
 		next.setToolTipText("Next event");
 		next.addActionListener(event -> navigator.next());
-		getToolBar().addSeparator();
-		getToolBar().add(next);
+		getToolBar().add(next, 0);
+		getToolBar().add(new JToolBar.Separator(), 1);
 	}
 
 	@Override
