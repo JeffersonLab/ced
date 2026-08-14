@@ -122,6 +122,7 @@ public final class PCalView extends CedHexView {
 			}
 			if (!accumulated && isDisplayed(CedDisplayOption.RECON_CAL)) drawRecon(g, container);
 			drawXYAxes(g, container);
+			CalorimeterDrawingSupport.drawDetectorLabel(g, "PCAL");
 		} finally {
 			g.dispose();
 		}

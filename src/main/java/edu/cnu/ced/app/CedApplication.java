@@ -22,6 +22,7 @@ import edu.cnu.ced.magfield.MagneticFieldService;
 import edu.cnu.ced.resources.Clas12Resources;
 import edu.cnu.ced.view.CurrentEventView;
 import edu.cnu.ced.view.ftcal.FTCalXYView;
+import edu.cnu.ced.view.ftof.FTOFView;
 import edu.cnu.ced.view.pcal.PCalView;
 import edu.cnu.ced.view.ecal.ECalView;
 import edu.cnu.mdi.app.BaseMDIApplication;
@@ -177,6 +178,10 @@ public final class CedApplication extends BaseMDIApplication {
 				"ECAL", () -> new ECalView(geometryService.ec(), eventNavigator,
 						accumulationService.ecal()),
 				4, 0, 0, VirtualView.CENTERLEFT));
+		ViewManager.getInstance().addConfiguration(ViewConfiguration.lazy(
+				"FTOF", () -> new FTOFView(geometryService.ftof(), eventNavigator,
+						accumulationService.ftof()),
+				6, 0, 0, VirtualView.CENTER));
 		Log.getInstance().config("CED MDI application shell initialized with "
 				+ VIRTUAL_DESKTOP_COLUMNS + " virtual desktop columns.");
 		Log.getInstance().config("CED launch configuration: geometry variation="

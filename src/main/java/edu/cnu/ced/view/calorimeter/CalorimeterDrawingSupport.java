@@ -7,6 +7,7 @@ import java.awt.Point;
 /** Shared drawing details for the PCAL and ECAL laboratory-XY views. */
 public final class CalorimeterDrawingSupport {
 	private static final Color RECON_CENTER = new Color(0, 210, 220);
+	private static final Color DETECTOR_LABEL = new Color(35, 35, 35, 55);
 
 	private CalorimeterDrawingSupport() { }
 
@@ -18,5 +19,12 @@ public final class CalorimeterDrawingSupport {
 		graphics.setColor(RECON_CENTER);
 		graphics.drawLine(center.x - 4, center.y - 4, center.x + 4, center.y + 4);
 		graphics.drawLine(center.x - 4, center.y + 4, center.x + 4, center.y - 4);
+	}
+
+	/** Draw a quiet detector identifier in the upper-left of the data canvas. */
+	public static void drawDetectorLabel(Graphics2D graphics, String label) {
+		graphics.setColor(DETECTOR_LABEL);
+		graphics.setFont(graphics.getFont().deriveFont(32f));
+		graphics.drawString(label, 12, 40);
 	}
 }

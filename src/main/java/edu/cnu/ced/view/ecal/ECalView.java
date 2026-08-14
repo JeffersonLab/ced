@@ -34,8 +34,6 @@ import edu.cnu.mdi.util.PropertyUtils;
 public final class ECalView extends CedHexView {
 	private static final Color EMPTY_FILL = new Color(250, 250, 250, 180);
 	private static final Color STRIP_OUTLINE = new Color(190, 190, 190);
-	private static final Color EXTENSION_EMPTY = new Color(250, 235, 215, 64);
-	private static final Color EXTENSION_OUTLINE = new Color(255, 127, 80, 128);
 	private static final Color HIT_EXTENSION_FILL = new Color(255, 230, 35, 210);
 	private static final Color HIT_OUTLINE = new Color(120, 25, 20);
 	private static final double EXTENSION_GAP = 1.0;
@@ -98,20 +96,11 @@ public final class ECalView extends CedHexView {
 						stripPolygons.put(key, polygon);
 						g.setColor(EMPTY_FILL);
 						g.fillPolygon(polygon);
-						if (!accumulated) {
-							g.setColor(EXTENSION_EMPTY);
-							g.fillPolygon(extensionPolygon(container, plane, key, 1.0));
-						}
 					}
 				}
 			}
 			g.setColor(STRIP_OUTLINE);
 			for (Polygon polygon : stripPolygons.values()) g.drawPolygon(polygon);
-			if (!accumulated) {
-				g.setColor(EXTENSION_OUTLINE);
-				for (StripKey key : stripPolygons.keySet())
-					g.drawPolygon(extensionPolygon(container, plane, key, 1.0));
-			}
 			for (Map.Entry<StripKey, Polygon> entry : stripPolygons.entrySet()) {
 				StripKey key = entry.getKey();
 				AdcHit hit = adc.get(key);
@@ -136,6 +125,7 @@ public final class ECalView extends CedHexView {
 			}
 			if (!accumulated && isDisplayed(CedDisplayOption.RECON_CAL)) drawRecon(g, container, plane);
 			drawXYAxes(g, container);
+			CalorimeterDrawingSupport.drawDetectorLabel(g, "ECAL");
 		} finally {
 			g.dispose();
 		}
