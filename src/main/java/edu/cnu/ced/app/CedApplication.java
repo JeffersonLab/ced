@@ -1,7 +1,9 @@
 package edu.cnu.ced.app;
 
+import java.io.File;
 import java.io.IOException;
 import java.nio.file.Path;
+import java.util.prefs.Preferences;
 import javax.swing.JMenu;
 import javax.swing.JMenuItem;
 import javax.swing.JOptionPane;
@@ -26,6 +28,8 @@ import edu.cnu.mdi.app.StartupInfo;
 import edu.cnu.mdi.app.StartupWindow;
 import edu.cnu.mdi.dialog.FileDialogs;
 import edu.cnu.mdi.dialog.FileType;
+import edu.cnu.mdi.io.RecentFiles;
+import edu.cnu.mdi.io.RecentFilesMenu;
 import edu.cnu.mdi.log.Log;
 import edu.cnu.mdi.ui.menu.MenuManager;
 import edu.cnu.mdi.ui.menu.MenuContribution;
@@ -66,6 +70,9 @@ public final class CedApplication extends BaseMDIApplication {
 	private CurrentEventView currentEventView;
 	private Clas12Resources clas12Resources;
 	private AccumulationService accumulationService;
+	private RecentFiles recentEventFiles;
+	private RecentFilesMenu recentEventMenuHelper;
+	private JMenu recentEventMenu;
 
 	private CedApplication() {
 		super(PropertyUtils.TITLE, CedVersion.title(),
@@ -192,9 +199,16 @@ public final class CedApplication extends BaseMDIApplication {
 	private void addCedFileActions() {
 		JMenuItem openHipo = new JMenuItem("Open HIPO Event File...");
 		openHipo.addActionListener(event -> chooseHipoFile());
+		recentEventFiles = new RecentFiles(Preferences.userNodeForPackage(CedApplication.class)
+				.node("recent-event-files"), 12);
+		recentEventMenu = new JMenu("Recent Event Files");
+		recentEventMenuHelper = new RecentFilesMenu(recentEventFiles,
+				file -> openHipoFile(file.toPath()), "event files");
+		recentEventMenuHelper.rebuild(recentEventMenu);
 		JMenu fileMenu = MenuManager.getInstance().getFileMenu();
 		fileMenu.insert(openHipo, 0);
-		fileMenu.insertSeparator(1);
+		fileMenu.insert(recentEventMenu, 1);
+		fileMenu.insertSeparator(2);
 	}
 
 	private void chooseHipoFile() {
@@ -214,6 +228,9 @@ public final class CedApplication extends BaseMDIApplication {
 			protected void done() {
 				try {
 					eventNavigator.open(get());
+					File opened = path.toAbsolutePath().normalize().toFile();
+					recentEventFiles.add(opened);
+					recentEventMenuHelper.rebuild(recentEventMenu);
 					currentEventView.setVisible(true);
 					Log.getInstance().info("Opened " + path + " with "
 							+ eventNavigator.state().eventCount() + " events.");
