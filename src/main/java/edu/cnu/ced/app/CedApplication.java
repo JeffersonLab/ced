@@ -23,6 +23,7 @@ import edu.cnu.ced.resources.Clas12Resources;
 import edu.cnu.ced.view.CurrentEventView;
 import edu.cnu.ced.view.ftcal.FTCalXYView;
 import edu.cnu.ced.view.pcal.PCalView;
+import edu.cnu.ced.view.ecal.ECalView;
 import edu.cnu.mdi.app.BaseMDIApplication;
 import edu.cnu.mdi.app.StartupInfo;
 import edu.cnu.mdi.app.StartupWindow;
@@ -168,10 +169,14 @@ public final class CedApplication extends BaseMDIApplication {
 				"FTCal XY", () -> new FTCalXYView(geometryService.ftcal(), eventNavigator,
 						accumulationService.ftcal()),
 				8, 0, 0, VirtualView.CENTER));
-		ViewManager.getInstance().addConfiguration(ViewConfiguration.lazy(
+		ViewManager.getInstance().addConfiguration(ViewConfiguration.eager(
 				"PCAL", () -> new PCalView(geometryService.pcal(), eventNavigator,
 						accumulationService.pcal()),
-				9, 0, 0, VirtualView.CENTER));
+				4, 0, 0, VirtualView.CENTERRIGHT));
+		ViewManager.getInstance().addConfiguration(ViewConfiguration.eager(
+				"ECAL", () -> new ECalView(geometryService.ec(), eventNavigator,
+						accumulationService.ecal()),
+				4, 0, 0, VirtualView.CENTERLEFT));
 		Log.getInstance().config("CED MDI application shell initialized with "
 				+ VIRTUAL_DESKTOP_COLUMNS + " virtual desktop columns.");
 		Log.getInstance().config("CED launch configuration: geometry variation="

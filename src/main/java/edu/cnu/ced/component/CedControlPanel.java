@@ -36,7 +36,7 @@ public final class CedControlPanel extends JPanel {
 		super(new BorderLayout());
 		this.bankPrefixes = List.copyOf(bankPrefixes);
 		setPreferredSize(new Dimension(WIDTH, 420));
-		displayArray = new CedDisplayArray(options, 2, 10, 3, displayChanged);
+		displayArray = new CedDisplayArray(options, 3, 8, 3, displayChanged);
 
 		JTabbedPane tabs = new JTabbedPane();
 		tabs.setFont(Fonts.mediumFont);
@@ -58,16 +58,20 @@ public final class CedControlPanel extends JPanel {
 			ColorScaleBar legend = new ColorScaleBar(colorMap);
 			legend.setLabels("0", "maximum");
 			legend.setBorder(new CommonBorder(legendTitle));
+			legend.setBarHeight(18);
 			legend.setAlignmentX(LEFT_ALIGNMENT);
-			legend.setPreferredSize(new Dimension(WIDTH - 12, 54));
-			legend.setMaximumSize(new Dimension(Integer.MAX_VALUE, 54));
+			Dimension legendSize = new Dimension(WIDTH - 12,
+					legend.getPreferredSize().height);
+			legend.setPreferredSize(legendSize);
+			legend.setMinimumSize(legendSize);
+			legend.setMaximumSize(new Dimension(Integer.MAX_VALUE,
+					legendSize.height));
 			display.add(legend);
 		}
 		tabs.addTab("display", display);
 
 		JList<String> banks = new JList<>(bankModel);
 		tabs.addTab("banks", new JScrollPane(banks));
-		tabs.setPreferredSize(new Dimension(WIDTH, 216));
 		add(tabs, BorderLayout.NORTH);
 		add(feedback, BorderLayout.CENTER);
 	}

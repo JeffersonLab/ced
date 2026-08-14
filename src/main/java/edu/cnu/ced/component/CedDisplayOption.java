@@ -7,6 +7,8 @@ public enum CedDisplayOption {
 	RAW_DATA("Raw Data", true, null),
 	RECON_HITS("Recon Hits", true, null),
 	RECON_CAL("Recon Cal", true, null),
+	INNER_PLANE("Inner", true, "ec-plane"),
+	OUTER_PLANE("Outer", false, "ec-plane"),
 	U_STRIPS("U Strips", true, null),
 	V_STRIPS("V Strips", true, null),
 	W_STRIPS("W Strips", true, null);

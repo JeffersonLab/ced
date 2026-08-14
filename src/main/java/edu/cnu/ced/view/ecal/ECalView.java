@@ -1,4 +1,4 @@
-package edu.cnu.ced.view.pcal;
+package edu.cnu.ced.view.ecal;
 
 import java.awt.BasicStroke;
 import java.awt.Color;
@@ -14,13 +14,13 @@ import java.util.List;
 import java.util.Map;
 
 import edu.cnu.ced.component.CedDisplayOption;
-import edu.cnu.ced.data.PCalAccumulation;
-import edu.cnu.ced.data.PCalEventData;
-import edu.cnu.ced.data.PCalEventData.AdcHit;
-import edu.cnu.ced.data.PCalEventData.ReconHit;
+import edu.cnu.ced.data.ECalAccumulation;
+import edu.cnu.ced.data.ECalEventData;
+import edu.cnu.ced.data.ECalEventData.AdcHit;
+import edu.cnu.ced.data.ECalEventData.ReconHit;
 import edu.cnu.ced.event.EventNavigationState;
 import edu.cnu.ced.event.EventNavigator;
-import edu.cnu.ced.geometry.PCALGeometry;
+import edu.cnu.ced.geometry.ECGeometry;
 import edu.cnu.ced.geometry.Point3;
 import edu.cnu.ced.view.CedHexView;
 import edu.cnu.ced.view.calorimeter.CalorimeterDrawingSupport;
@@ -29,29 +29,29 @@ import edu.cnu.mdi.graphics.toolbar.ToolBits;
 import edu.cnu.mdi.ui.colors.ScientificColorMap;
 import edu.cnu.mdi.util.PropertyUtils;
 
-/** Six-sector PCAL laboratory XY display backed directly by CLAS banks. */
+/** Six-sector ECAL inner/outer-stack laboratory XY display. */
 @SuppressWarnings("serial")
-public final class PCalView extends CedHexView {
-
+public final class ECalView extends CedHexView {
 	private static final Color EMPTY_FILL = new Color(250, 250, 250, 180);
 	private static final Color STRIP_OUTLINE = new Color(190, 190, 190);
+	private static final Color EXTENSION_EMPTY = new Color(250, 235, 215, 64);
+	private static final Color EXTENSION_OUTLINE = new Color(255, 127, 80, 128);
 	private static final Color HIT_EXTENSION_FILL = new Color(255, 230, 35, 210);
-	private static final Color HIT_EXTENSION_OUTLINE = new Color(120, 25, 20);
+	private static final Color HIT_OUTLINE = new Color(120, 25, 20);
 	private static final double EXTENSION_GAP = 1.0;
 	private static final double MAX_EXTENSION_LENGTH = 32.0;
 	private static final int RECON_RADIUS = 7;
 
-	private final PCALGeometry geometry;
-	private final PCalAccumulation accumulation;
+	private final ECGeometry geometry;
+	private final ECalAccumulation accumulation;
 	private final Map<StripKey, Polygon> stripPolygons = new HashMap<>();
 	private final Map<ReconHit, Point> reconLocations = new HashMap<>();
-	private volatile PCalEventData eventData = PCalEventData.from(null);
+	private volatile ECalEventData eventData = ECalEventData.from(null);
 
-	public PCalView(PCALGeometry geometry, EventNavigator navigator,
-			PCalAccumulation accumulation) {
-		super(navigator, PropertyUtils.TITLE, "PCAL",
-				PropertyUtils.WIDTH, 760, PropertyUtils.HEIGHT, 760,
-				PropertyUtils.WORLDSYSTEM, new Rectangle2D.Double(410, -474, -820, 948),
+	public ECalView(ECGeometry geometry, EventNavigator navigator, ECalAccumulation accumulation) {
+		super(navigator, PropertyUtils.TITLE, "ECAL",
+				PropertyUtils.WIDTH, 780, PropertyUtils.HEIGHT, 780,
+				PropertyUtils.WORLDSYSTEM, new Rectangle2D.Double(430, -496.53562, -860, 993.07124),
 				PropertyUtils.BACKGROUND, new Color(235, 245, 250),
 				PropertyUtils.TOOLBARBITS, ToolBits.NAVIGATIONTOOLS,
 				PropertyUtils.WHEELZOOM, true, PropertyUtils.VISIBLE, true);
@@ -60,7 +60,8 @@ public final class PCalView extends CedHexView {
 		setAfterDraw(this::drawDetector);
 		initializeCedView(EnumSet.of(CedDisplayOption.SINGLE_EVENT,
 				CedDisplayOption.ACCUMULATION, CedDisplayOption.RAW_DATA,
-				CedDisplayOption.RECON_CAL, CedDisplayOption.U_STRIPS,
+				CedDisplayOption.RECON_CAL, CedDisplayOption.INNER_PLANE,
+				CedDisplayOption.OUTER_PLANE, CedDisplayOption.U_STRIPS,
 				CedDisplayOption.V_STRIPS, CedDisplayOption.W_STRIPS),
 				List.of("ECAL::", "REC::Calorimeter"), ScientificColorMap.TURBO,
 				"Relative ADC / accumulation");
@@ -68,7 +69,11 @@ public final class PCalView extends CedHexView {
 
 	@Override
 	protected void eventChanged(EventNavigationState state) {
-		eventData = PCalEventData.from(state.snapshot());
+		eventData = ECalEventData.from(state.snapshot());
+	}
+
+	private int displayedPlane() {
+		return isDisplayed(CedDisplayOption.INNER_PLANE) ? ECGeometry.INNER : ECGeometry.OUTER;
 	}
 
 	private void drawDetector(Graphics2D graphics, IContainer container) {
@@ -77,64 +82,73 @@ public final class PCalView extends CedHexView {
 			g.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
 			stripPolygons.clear();
 			reconLocations.clear();
+			int plane = displayedPlane();
 			boolean accumulated = isDisplayed(CedDisplayOption.ACCUMULATION);
 			Map<StripKey, AdcHit> adc = new HashMap<>();
 			if (!accumulated && isDisplayed(CedDisplayOption.RAW_DATA)) {
-				for (AdcHit hit : eventData.adcHits()) adc.put(new StripKey(hit.sector(), hit.view(), hit.strip()), hit);
+				for (AdcHit hit : eventData.adcHits()) if (hit.plane() == plane)
+					adc.put(new StripKey(hit.sector(), hit.view(), hit.strip()), hit);
 			}
-			// Fill first, then outline every selected strip. This preserves the full
-			// U/V/W pixel lattice instead of allowing the last view to erase it.
 			for (int sector = 1; sector <= 6; sector++) {
 				for (int view = 0; view < 3; view++) {
 					if (!showView(view)) continue;
-					for (int strip = 1; strip <= PCALGeometry.STRIP_COUNTS[view]; strip++) {
+					for (int strip = 1; strip <= ECGeometry.STRIP_COUNT; strip++) {
 						StripKey key = new StripKey(sector, view, strip);
-						Polygon polygon = polygon(container, sector, view, strip);
+						Polygon polygon = polygon(container, plane, key);
 						stripPolygons.put(key, polygon);
 						g.setColor(EMPTY_FILL);
 						g.fillPolygon(polygon);
+						if (!accumulated) {
+							g.setColor(EXTENSION_EMPTY);
+							g.fillPolygon(extensionPolygon(container, plane, key, 1.0));
+						}
 					}
 				}
 			}
 			g.setColor(STRIP_OUTLINE);
 			for (Polygon polygon : stripPolygons.values()) g.drawPolygon(polygon);
-
-			// Data are a separate overlay pass. Translucent fills retain crossings,
-			// while the outward extensions give U, V and W hits equal visual weight.
+			if (!accumulated) {
+				g.setColor(EXTENSION_OUTLINE);
+				for (StripKey key : stripPolygons.keySet())
+					g.drawPolygon(extensionPolygon(container, plane, key, 1.0));
+			}
 			for (Map.Entry<StripKey, Polygon> entry : stripPolygons.entrySet()) {
 				StripKey key = entry.getKey();
 				AdcHit hit = adc.get(key);
-				int count = accumulated ? accumulation.count(key.sector(), key.view(), key.strip()) : 0;
+				int count = accumulated ? accumulation.count(key.sector(), plane, key.view(), key.strip()) : 0;
 				double fraction = accumulated
-						? (accumulation.maximumCount() == 0 ? 0 : (double) count / accumulation.maximumCount())
-						: (hit == null || eventData.maximumAdc() == 0 ? 0 : (double) hit.adc() / eventData.maximumAdc());
+						? (accumulation.maximumCount(plane) == 0 ? 0.0
+								: (double) count / accumulation.maximumCount(plane))
+						: (hit == null || eventData.maximumAdc() == 0 ? 0.0
+								: (double) hit.adc() / eventData.maximumAdc());
 				if ((accumulated && count == 0) || (!accumulated && hit == null)) continue;
 				Color color = ScientificColorMap.TURBO.colorAt(fraction);
 				g.setColor(new Color(color.getRed(), color.getGreen(), color.getBlue(), 125));
 				g.fillPolygon(entry.getValue());
-				g.setColor(Color.DARK_GRAY);
+				g.setColor(HIT_OUTLINE);
 				g.drawPolygon(entry.getValue());
-				Polygon extension = extensionPolygon(container, key, fraction);
+				Polygon extension = extensionPolygon(container, plane, key,
+						Math.max(0.15, fraction));
 				g.setColor(HIT_EXTENSION_FILL);
 				g.fillPolygon(extension);
-				g.setColor(HIT_EXTENSION_OUTLINE);
+				g.setColor(HIT_OUTLINE);
 				g.drawPolygon(extension);
 			}
-			if (!accumulated && isDisplayed(CedDisplayOption.RECON_CAL)) drawRecon(g, container);
+			if (!accumulated && isDisplayed(CedDisplayOption.RECON_CAL)) drawRecon(g, container, plane);
 			drawXYAxes(g, container);
 		} finally {
 			g.dispose();
 		}
 	}
 
-	private Polygon polygon(IContainer container, int sector, int view, int strip) {
-		return polygon(container, worldStrip(sector, view, strip));
+	private Polygon polygon(IContainer container, int plane, StripKey key) {
+		return polygon(container, worldStrip(plane, key));
 	}
 
-	private Point2D.Double[] worldStrip(int sector, int view, int strip) {
+	private Point2D.Double[] worldStrip(int plane, StripKey key) {
 		Point2D.Double[] world = new Point2D.Double[4];
 		int index = 0;
-		List<Point3> vertices = geometry.stripVertices(sector, view, strip);
+		List<Point3> vertices = geometry.stripVertices(key.sector(), plane, key.view(), key.strip());
 		for (int corner : new int[] { 4, 5, 1, 0 }) {
 			Point3 vertex = vertices.get(corner);
 			world[index++] = new Point2D.Double(vertex.x(), vertex.y());
@@ -142,7 +156,7 @@ public final class PCalView extends CedHexView {
 		return world;
 	}
 
-	private Polygon polygon(IContainer container, Point2D.Double[] world) {
+	private static Polygon polygon(IContainer container, Point2D.Double[] world) {
 		Polygon polygon = new Polygon();
 		Point point = new Point();
 		for (Point2D.Double vertex : world) {
@@ -152,8 +166,9 @@ public final class PCalView extends CedHexView {
 		return polygon;
 	}
 
-	private Polygon extensionPolygon(IContainer container, StripKey key, double fraction) {
-		Point2D.Double[] strip = worldStrip(key.sector(), key.view(), key.strip());
+	private Polygon extensionPolygon(IContainer container, int plane, StripKey key,
+			double fraction) {
+		Point2D.Double[] strip = worldStrip(plane, key);
 		double length = MAX_EXTENSION_LENGTH * Math.max(0, Math.min(1, fraction));
 		double d1 = strip[1].distance(strip[2]);
 		double d2 = strip[0].distance(strip[3]);
@@ -172,9 +187,10 @@ public final class PCalView extends CedHexView {
 				from.y + scale * (toward.y - from.y));
 	}
 
-	private void drawRecon(Graphics2D g, IContainer container) {
+	private void drawRecon(Graphics2D g, IContainer container, int plane) {
 		g.setStroke(new BasicStroke(2f));
 		for (ReconHit hit : eventData.reconHits()) {
+			if (hit.plane() != plane) continue;
 			Point point = new Point();
 			container.worldToLocal(point, hit.x(), hit.y());
 			reconLocations.put(hit, point);
@@ -198,13 +214,15 @@ public final class PCalView extends CedHexView {
 
 	@Override
 	public void getFeedbackStrings(IContainer container, Point screenPoint,
-		Point2D.Double worldPoint, List<String> feedback) {
+			Point2D.Double worldPoint, List<String> feedback) {
+		feedback.add(displayedPlane() == ECGeometry.INNER ? "$white$INNER plane" : "$white$OUTER plane");
 		super.getFeedbackStrings(container, screenPoint, worldPoint, feedback);
 		int sector = sectorAt(worldPoint);
+		int plane = displayedPlane();
 		int[] uvw = { -1, -1, -1 };
 		for (int view = 0; view < 3; view++) {
-			for (int strip = 1; strip <= PCALGeometry.STRIP_COUNTS[view]; strip++) {
-				if (polygon(container, sector, view, strip).contains(screenPoint)) {
+			for (int strip = 1; strip <= ECGeometry.STRIP_COUNT; strip++) {
+				if (polygon(container, plane, new StripKey(sector, view, strip)).contains(screenPoint)) {
 					uvw[view] = strip;
 					break;
 				}
@@ -215,12 +233,12 @@ public final class PCalView extends CedHexView {
 			for (int view = 0; view < 3; view++) {
 				if (uvw[view] < 1) continue;
 				if (isDisplayed(CedDisplayOption.ACCUMULATION)) {
-					int count = accumulation.count(sector, view, uvw[view]);
+					int count = accumulation.count(sector, plane, view, uvw[view]);
 					if (count > 0) feedback.add(String.format("$cyan$%c occupancy %d / %d events",
 							"UVW".charAt(view), count, accumulation.eventCount()));
 				} else {
 					for (AdcHit hit : eventData.adcHits()) if (hit.sector() == sector
-							&& hit.view() == view && hit.strip() == uvw[view]) {
+							&& hit.plane() == plane && hit.view() == view && hit.strip() == uvw[view]) {
 						feedback.add(String.format("$cyan$%c strip %d adc %d time %7.3f",
 								"UVW".charAt(view), hit.strip(), hit.adc(), hit.time()));
 					}
