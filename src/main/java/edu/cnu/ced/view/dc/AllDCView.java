@@ -27,6 +27,7 @@ import edu.cnu.ced.event.EventNavigationState;
 import edu.cnu.ced.event.EventNavigator;
 import edu.cnu.ced.geometry.DCGeometry;
 import edu.cnu.ced.geometry.Point3;
+import edu.cnu.ced.style.CedDrawingStyle;
 import edu.cnu.ced.view.CedView;
 import edu.cnu.mdi.component.AspectRatioPanel;
 import edu.cnu.mdi.container.IContainer;
@@ -55,10 +56,6 @@ public final class AllDCView extends CedView {
 	private static final Color SECTOR_FILL = new Color(47, 79, 79);
 	private static final Color SHELL = new Color(245, 247, 247);
 	private static final Color LAYER_SHADE = new Color(155, 155, 155, 48);
-	private static final Color RAW = new Color(225, 35, 25);
-	private static final Map<ReconKind, Color> RECON_COLORS = Map.of(
-			ReconKind.HB, new Color(255, 190, 0), ReconKind.TB, new Color(20, 155, 235),
-			ReconKind.AI_HB, new Color(255, 80, 190), ReconKind.AI_TB, new Color(50, 180, 75));
 
 	private final DCGeometry geometry;
 	private final DCAccumulation accumulation;
@@ -153,14 +150,15 @@ public final class AllDCView extends CedView {
 
 	private void drawRaw(Graphics2D g, IContainer container) {
 		for (RawHit hit : data.rawHits()) fillCell(g, container,
-				new Cell(hit.sector(), hit.superlayer(), hit.layer(), hit.wire()), RAW, 0);
+				new Cell(hit.sector(), hit.superlayer(), hit.layer(), hit.wire()),
+				CedDrawingStyle.RAW_HIT, 0);
 	}
 
 	private void drawRecon(Graphics2D g, IContainer container) {
 		for (ReconHit hit : data.reconHits()) {
 			if (!show(hit.kind())) continue;
 			fillCell(g, container, new Cell(hit.sector(), hit.superlayer(), hit.layer(), hit.wire()),
-					RECON_COLORS.get(hit.kind()), 1);
+					CedDrawingStyle.reconstructionColor(hit.kind()), 1);
 		}
 	}
 

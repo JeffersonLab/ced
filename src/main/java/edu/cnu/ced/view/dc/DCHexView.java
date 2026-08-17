@@ -22,6 +22,7 @@ import edu.cnu.ced.data.DCEventData.ReconHit;
 import edu.cnu.ced.data.DCEventData.ReconKind;
 import edu.cnu.ced.event.EventNavigationState;
 import edu.cnu.ced.event.EventNavigator;
+import edu.cnu.ced.style.CedDrawingStyle;
 import edu.cnu.ced.view.CedView;
 import edu.cnu.mdi.container.IContainer;
 import edu.cnu.mdi.graphics.toolbar.ToolBits;
@@ -45,10 +46,6 @@ public final class DCHexView extends CedView {
 	private static final Color[] LAYER_COLORS = {
 			new Color(240, 255, 255), new Color(240, 248, 255)};
 	private static final Color CELL_LINE = new Color(235, 210, 210);
-	private static final Color RAW = new Color(225, 35, 25);
-	private static final Map<ReconKind, Color> RECON_COLORS = Map.of(
-			ReconKind.HB, new Color(255, 190, 0), ReconKind.TB, new Color(20, 155, 235),
-			ReconKind.AI_HB, new Color(255, 80, 190), ReconKind.AI_TB, new Color(50, 180, 75));
 
 	private final DCAccumulation accumulation;
 	private final Map<Cell, Polygon> screenCells = new HashMap<>();
@@ -108,13 +105,14 @@ public final class DCHexView extends CedView {
 
 	private void drawRaw(Graphics2D g, IContainer container) {
 		for (RawHit hit : data.rawHits()) fillCell(g, container,
-				new Cell(hit.sector(), hit.superlayer(), hit.layer(), hit.wire()), RAW);
+				new Cell(hit.sector(), hit.superlayer(), hit.layer(), hit.wire()),
+				CedDrawingStyle.RAW_HIT);
 	}
 
 	private void drawRecon(Graphics2D g, IContainer container) {
 		for (ReconHit hit : data.reconHits()) if (show(hit.kind()))
 			fillCell(g, container, new Cell(hit.sector(), hit.superlayer(), hit.layer(), hit.wire()),
-					RECON_COLORS.get(hit.kind()));
+					CedDrawingStyle.reconstructionColor(hit.kind()));
 	}
 
 	private void drawAccumulation(Graphics2D g, IContainer container) {

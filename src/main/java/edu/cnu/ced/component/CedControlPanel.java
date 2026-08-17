@@ -27,7 +27,7 @@ import edu.cnu.mdi.ui.fonts.Fonts;
 @SuppressWarnings("serial")
 public final class CedControlPanel extends JPanel {
 
-	private static final int WIDTH = 270;
+	public static final int DEFAULT_WIDTH = 270;
 	private final CedDisplayArray displayArray;
 	private final JTextArea eventSummary = new JTextArea("No event source open");
 	private final DefaultListModel<String> bankModel = new DefaultListModel<>();
@@ -38,10 +38,18 @@ public final class CedControlPanel extends JPanel {
 	public CedControlPanel(EnumSet<CedDisplayOption> options, List<String> bankPrefixes,
 			FeedbackPane feedback, ScientificColorMap colorMap, String legendTitle,
 			Runnable displayChanged) {
+		this(options, bankPrefixes, feedback, colorMap, legendTitle, displayChanged,
+				DEFAULT_WIDTH);
+	}
+
+	public CedControlPanel(EnumSet<CedDisplayOption> options, List<String> bankPrefixes,
+			FeedbackPane feedback, ScientificColorMap colorMap, String legendTitle,
+			Runnable displayChanged, int width) {
 		super(new BorderLayout());
 		this.bankPrefixes = List.copyOf(bankPrefixes);
-		setPreferredSize(new Dimension(WIDTH, 420));
-		displayArray = new CedDisplayArray(options, 3, 8, 3, displayChanged);
+		int panelWidth = Math.max(DEFAULT_WIDTH, width);
+		setPreferredSize(new Dimension(panelWidth, 420));
+		displayArray = new CedDisplayArray(options, 3, 4, 3, displayChanged);
 
 		tabs = new JTabbedPane();
 		tabs.setFont(Fonts.mediumFont);
@@ -63,7 +71,7 @@ public final class CedControlPanel extends JPanel {
 		eventSummary.setWrapStyleWord(false);
 		eventPanel.add(eventSummary, BorderLayout.CENTER);
 		eventPanel.setAlignmentX(LEFT_ALIGNMENT);
-		eventPanel.setPreferredSize(new Dimension(WIDTH - 12, 92));
+		eventPanel.setPreferredSize(new Dimension(panelWidth - 12, 92));
 		eventPanel.setMaximumSize(new Dimension(Integer.MAX_VALUE, 92));
 		displayPanel.add(eventPanel);
 		if (colorMap != null) {
@@ -72,7 +80,7 @@ public final class CedControlPanel extends JPanel {
 			legend.setBorder(new CommonBorder(legendTitle));
 			legend.setBarHeight(18);
 			legend.setAlignmentX(LEFT_ALIGNMENT);
-			Dimension legendSize = new Dimension(WIDTH - 12,
+			Dimension legendSize = new Dimension(panelWidth - 12,
 					legend.getPreferredSize().height);
 			legend.setPreferredSize(legendSize);
 			legend.setMinimumSize(legendSize);

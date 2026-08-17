@@ -55,6 +55,33 @@ class DCEventDataTest {
 		assertEquals(321, data.rawHits().getFirst().tdc());
 	}
 
+	@Test
+	void extractsClusterMembershipAndSegmentEndpoints() {
+		DataBank clusters = bank(new String[] {"sector", "superlayer", "id",
+				"Hit1_ID", "Hit2_ID", "Hit3_ID"}, 1,
+				Map.of("sector", new byte[] {3}, "superlayer", new byte[] {4},
+						"id", new short[] {12}, "Hit1_ID", new short[] {21},
+						"Hit2_ID", new short[] {22}, "Hit3_ID", new short[] {-1}));
+		DataBank segments = bank(new String[] {"sector", "superlayer",
+				"SegEndPoint1X", "SegEndPoint1Z", "SegEndPoint2X", "SegEndPoint2Z"}, 1,
+				Map.of("sector", new byte[] {3}, "superlayer", new byte[] {4},
+						"SegEndPoint1X", new float[] {10.5f},
+						"SegEndPoint1Z", new float[] {220.0f},
+						"SegEndPoint2X", new float[] {18.5f},
+						"SegEndPoint2Z", new float[] {310.0f}));
+
+		DCEventData data = DCEventData.from(EventSnapshot.of(event(Map.of(
+				"HitBasedTrkg::HBClusters", clusters,
+				"HitBasedTrkg::HBSegments", segments))));
+
+		assertEquals(1, data.clusters().size());
+		assertEquals(12, data.clusters().getFirst().id());
+		assertEquals(java.util.List.of(21, 22), data.clusters().getFirst().hitIds());
+		assertEquals(1, data.segments().size());
+		assertEquals(10.5f, data.segments().getFirst().x1());
+		assertEquals(310.0f, data.segments().getFirst().z2());
+	}
+
 	private static DataEvent event(Map<String, DataBank> banks) {
 		return (DataEvent) Proxy.newProxyInstance(DataEvent.class.getClassLoader(),
 				new Class<?>[] {DataEvent.class}, (instance, method, args) -> switch (method.getName()) {

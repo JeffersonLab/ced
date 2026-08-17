@@ -8,6 +8,7 @@ import java.awt.Polygon;
 import java.awt.RenderingHints;
 import java.awt.Rectangle;
 import java.awt.geom.Point2D;
+import java.awt.geom.Line2D;
 import java.awt.geom.Rectangle2D;
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -33,9 +34,12 @@ import edu.cnu.ced.data.DCEventData;
 import edu.cnu.ced.data.DCEventData.RawHit;
 import edu.cnu.ced.data.DCEventData.ReconHit;
 import edu.cnu.ced.data.DCEventData.ReconKind;
+import edu.cnu.ced.data.DCEventData.Cluster;
+import edu.cnu.ced.data.DCEventData.Segment;
 import edu.cnu.ced.event.EventNavigationState;
 import edu.cnu.ced.event.EventNavigator;
 import edu.cnu.ced.geometry.DCGeometry;
+import edu.cnu.ced.style.CedDrawingStyle;
 import edu.cnu.ced.view.CedView;
 import edu.cnu.mdi.container.IContainer;
 import edu.cnu.mdi.component.CommonBorder;
@@ -64,15 +68,12 @@ public final class SectorView extends CedView implements MagneticFieldChangeList
 	private static final Color CELL_LINE = new Color(170, 180, 185);
 	private static final double[] WIRE_THRESHOLD = {Double.NaN, 2.0, 2.0, 1.7, 1.7, 1.6, 1.6};
 	private static final double[] HEX_THRESHOLD = {Double.NaN, 16.0, 16.0, 12.0, 12.0, 7.0, 7.0};
-	private static final Color RAW = new Color(225, 35, 25);
-	private static final Map<ReconKind, Color> RECON_COLORS = Map.of(
-			ReconKind.HB, new Color(255, 185, 0), ReconKind.TB, new Color(20, 145, 235),
-			ReconKind.AI_HB, new Color(255, 70, 190), ReconKind.AI_TB, new Color(35, 175, 70));
 
 	private final DCGeometry geometry;
 	private final DCAccumulation accumulation;
 	private final Pair pair;
 	private final Map<Cell, Polygon> screenCells = new HashMap<>();
+	private final List<ScreenSegment> screenSegments = new ArrayList<>();
 	private volatile DCEventData data = DCEventData.from(null);
 	private volatile FieldProbe fieldProbe = FieldProbe.factory();
 	private volatile boolean showMagneticField;
@@ -95,9 +96,13 @@ public final class SectorView extends CedView implements MagneticFieldChangeList
 		initializeCedView(EnumSet.of(CedDisplayOption.SINGLE_EVENT,
 				CedDisplayOption.ACCUMULATION, CedDisplayOption.RAW_DATA,
 				CedDisplayOption.HB_HITS, CedDisplayOption.TB_HITS,
-				CedDisplayOption.AI_HB_HITS, CedDisplayOption.AI_TB_HITS),
+				CedDisplayOption.AI_HB_HITS, CedDisplayOption.AI_TB_HITS,
+				CedDisplayOption.CLUSTERS, CedDisplayOption.HB_SEGMENTS,
+				CedDisplayOption.TB_SEGMENTS, CedDisplayOption.AI_HB_SEGMENTS,
+				CedDisplayOption.AI_TB_SEGMENTS),
 				List.of("DC::", "HitBasedTrkg::", "TimeBasedTrkg::"),
-				ScientificColorMap.TURBO, "Relative occupancy (95th-percentile ceiling)");
+				ScientificColorMap.TURBO, "Relative occupancy (95th-percentile ceiling)",
+				340);
 		addControlTab("phi", createPhiPanel());
 		addControlTab("field", createFieldPanel());
 		MagneticFields.getInstance().addMagneticFieldChangeListener(this);
@@ -113,6 +118,7 @@ public final class SectorView extends CedView implements MagneticFieldChangeList
 		try {
 			g.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
 			screenCells.clear();
+			screenSegments.clear();
 			if (showMagneticField) drawMagneticField(g, container);
 			drawBeamline(g, container);
 			drawTarget(g, container);
@@ -122,6 +128,8 @@ public final class SectorView extends CedView implements MagneticFieldChangeList
 			else {
 				if (isDisplayed(CedDisplayOption.RAW_DATA)) drawRaw(g, container);
 				drawRecon(g, container);
+				drawClusters(g);
+				drawSegments(g, container);
 			}
 			drawLabels(g, container);
 			drawScale(g, container);
@@ -359,13 +367,70 @@ public final class SectorView extends CedView implements MagneticFieldChangeList
 
 	private void drawRaw(Graphics2D g, IContainer container) {
 		for (RawHit hit : data.rawHits()) if (displayedSector(hit.sector()))
-			fill(g, new Cell(hit.sector(), hit.superlayer(), hit.layer(), hit.wire()), RAW);
+			fill(g, new Cell(hit.sector(), hit.superlayer(), hit.layer(), hit.wire()),
+					CedDrawingStyle.RAW_HIT);
 	}
 
 	private void drawRecon(Graphics2D g, IContainer container) {
 		for (ReconHit hit : data.reconHits()) if (displayedSector(hit.sector()) && show(hit.kind()))
 			fill(g, new Cell(hit.sector(), hit.superlayer(), hit.layer(), hit.wire()),
-					RECON_COLORS.get(hit.kind()));
+					CedDrawingStyle.reconstructionColor(hit.kind()));
+	}
+
+	private void drawClusters(Graphics2D g) {
+		if (!isDisplayed(CedDisplayOption.CLUSTERS)) return;
+		g.setStroke(new BasicStroke(2.5f));
+		for (Cluster cluster : data.clusters()) {
+			if (!displayedSector(cluster.sector()) || !show(cluster.kind())) continue;
+			Color color = CedDrawingStyle.outline(
+					CedDrawingStyle.reconstructionColor(cluster.kind()));
+			for (int hitId : cluster.hitIds()) {
+				ReconHit hit = reconHit(cluster.kind(), hitId);
+				if (hit == null) continue;
+				Polygon polygon = screenCells.get(new Cell(hit.sector(), hit.superlayer(),
+						hit.layer(), hit.wire()));
+				if (polygon != null) {
+					g.setColor(color);
+					g.drawPolygon(polygon);
+				}
+			}
+		}
+		g.setStroke(new BasicStroke(1f));
+	}
+
+	private ReconHit reconHit(ReconKind kind, int id) {
+		for (ReconHit hit : data.reconHits())
+			if (hit.kind() == kind && hit.id() == id) return hit;
+		return null;
+	}
+
+	private void drawSegments(Graphics2D g, IContainer container) {
+		for (Segment segment : data.segments()) {
+			if (!displayedSector(segment.sector()) || !showSegment(segment.kind())) continue;
+			Point2D.Double w1 = SectorProjection.sectorPoint(segment.x1(), segment.z1(),
+					segment.sector(), phiOffsetDegrees);
+			Point2D.Double w2 = SectorProjection.sectorPoint(segment.x2(), segment.z2(),
+					segment.sector(), phiOffsetDegrees);
+			Point p1 = local(container, w1.x, w1.y);
+			Point p2 = local(container, w2.x, w2.y);
+			Color color = CedDrawingStyle.reconstructionColor(segment.kind());
+			g.setStroke(new BasicStroke(6f, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND));
+			g.setColor(new Color(245, 245, 210, 180));
+			g.drawLine(p1.x, p1.y, p2.x, p2.y);
+			g.setStroke(new BasicStroke(1.5f));
+			g.setColor(color.darker());
+			g.drawLine(p1.x, p1.y, p2.x, p2.y);
+			drawEndpoint(g, p1, color);
+			drawEndpoint(g, p2, color);
+			screenSegments.add(new ScreenSegment(segment, p1, p2));
+		}
+	}
+
+	private static void drawEndpoint(Graphics2D g, Point point, Color color) {
+		g.setColor(color);
+		g.fillOval(point.x - 3, point.y - 3, 7, 7);
+		g.setColor(Color.BLACK);
+		g.drawOval(point.x - 3, point.y - 3, 7, 7);
 	}
 
 	private void drawAccumulation(Graphics2D g, IContainer container) {
@@ -448,12 +513,32 @@ public final class SectorView extends CedView implements MagneticFieldChangeList
 		};
 	}
 
+	private boolean showSegment(ReconKind kind) {
+		return switch (kind) {
+			case HB -> isDisplayed(CedDisplayOption.HB_SEGMENTS);
+			case TB -> isDisplayed(CedDisplayOption.TB_SEGMENTS);
+			case AI_HB -> isDisplayed(CedDisplayOption.AI_HB_SEGMENTS);
+			case AI_TB -> isDisplayed(CedDisplayOption.AI_TB_SEGMENTS);
+		};
+	}
+
 	@Override
 	public void getFeedbackStrings(IContainer container, Point screenPoint,
 			Point2D.Double worldPoint, List<String> feedback) {
 		feedback.add(String.format("$yellow$(z, transverse) = (%6.2f, %6.2f) cm",
 				worldPoint.x, worldPoint.y));
 		addFieldFeedback(worldPoint, feedback);
+		for (ScreenSegment drawn : screenSegments) {
+			if (Line2D.ptSegDist(drawn.start.x, drawn.start.y, drawn.end.x,
+					drawn.end.y, screenPoint.x, screenPoint.y) <= 5.0) {
+				Segment segment = drawn.segment;
+				feedback.add(String.format("$orange$%s segment sector %d superlayer %d",
+						segment.kind(), segment.sector(), segment.superlayer()));
+				feedback.add(String.format("$orange$endpoints (x,z) (%.2f, %.2f) to (%.2f, %.2f) cm",
+						segment.x1(), segment.z1(), segment.x2(), segment.z2()));
+				break;
+			}
+		}
 		Cell cell = screenCells.entrySet().stream().filter(e -> e.getValue().contains(screenPoint))
 				.map(Map.Entry::getKey).findFirst().orElse(null);
 		if (cell == null) return;
@@ -515,6 +600,8 @@ public final class SectorView extends CedView implements MagneticFieldChangeList
 		boolean matches(ReconHit hit) { return sector == hit.sector() && superlayer == hit.superlayer()
 				&& layer == hit.layer() && wire == hit.wire(); }
 	}
+
+	private record ScreenSegment(Segment segment, Point start, Point end) { }
 
 	@Override
 	public void magneticFieldChanged() {

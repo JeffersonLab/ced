@@ -32,6 +32,13 @@ final class SectorProjection {
 		return cell(geometry, sector, superlayer, layer, wire, 0.0);
 	}
 
+	/** Project a point expressed in sector coordinates with {@code y=0}. */
+	static Point2D.Double sectorPoint(double x, double z, int sector,
+			double phiOffsetDegrees) {
+		double transverse = x * Math.cos(Math.toRadians(phiOffsetDegrees));
+		return new Point2D.Double(z, sector <= 3 ? transverse : -transverse);
+	}
+
 	/**
 	 * Returns a display hexagon centered on the intersection of the selected phi
 	 * plane and an infinitely extended wire. Using the same construction at every

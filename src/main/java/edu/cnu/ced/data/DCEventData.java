@@ -9,23 +9,34 @@ import edu.cnu.ced.event.BankAccess;
 import edu.cnu.ced.event.EventSnapshot;
 
 /** Immutable drift-chamber data extracted from one atomic event snapshot. */
-public record DCEventData(List<RawHit> rawHits, List<ReconHit> reconHits) {
+public record DCEventData(List<RawHit> rawHits, List<ReconHit> reconHits,
+		List<Cluster> clusters, List<Segment> segments) {
 
 	public static final String RAW_BANK = "DC::tdc";
 	public static final String TOT_BANK = "DC::tot";
-	private static final DCEventData EMPTY = new DCEventData(List.of(), List.of());
+	private static final DCEventData EMPTY = new DCEventData(List.of(), List.of(),
+			List.of(), List.of());
 
 	public enum ReconKind { HB, TB, AI_HB, AI_TB }
 
 	public DCEventData {
 		rawHits = List.copyOf(rawHits);
 		reconHits = List.copyOf(reconHits);
+		clusters = List.copyOf(clusters);
+		segments = List.copyOf(segments);
+	}
+
+	/** Compatibility constructor for callers that only supply hit data. */
+	public DCEventData(List<RawHit> rawHits, List<ReconHit> reconHits) {
+		this(rawHits, reconHits, List.of(), List.of());
 	}
 
 	public static DCEventData from(EventSnapshot snapshot) {
 		if (snapshot == null || !snapshot.hasEvent()) return EMPTY;
 		ArrayList<RawHit> raw = new ArrayList<>();
 		ArrayList<ReconHit> recon = new ArrayList<>();
+		ArrayList<Cluster> clusters = new ArrayList<>();
+		ArrayList<Segment> segments = new ArrayList<>();
 		DataBank timingBank = snapshot.bank(RAW_BANK).filter(bank -> bank.rows() > 0)
 				.orElseGet(() -> snapshot.bank(TOT_BANK).filter(bank -> bank.rows() > 0)
 						.orElse(null));
@@ -34,7 +45,50 @@ public record DCEventData(List<RawHit> rawHits, List<ReconHit> reconHits) {
 		readRecon(snapshot.bank("TimeBasedTrkg::TBHits").orElse(null), ReconKind.TB, recon);
 		readRecon(snapshot.bank("HitBasedTrkg::AIHits").orElse(null), ReconKind.AI_HB, recon);
 		readRecon(snapshot.bank("TimeBasedTrkg::AIHits").orElse(null), ReconKind.AI_TB, recon);
-		return raw.isEmpty() && recon.isEmpty() ? EMPTY : new DCEventData(raw, recon);
+		readClusters(snapshot.bank("HitBasedTrkg::HBClusters").orElse(null), ReconKind.HB, clusters);
+		readClusters(snapshot.bank("TimeBasedTrkg::TBClusters").orElse(null), ReconKind.TB, clusters);
+		readClusters(snapshot.bank("HitBasedTrkg::AIClusters").orElse(null), ReconKind.AI_HB, clusters);
+		readClusters(snapshot.bank("TimeBasedTrkg::AIClusters").orElse(null), ReconKind.AI_TB, clusters);
+		readSegments(snapshot.bank("HitBasedTrkg::HBSegments").orElse(null), ReconKind.HB, segments);
+		readSegments(snapshot.bank("TimeBasedTrkg::TBSegments").orElse(null), ReconKind.TB, segments);
+		readSegments(snapshot.bank("HitBasedTrkg::AISegments").orElse(null), ReconKind.AI_HB, segments);
+		readSegments(snapshot.bank("TimeBasedTrkg::AISegments").orElse(null), ReconKind.AI_TB, segments);
+		return raw.isEmpty() && recon.isEmpty() && clusters.isEmpty() && segments.isEmpty()
+				? EMPTY : new DCEventData(raw, recon, clusters, segments);
+	}
+
+	private static void readClusters(DataBank bank, ReconKind kind,
+			List<Cluster> destination) {
+		if (!hasColumns(bank, "sector", "superlayer", "id")) return;
+		for (int row = 0; row < bank.rows(); row++) {
+			int sector = bank.getByte("sector", row);
+			int superlayer = bank.getByte("superlayer", row);
+			if (sector < 1 || sector > 6 || superlayer < 1 || superlayer > 6) continue;
+			ArrayList<Integer> hitIds = new ArrayList<>(12);
+			for (int hit = 1; hit <= 12; hit++) {
+				String column = "Hit" + hit + "_ID";
+				if (!BankAccess.hasColumn(bank, column)) break;
+				int id = bank.getShort(column, row);
+				if (id <= 0) break;
+				hitIds.add(id);
+			}
+			destination.add(new Cluster(kind, row, sector, superlayer,
+					bank.getShort("id", row), List.copyOf(hitIds)));
+		}
+	}
+
+	private static void readSegments(DataBank bank, ReconKind kind,
+			List<Segment> destination) {
+		if (!hasColumns(bank, "sector", "superlayer", "SegEndPoint1X",
+				"SegEndPoint1Z", "SegEndPoint2X", "SegEndPoint2Z")) return;
+		for (int row = 0; row < bank.rows(); row++) {
+			int sector = bank.getByte("sector", row);
+			int superlayer = bank.getByte("superlayer", row);
+			if (sector < 1 || sector > 6 || superlayer < 1 || superlayer > 6) continue;
+			destination.add(new Segment(kind, row, sector, superlayer,
+					bank.getFloat("SegEndPoint1X", row), bank.getFloat("SegEndPoint1Z", row),
+					bank.getFloat("SegEndPoint2X", row), bank.getFloat("SegEndPoint2Z", row)));
+		}
 	}
 
 	private static void readRaw(DataBank bank, List<RawHit> destination) {
@@ -91,4 +145,10 @@ public record DCEventData(List<RawHit> rawHits, List<ReconHit> reconHits) {
 	public record ReconHit(ReconKind kind, int row, int sector, int superlayer,
 			int layer, int wire, int id, int status, int clusterId, float trackDoca,
 			float docaError) { }
+
+	public record Cluster(ReconKind kind, int row, int sector, int superlayer,
+			int id, List<Integer> hitIds) { }
+
+	public record Segment(ReconKind kind, int row, int sector, int superlayer,
+			float x1, float z1, float x2, float z2) { }
 }

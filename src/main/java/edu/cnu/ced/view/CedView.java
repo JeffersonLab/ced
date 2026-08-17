@@ -41,9 +41,17 @@ public abstract class CedView extends BaseView {
 	 */
 	protected final void initializeCedView(EnumSet<CedDisplayOption> options,
 			List<String> bankPrefixes, ScientificColorMap colorMap, String legendTitle) {
+		initializeCedView(options, bankPrefixes, colorMap, legendTitle,
+				CedControlPanel.DEFAULT_WIDTH);
+	}
+
+	/** Install the standard controls with a detector-specific sidebar width. */
+	protected final void initializeCedView(EnumSet<CedDisplayOption> options,
+			List<String> bankPrefixes, ScientificColorMap colorMap, String legendTitle,
+			int controlWidth) {
 		FeedbackPane feedback = initFeedback(Color.CYAN, Color.BLACK, 10);
 		controls = new CedControlPanel(options, bankPrefixes, feedback, colorMap,
-				legendTitle, this::refresh);
+				legendTitle, this::refresh, controlWidth);
 		add(controls, BorderLayout.EAST);
 		// BaseView packs its canvas before detector-specific controls are installed.
 		// Repack now so an east panel expands the frame instead of stealing canvas.
