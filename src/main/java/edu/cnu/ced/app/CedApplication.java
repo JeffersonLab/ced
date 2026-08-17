@@ -29,6 +29,8 @@ import edu.cnu.ced.view.central.CentralXYView;
 import edu.cnu.ced.view.central.CentralZView;
 import edu.cnu.ced.view.dc.AllDCView;
 import edu.cnu.ced.view.dc.DCHexView;
+import edu.cnu.ced.view.sector.SectorView;
+import edu.cnu.ced.view.sector.SectorView.Pair;
 import edu.cnu.mdi.app.BaseMDIApplication;
 import edu.cnu.mdi.app.StartupInfo;
 import edu.cnu.mdi.app.StartupWindow;
@@ -203,6 +205,18 @@ public final class CedApplication extends BaseMDIApplication {
 		ViewManager.getInstance().addConfiguration(ViewConfiguration.lazy(
 				"DC Hex", () -> new DCHexView(eventNavigator, accumulationService.dc()),
 				6, 0, 0, VirtualView.CENTER));
+		ViewManager.getInstance().addConfiguration(ViewConfiguration.eager(
+				"Sectors 3 and 6", () -> new SectorView(Pair.SECTORS_3_6,
+						geometryService.dc(), eventNavigator, accumulationService.dc()),
+				0, 20, 65, VirtualView.UPPERLEFT));
+		ViewManager.getInstance().addConfiguration(ViewConfiguration.eager(
+				"Sectors 2 and 5", () -> new SectorView(Pair.SECTORS_2_5,
+						geometryService.dc(), eventNavigator, accumulationService.dc()),
+				0, 85, 115, VirtualView.UPPERLEFT));
+		ViewManager.getInstance().addConfiguration(ViewConfiguration.eager(
+				"Sectors 1 and 4", () -> new SectorView(Pair.SECTORS_1_4,
+						geometryService.dc(), eventNavigator, accumulationService.dc()),
+				0, 150, 165, VirtualView.UPPERLEFT));
 		Log.getInstance().config("CED MDI application shell initialized with "
 				+ VIRTUAL_DESKTOP_COLUMNS + " virtual desktop columns.");
 		Log.getInstance().config("CED launch configuration: geometry variation="
@@ -278,7 +292,7 @@ public final class CedApplication extends BaseMDIApplication {
 
 	@Override
 	protected void defaultViewLayout() {
-		virtualViewMove(currentEventView, 0, VirtualView.CENTER);
+		virtualViewMove(currentEventView, 1, VirtualView.CENTER);
 		virtualViewMove(logView, 17, VirtualView.UPPERLEFT);
 		virtualViewMove(jsonView, 17, VirtualView.BOTTOMRIGHT);
 	}

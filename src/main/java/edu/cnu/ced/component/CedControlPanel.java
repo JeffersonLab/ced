@@ -33,6 +33,7 @@ public final class CedControlPanel extends JPanel {
 	private final DefaultListModel<String> bankModel = new DefaultListModel<>();
 	private final List<String> bankPrefixes;
 	private final JPanel displayPanel;
+	private final JTabbedPane tabs;
 
 	public CedControlPanel(EnumSet<CedDisplayOption> options, List<String> bankPrefixes,
 			FeedbackPane feedback, ScientificColorMap colorMap, String legendTitle,
@@ -42,7 +43,7 @@ public final class CedControlPanel extends JPanel {
 		setPreferredSize(new Dimension(WIDTH, 420));
 		displayArray = new CedDisplayArray(options, 3, 8, 3, displayChanged);
 
-		JTabbedPane tabs = new JTabbedPane();
+		tabs = new JTabbedPane();
 		tabs.setFont(Fonts.mediumFont);
 		displayPanel = new JPanel();
 		displayPanel.setLayout(new BoxLayout(displayPanel, BoxLayout.Y_AXIS));
@@ -93,6 +94,11 @@ public final class CedControlPanel extends JPanel {
 			swingComponent.setAlignmentX(LEFT_ALIGNMENT);
 		displayPanel.add(component, 1);
 		displayPanel.revalidate();
+	}
+
+	/** Add a detector-specific tab beside the standard display and banks tabs. */
+	public void addTab(String title, Component component) {
+		tabs.addTab(title, component);
 	}
 
 	public boolean isSelected(CedDisplayOption option) {
