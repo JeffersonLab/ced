@@ -28,6 +28,7 @@ import edu.cnu.ced.view.ecal.ECalView;
 import edu.cnu.ced.view.central.CentralXYView;
 import edu.cnu.ced.view.central.CentralZView;
 import edu.cnu.ced.view.dc.AllDCView;
+import edu.cnu.ced.view.dc.DCHexView;
 import edu.cnu.mdi.app.BaseMDIApplication;
 import edu.cnu.mdi.app.StartupInfo;
 import edu.cnu.mdi.app.StartupWindow;
@@ -199,6 +200,9 @@ public final class CedApplication extends BaseMDIApplication {
 				"All Drift Chambers", () -> new AllDCView(geometryService.dc(), eventNavigator,
 						accumulationService.dc()),
 				3, 0, 0, VirtualView.CENTER));
+		ViewManager.getInstance().addConfiguration(ViewConfiguration.lazy(
+				"DC Hex", () -> new DCHexView(eventNavigator, accumulationService.dc()),
+				6, 0, 0, VirtualView.CENTER));
 		Log.getInstance().config("CED MDI application shell initialized with "
 				+ VIRTUAL_DESKTOP_COLUMNS + " virtual desktop columns.");
 		Log.getInstance().config("CED launch configuration: geometry variation="
