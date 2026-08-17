@@ -26,4 +26,9 @@ public final class CedDisplayArray extends CheckBoxArray {
 	public boolean isSelected(CedDisplayOption option) {
 		return super.isSelected(option.label());
 	}
+
+	/** Select an option without synthesizing a user action event. */
+	public void setSelected(CedDisplayOption option, boolean selected) {
+		super.setSelected(option.label(), selected);
+	}
 }

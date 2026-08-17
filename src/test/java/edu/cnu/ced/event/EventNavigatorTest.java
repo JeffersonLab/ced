@@ -67,6 +67,23 @@ class EventNavigatorTest {
 		assertEquals(3, navigator.state().sequenceNumber());
 	}
 
+	@Test
+	void announcesEachNewSourceBeforePublishingItsFirstEvent() {
+		EventNavigator navigator = new EventNavigator(new EventStore());
+		List<String> notifications = new ArrayList<>();
+		navigator.addSourceListener(() -> notifications.add("source"));
+		navigator.addListener(state -> notifications.add("event-" + state.sequenceNumber()));
+
+		FakeSource first = new FakeSource(2);
+		navigator.open(first);
+		navigator.next();
+		navigator.open(new FakeSource(1));
+
+		assertTrue(first.closed);
+		assertEquals(List.of("source", "event-1", "event-2", "source", "event-1"),
+				notifications);
+	}
+
 	private static final class FakeSource implements EventSource {
 		private final List<DataEvent> events;
 		private int index = -1;

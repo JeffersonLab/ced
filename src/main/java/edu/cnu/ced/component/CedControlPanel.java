@@ -14,6 +14,7 @@ import javax.swing.JComponent;
 import javax.swing.JPanel;
 import javax.swing.JScrollPane;
 import javax.swing.JTabbedPane;
+import javax.swing.JTextArea;
 
 import edu.cnu.ced.event.EventNavigationState;
 import edu.cnu.mdi.component.CommonBorder;
@@ -28,7 +29,7 @@ public final class CedControlPanel extends JPanel {
 
 	private static final int WIDTH = 270;
 	private final CedDisplayArray displayArray;
-	private final JLabel eventSummary = new JLabel("No event source open");
+	private final JTextArea eventSummary = new JTextArea("No event source open");
 	private final DefaultListModel<String> bankModel = new DefaultListModel<>();
 	private final List<String> bankPrefixes;
 	private final JPanel displayPanel;
@@ -53,9 +54,16 @@ public final class CedControlPanel extends JPanel {
 		displayPanel.add(displayArray);
 		JPanel eventPanel = new JPanel(new BorderLayout());
 		eventPanel.setBorder(new CommonBorder("Current event"));
+		eventSummary.setEditable(false);
+		eventSummary.setFocusable(false);
+		eventSummary.setOpaque(false);
+		eventSummary.setFont(Fonts.smallFont);
+		eventSummary.setLineWrap(true);
+		eventSummary.setWrapStyleWord(false);
 		eventPanel.add(eventSummary, BorderLayout.CENTER);
 		eventPanel.setAlignmentX(LEFT_ALIGNMENT);
-		eventPanel.setMaximumSize(new Dimension(Integer.MAX_VALUE, 48));
+		eventPanel.setPreferredSize(new Dimension(WIDTH - 12, 92));
+		eventPanel.setMaximumSize(new Dimension(Integer.MAX_VALUE, 92));
 		displayPanel.add(eventPanel);
 		if (colorMap != null) {
 			ColorScaleBar legend = new ColorScaleBar(colorMap);
@@ -91,10 +99,25 @@ public final class CedControlPanel extends JPanel {
 		return displayArray.isSelected(option);
 	}
 
+	/** Restore the standard display mode used when an event source changes. */
+	public void showSingleEvent() {
+		displayArray.setSelected(CedDisplayOption.SINGLE_EVENT, true);
+	}
+
 	public void update(EventNavigationState state) {
-		eventSummary.setText(state.isOpen()
-				? "Sequence " + state.sequenceNumber() + " of " + state.eventCount()
-				: "No event source open");
+		if (state.isOpen()) {
+			edu.cnu.ced.event.RunConfig config =
+					edu.cnu.ced.event.RunConfig.from(state.snapshot()).orElse(null);
+			String sourceType = state.source().toLowerCase(java.util.Locale.ROOT)
+					.endsWith(".hipo") ? "HIPOFILE" : "EVENT SOURCE";
+			eventSummary.setText("Event source: " + sourceType
+					+ "\nFile: " + state.source()
+					+ "\nSequential number: " + state.sequenceNumber()
+					+ (config == null ? "" : "\nTrue number: " + config.event()
+							+ "   Run: " + config.run()));
+		} else {
+			eventSummary.setText("No event source open");
+		}
 		bankModel.clear();
 		state.snapshot().bankNames().stream().filter(this::matches).forEach(bankModel::addElement);
 	}

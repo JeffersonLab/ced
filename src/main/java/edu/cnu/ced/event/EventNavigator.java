@@ -14,6 +14,8 @@ public final class EventNavigator implements AutoCloseable {
 	private final EventStore store;
 	private final CopyOnWriteArrayList<Consumer<EventNavigationState>> listeners =
 			new CopyOnWriteArrayList<>();
+	private final CopyOnWriteArrayList<Runnable> sourceListeners =
+			new CopyOnWriteArrayList<>();
 
 	private EventSource source;
 	private volatile EventNavigationState state = EventNavigationState.closed();
@@ -34,15 +36,25 @@ public final class EventNavigator implements AutoCloseable {
 		listeners.remove(listener);
 	}
 
+	/** Register a callback invoked before the first event from each new source. */
+	public void addSourceListener(Runnable listener) {
+		sourceListeners.addIfAbsent(Objects.requireNonNull(listener, "listener"));
+	}
+
+	public void removeSourceListener(Runnable listener) {
+		sourceListeners.remove(listener);
+	}
+
 	/** Open a source and publish its first event, when present. */
 	public void open(EventSource newSource) {
 		Objects.requireNonNull(newSource, "newSource");
 		closeSource();
 		source = newSource;
+		store.clear();
+		sourceListeners.forEach(Runnable::run);
 		if (source.size() > 0 && source.hasNext()) {
 			publish(source.next());
 		} else {
-			store.clear();
 			updateState(EventSnapshot.empty());
 		}
 	}

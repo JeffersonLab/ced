@@ -24,6 +24,7 @@ public abstract class CedView extends BaseView {
 
 	private final EventNavigator navigator;
 	private final Consumer<EventNavigationState> eventListener = this::acceptEventState;
+	private final Runnable sourceListener = this::acceptSourceChange;
 	private CedControlPanel controls;
 	private boolean listening;
 
@@ -48,6 +49,7 @@ public abstract class CedView extends BaseView {
 		// Repack now so an east panel expands the frame instead of stealing canvas.
 		pack();
 		navigator.addListener(eventListener);
+		navigator.addSourceListener(sourceListener);
 		listening = true;
 		acceptEventState(navigator.state());
 	}
@@ -79,6 +81,15 @@ public abstract class CedView extends BaseView {
 		else SwingUtilities.invokeLater(update);
 	}
 
+	private void acceptSourceChange() {
+		Runnable reset = () -> {
+			if (controls != null) controls.showSingleEvent();
+			refresh();
+		};
+		if (SwingUtilities.isEventDispatchThread()) reset.run();
+		else SwingUtilities.invokeLater(reset);
+	}
+
 	private void installNextButton() {
 		if (getToolBar() == null) return;
 		JButton next = new JButton("Next");
@@ -90,7 +101,10 @@ public abstract class CedView extends BaseView {
 
 	@Override
 	public void dispose() {
-		if (listening) navigator.removeListener(eventListener);
+		if (listening) {
+			navigator.removeListener(eventListener);
+			navigator.removeSourceListener(sourceListener);
+		}
 		super.dispose();
 	}
 }

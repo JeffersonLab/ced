@@ -27,6 +27,7 @@ import edu.cnu.ced.view.pcal.PCalView;
 import edu.cnu.ced.view.ecal.ECalView;
 import edu.cnu.ced.view.central.CentralXYView;
 import edu.cnu.ced.view.central.CentralZView;
+import edu.cnu.ced.view.dc.AllDCView;
 import edu.cnu.mdi.app.BaseMDIApplication;
 import edu.cnu.mdi.app.StartupInfo;
 import edu.cnu.mdi.app.StartupWindow;
@@ -156,6 +157,7 @@ public final class CedApplication extends BaseMDIApplication {
 		eventStore = new EventStore();
 		eventNavigator = new EventNavigator(eventStore);
 		accumulationService = new AccumulationService();
+		eventNavigator.addSourceListener(accumulationService::clear);
 		if (bootstrap != null) {
 			magneticFieldService = bootstrap.magneticFields();
 			geometryService = bootstrap.geometry();
@@ -193,6 +195,10 @@ public final class CedApplication extends BaseMDIApplication {
 				"Central Z", () -> new CentralZView(geometryService.bst(), geometryService.bmt(),
 						eventNavigator, accumulationService.central()),
 				8, 0, 0, VirtualView.CENTER));
+		ViewManager.getInstance().addConfiguration(ViewConfiguration.eager(
+				"All Drift Chambers", () -> new AllDCView(geometryService.dc(), eventNavigator,
+						accumulationService.dc()),
+				3, 0, 0, VirtualView.CENTER));
 		Log.getInstance().config("CED MDI application shell initialized with "
 				+ VIRTUAL_DESKTOP_COLUMNS + " virtual desktop columns.");
 		Log.getInstance().config("CED launch configuration: geometry variation="
