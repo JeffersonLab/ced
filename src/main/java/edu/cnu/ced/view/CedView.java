@@ -56,6 +56,12 @@ public abstract class CedView extends BaseView {
 		return controls != null && controls.isSelected(option);
 	}
 
+	/** Add a detector-specific component to the standard display tab. */
+	protected final void addDisplayControl(java.awt.Component component) {
+		if (controls == null) throw new IllegalStateException("CED view is not initialized");
+		controls.addDisplayControl(component);
+	}
+
 	protected final EventNavigationState eventState() {
 		return navigator.state();
 	}

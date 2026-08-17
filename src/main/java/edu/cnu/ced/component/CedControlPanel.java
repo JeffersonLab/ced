@@ -2,6 +2,7 @@ package edu.cnu.ced.component;
 
 import java.awt.BorderLayout;
 import java.awt.Dimension;
+import java.awt.Component;
 import java.util.EnumSet;
 import java.util.List;
 
@@ -9,6 +10,7 @@ import javax.swing.BoxLayout;
 import javax.swing.DefaultListModel;
 import javax.swing.JLabel;
 import javax.swing.JList;
+import javax.swing.JComponent;
 import javax.swing.JPanel;
 import javax.swing.JScrollPane;
 import javax.swing.JTabbedPane;
@@ -29,6 +31,7 @@ public final class CedControlPanel extends JPanel {
 	private final JLabel eventSummary = new JLabel("No event source open");
 	private final DefaultListModel<String> bankModel = new DefaultListModel<>();
 	private final List<String> bankPrefixes;
+	private final JPanel displayPanel;
 
 	public CedControlPanel(EnumSet<CedDisplayOption> options, List<String> bankPrefixes,
 			FeedbackPane feedback, ScientificColorMap colorMap, String legendTitle,
@@ -40,20 +43,20 @@ public final class CedControlPanel extends JPanel {
 
 		JTabbedPane tabs = new JTabbedPane();
 		tabs.setFont(Fonts.mediumFont);
-		JPanel display = new JPanel();
-		display.setLayout(new BoxLayout(display, BoxLayout.Y_AXIS));
-		display.setBorder(javax.swing.BorderFactory.createEmptyBorder(3, 3, 3, 3));
+		displayPanel = new JPanel();
+		displayPanel.setLayout(new BoxLayout(displayPanel, BoxLayout.Y_AXIS));
+		displayPanel.setBorder(javax.swing.BorderFactory.createEmptyBorder(3, 3, 3, 3));
 		displayArray.setBorder(new CommonBorder("Visibility"));
 		displayArray.setAlignmentX(LEFT_ALIGNMENT);
 		displayArray.setMaximumSize(new Dimension(Integer.MAX_VALUE,
 				displayArray.getPreferredSize().height));
-		display.add(displayArray);
+		displayPanel.add(displayArray);
 		JPanel eventPanel = new JPanel(new BorderLayout());
 		eventPanel.setBorder(new CommonBorder("Current event"));
 		eventPanel.add(eventSummary, BorderLayout.CENTER);
 		eventPanel.setAlignmentX(LEFT_ALIGNMENT);
 		eventPanel.setMaximumSize(new Dimension(Integer.MAX_VALUE, 48));
-		display.add(eventPanel);
+		displayPanel.add(eventPanel);
 		if (colorMap != null) {
 			ColorScaleBar legend = new ColorScaleBar(colorMap);
 			legend.setLabels("0", "maximum");
@@ -66,14 +69,22 @@ public final class CedControlPanel extends JPanel {
 			legend.setMinimumSize(legendSize);
 			legend.setMaximumSize(new Dimension(Integer.MAX_VALUE,
 					legendSize.height));
-			display.add(legend);
+			displayPanel.add(legend);
 		}
-		tabs.addTab("display", display);
+		tabs.addTab("display", displayPanel);
 
 		JList<String> banks = new JList<>(bankModel);
 		tabs.addTab("banks", new JScrollPane(banks));
 		add(tabs, BorderLayout.NORTH);
 		add(feedback, BorderLayout.CENTER);
+	}
+
+	/** Add a detector-specific control beneath the standard display controls. */
+	public void addDisplayControl(Component component) {
+		if (component instanceof JComponent swingComponent)
+			swingComponent.setAlignmentX(LEFT_ALIGNMENT);
+		displayPanel.add(component, 1);
+		displayPanel.revalidate();
 	}
 
 	public boolean isSelected(CedDisplayOption option) {
