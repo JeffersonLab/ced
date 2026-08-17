@@ -10,12 +10,12 @@ import edu.cnu.ced.event.EventSnapshot;
 
 /** Immutable drift-chamber data extracted from one atomic event snapshot. */
 public record DCEventData(List<RawHit> rawHits, List<ReconHit> reconHits,
-		List<Cluster> clusters, List<Segment> segments) {
+		List<Cluster> clusters, List<Segment> segments, List<Cross> crosses) {
 
 	public static final String RAW_BANK = "DC::tdc";
 	public static final String TOT_BANK = "DC::tot";
 	private static final DCEventData EMPTY = new DCEventData(List.of(), List.of(),
-			List.of(), List.of());
+			List.of(), List.of(), List.of());
 
 	public enum ReconKind { HB, TB, AI_HB, AI_TB }
 
@@ -24,11 +24,18 @@ public record DCEventData(List<RawHit> rawHits, List<ReconHit> reconHits,
 		reconHits = List.copyOf(reconHits);
 		clusters = List.copyOf(clusters);
 		segments = List.copyOf(segments);
+		crosses = List.copyOf(crosses);
 	}
 
 	/** Compatibility constructor for callers that only supply hit data. */
 	public DCEventData(List<RawHit> rawHits, List<ReconHit> reconHits) {
-		this(rawHits, reconHits, List.of(), List.of());
+		this(rawHits, reconHits, List.of(), List.of(), List.of());
+	}
+
+	/** Compatibility constructor for callers that do not yet supply crosses. */
+	public DCEventData(List<RawHit> rawHits, List<ReconHit> reconHits,
+			List<Cluster> clusters, List<Segment> segments) {
+		this(rawHits, reconHits, clusters, segments, List.of());
 	}
 
 	public static DCEventData from(EventSnapshot snapshot) {
@@ -37,6 +44,7 @@ public record DCEventData(List<RawHit> rawHits, List<ReconHit> reconHits,
 		ArrayList<ReconHit> recon = new ArrayList<>();
 		ArrayList<Cluster> clusters = new ArrayList<>();
 		ArrayList<Segment> segments = new ArrayList<>();
+		ArrayList<Cross> crosses = new ArrayList<>();
 		DataBank timingBank = snapshot.bank(RAW_BANK).filter(bank -> bank.rows() > 0)
 				.orElseGet(() -> snapshot.bank(TOT_BANK).filter(bank -> bank.rows() > 0)
 						.orElse(null));
@@ -53,8 +61,34 @@ public record DCEventData(List<RawHit> rawHits, List<ReconHit> reconHits,
 		readSegments(snapshot.bank("TimeBasedTrkg::TBSegments").orElse(null), ReconKind.TB, segments);
 		readSegments(snapshot.bank("HitBasedTrkg::AISegments").orElse(null), ReconKind.AI_HB, segments);
 		readSegments(snapshot.bank("TimeBasedTrkg::AISegments").orElse(null), ReconKind.AI_TB, segments);
+		readCrosses(snapshot.bank("HitBasedTrkg::HBCrosses").orElse(null), ReconKind.HB, crosses);
+		readCrosses(snapshot.bank("TimeBasedTrkg::TBCrosses").orElse(null), ReconKind.TB, crosses);
+		readCrosses(snapshot.bank("HitBasedTrkg::AICrosses").orElse(null), ReconKind.AI_HB, crosses);
+		readCrosses(snapshot.bank("TimeBasedTrkg::AICrosses").orElse(null), ReconKind.AI_TB, crosses);
 		return raw.isEmpty() && recon.isEmpty() && clusters.isEmpty() && segments.isEmpty()
-				? EMPTY : new DCEventData(raw, recon, clusters, segments);
+				&& crosses.isEmpty() ? EMPTY : new DCEventData(raw, recon, clusters, segments, crosses);
+	}
+
+	private static void readCrosses(DataBank bank, ReconKind kind,
+			List<Cross> destination) {
+		if (!hasColumns(bank, "sector", "region", "id", "x", "y", "z",
+				"ux", "uy", "uz")) return;
+		for (int row = 0; row < bank.rows(); row++) {
+			int sector = bank.getByte("sector", row);
+			int region = bank.getByte("region", row);
+			float x = bank.getFloat("x", row);
+			float y = bank.getFloat("y", row);
+			float z = bank.getFloat("z", row);
+			if (sector < 1 || sector > 6 || region < 1 || region > 3
+					|| !Float.isFinite(x) || !Float.isFinite(y) || !Float.isFinite(z)) continue;
+			destination.add(new Cross(kind, row, sector, region,
+					bank.getShort("id", row), x, y, z,
+					optionalFloat(bank, "err_x", row), optionalFloat(bank, "err_y", row),
+					optionalFloat(bank, "err_z", row), bank.getFloat("ux", row),
+					bank.getFloat("uy", row), bank.getFloat("uz", row),
+					optionalShort(bank, "Segment1_ID", row),
+					optionalShort(bank, "Segment2_ID", row)));
+		}
 	}
 
 	private static void readClusters(DataBank bank, ReconKind kind,
@@ -151,4 +185,9 @@ public record DCEventData(List<RawHit> rawHits, List<ReconHit> reconHits,
 
 	public record Segment(ReconKind kind, int row, int sector, int superlayer,
 			float x1, float z1, float x2, float z2) { }
+
+	public record Cross(ReconKind kind, int row, int sector, int region, int id,
+			float x, float y, float z, float errorX, float errorY, float errorZ,
+			float directionX, float directionY, float directionZ,
+			int segment1Id, int segment2Id) { }
 }

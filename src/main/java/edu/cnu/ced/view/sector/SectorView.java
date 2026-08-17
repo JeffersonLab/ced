@@ -35,6 +35,7 @@ import edu.cnu.ced.data.DCEventData.RawHit;
 import edu.cnu.ced.data.DCEventData.ReconHit;
 import edu.cnu.ced.data.DCEventData.ReconKind;
 import edu.cnu.ced.data.DCEventData.Cluster;
+import edu.cnu.ced.data.DCEventData.Cross;
 import edu.cnu.ced.data.DCEventData.Segment;
 import edu.cnu.ced.event.EventNavigationState;
 import edu.cnu.ced.event.EventNavigator;
@@ -74,6 +75,7 @@ public final class SectorView extends CedView implements MagneticFieldChangeList
 	private final Pair pair;
 	private final Map<Cell, Polygon> screenCells = new HashMap<>();
 	private final List<ScreenSegment> screenSegments = new ArrayList<>();
+	private final List<ScreenCross> screenCrosses = new ArrayList<>();
 	private volatile DCEventData data = DCEventData.from(null);
 	private volatile FieldProbe fieldProbe = FieldProbe.factory();
 	private volatile boolean showMagneticField;
@@ -97,7 +99,7 @@ public final class SectorView extends CedView implements MagneticFieldChangeList
 				CedDisplayOption.ACCUMULATION, CedDisplayOption.RAW_DATA,
 				CedDisplayOption.HB_HITS, CedDisplayOption.TB_HITS,
 				CedDisplayOption.AI_HB_HITS, CedDisplayOption.AI_TB_HITS,
-				CedDisplayOption.CLUSTERS, CedDisplayOption.HB_SEGMENTS,
+				CedDisplayOption.CLUSTERS, CedDisplayOption.CROSSES, CedDisplayOption.HB_SEGMENTS,
 				CedDisplayOption.TB_SEGMENTS, CedDisplayOption.AI_HB_SEGMENTS,
 				CedDisplayOption.AI_TB_SEGMENTS),
 				List.of("DC::", "HitBasedTrkg::", "TimeBasedTrkg::"),
@@ -119,6 +121,7 @@ public final class SectorView extends CedView implements MagneticFieldChangeList
 			g.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
 			screenCells.clear();
 			screenSegments.clear();
+			screenCrosses.clear();
 			if (showMagneticField) drawMagneticField(g, container);
 			drawBeamline(g, container);
 			drawTarget(g, container);
@@ -130,6 +133,7 @@ public final class SectorView extends CedView implements MagneticFieldChangeList
 				drawRecon(g, container);
 				drawClusters(g);
 				drawSegments(g, container);
+				drawCrosses(g, container);
 			}
 			drawLabels(g, container);
 			drawScale(g, container);
@@ -433,6 +437,44 @@ public final class SectorView extends CedView implements MagneticFieldChangeList
 		g.drawOval(point.x - 3, point.y - 3, 7, 7);
 	}
 
+	private void drawCrosses(Graphics2D g, IContainer container) {
+		if (!isDisplayed(CedDisplayOption.CROSSES)) return;
+		for (Cross cross : data.crosses()) {
+			if (!displayedSector(cross.sector()) || !show(cross.kind())) continue;
+			Point2D.Double world = SectorProjection.tiltedPoint(cross.x(), cross.y(), cross.z(),
+					cross.sector(), phiOffsetDegrees);
+			Point center = local(container, world.x, world.y);
+			Point2D.Double directionWorld = SectorProjection.tiltedPoint(
+					cross.x() + cross.directionX(), cross.y() + cross.directionY(),
+					cross.z() + cross.directionZ(), cross.sector(), phiOffsetDegrees);
+			Point direction = local(container, directionWorld.x, directionWorld.y);
+			double dx = direction.x - center.x;
+			double dy = direction.y - center.y;
+			double length = Math.hypot(dx, dy);
+			Point arrow = length < 1.0 ? center : new Point(
+					(int) Math.round(center.x + 30.0 * dx / length),
+					(int) Math.round(center.y + 30.0 * dy / length));
+			drawCrossSymbol(g, center, arrow, cross.kind());
+			screenCrosses.add(new ScreenCross(cross, center));
+		}
+	}
+
+	private static void drawCrossSymbol(Graphics2D g, Point center, Point arrow,
+			ReconKind kind) {
+		Color color = CedDrawingStyle.reconstructionColor(kind);
+		g.setStroke(new BasicStroke(1.5f));
+		g.setColor(new Color(255, 165, 0));
+		g.drawLine(center.x + 1, center.y, arrow.x + 1, arrow.y);
+		g.setColor(Color.DARK_GRAY);
+		g.drawLine(center.x, center.y, arrow.x, arrow.y);
+		g.setColor(color);
+		g.fillOval(center.x - 6, center.y - 6, 13, 13);
+		g.setColor(Color.BLACK);
+		g.drawOval(center.x - 6, center.y - 6, 13, 13);
+		g.drawLine(center.x - 8, center.y, center.x + 8, center.y);
+		g.drawLine(center.x, center.y - 8, center.x, center.y + 8);
+	}
+
 	private void drawAccumulation(Graphics2D g, IContainer container) {
 		for (int superlayer = 1; superlayer <= DCGeometry.SUPERLAYER_COUNT; superlayer++) {
 			int ceiling = accumulation.percentileCount(superlayer, COLOR_CEILING_PERCENTILE);
@@ -528,6 +570,22 @@ public final class SectorView extends CedView implements MagneticFieldChangeList
 		feedback.add(String.format("$yellow$(z, transverse) = (%6.2f, %6.2f) cm",
 				worldPoint.x, worldPoint.y));
 		addFieldFeedback(worldPoint, feedback);
+		for (ScreenCross drawn : screenCrosses) {
+			if (drawn.location.distance(screenPoint) <= 9.0) {
+				Cross cross = drawn.cross;
+				feedback.add(String.format("$green$%s cross ID %d sector %d region %d",
+						cross.kind(), cross.id(), cross.sector(), cross.region()));
+				feedback.add(String.format("$green$cross xyz (%.3f, %.3f, %.3f) cm",
+						cross.x(), cross.y(), cross.z()));
+				feedback.add(String.format("$green$cross error (%.3f, %.3f, %.3f) cm",
+						cross.errorX(), cross.errorY(), cross.errorZ()));
+				feedback.add(String.format("$green$cross direction (%.3f, %.3f, %.3f)",
+						cross.directionX(), cross.directionY(), cross.directionZ()));
+				feedback.add(String.format("$green$segment IDs %d, %d",
+						cross.segment1Id(), cross.segment2Id()));
+				break;
+			}
+		}
 		for (ScreenSegment drawn : screenSegments) {
 			if (Line2D.ptSegDist(drawn.start.x, drawn.start.y, drawn.end.x,
 					drawn.end.y, screenPoint.x, screenPoint.y) <= 5.0) {
@@ -602,6 +660,7 @@ public final class SectorView extends CedView implements MagneticFieldChangeList
 	}
 
 	private record ScreenSegment(Segment segment, Point start, Point end) { }
+	private record ScreenCross(Cross cross, Point location) { }
 
 	@Override
 	public void magneticFieldChanged() {

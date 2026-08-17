@@ -39,6 +39,18 @@ final class SectorProjection {
 		return new Point2D.Double(z, sector <= 3 ? transverse : -transverse);
 	}
 
+	/** Project a point expressed in the reconstruction tilted-sector frame. */
+	static Point2D.Double tiltedPoint(double tiltedX, double tiltedY, double tiltedZ,
+			int sector, double phiOffsetDegrees) {
+		double tilt = Math.toRadians(25.0);
+		double sectorX = tiltedX * Math.cos(tilt) + tiltedZ * Math.sin(tilt);
+		double sectorY = tiltedY;
+		double sectorZ = -tiltedX * Math.sin(tilt) + tiltedZ * Math.cos(tilt);
+		double phi = Math.toRadians(phiOffsetDegrees);
+		double transverse = sectorX * Math.cos(phi) + sectorY * Math.sin(phi);
+		return new Point2D.Double(sectorZ, sector <= 3 ? transverse : -transverse);
+	}
+
 	/**
 	 * Returns a display hexagon centered on the intersection of the selected phi
 	 * plane and an infinitely extended wire. Using the same construction at every

@@ -39,6 +39,19 @@ class SectorProjectionTest {
 	}
 
 	@Test
+	void tiltedCrossCoordinatesRespectSectorSideAndTilt() {
+		var upper = SectorProjection.tiltedPoint(12.0, -3.0, 240.0, 2, 0.0);
+		var lower = SectorProjection.tiltedPoint(12.0, -3.0, 240.0, 5, 0.0);
+		double tilt = Math.toRadians(25.0);
+		double expectedZ = -12.0 * Math.sin(tilt) + 240.0 * Math.cos(tilt);
+		double expectedTransverse = 12.0 * Math.cos(tilt) + 240.0 * Math.sin(tilt);
+		assertEquals(expectedZ, upper.x, 1.0e-12);
+		assertEquals(expectedTransverse, upper.y, 1.0e-12);
+		assertEquals(expectedZ, lower.x, 1.0e-12);
+		assertEquals(-expectedTransverse, lower.y, 1.0e-12);
+	}
+
+	@Test
 	void nonlinearFieldScaleRoundTripsAndExpandsLowFields() {
 		double maximum = 6.58;
 		for (double fraction : new double[] {0.0, 0.25, 0.5, 0.75, 1.0}) {

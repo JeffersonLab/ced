@@ -82,6 +82,34 @@ class DCEventDataTest {
 		assertEquals(310.0f, data.segments().getFirst().z2());
 	}
 
+	@Test
+	void extractsCrossPositionDirectionAndReferences() {
+		DataBank crosses = bank(new String[] {"sector", "region", "id", "x", "y", "z",
+				"err_x", "err_y", "err_z", "ux", "uy", "uz", "Segment1_ID", "Segment2_ID"}, 1,
+				Map.ofEntries(Map.entry("sector", new byte[] {5}), Map.entry("region", new byte[] {2}),
+						Map.entry("id", new short[] {17}), Map.entry("x", new float[] {4.5f}),
+						Map.entry("y", new float[] {-1.25f}), Map.entry("z", new float[] {315f}),
+						Map.entry("err_x", new float[] {.1f}), Map.entry("err_y", new float[] {.2f}),
+						Map.entry("err_z", new float[] {.3f}), Map.entry("ux", new float[] {.4f}),
+						Map.entry("uy", new float[] {.5f}), Map.entry("uz", new float[] {.6f}),
+						Map.entry("Segment1_ID", new short[] {8}),
+						Map.entry("Segment2_ID", new short[] {9})));
+
+		DCEventData data = DCEventData.from(EventSnapshot.of(event(Map.of(
+				"HitBasedTrkg::HBCrosses", crosses))));
+
+		assertEquals(1, data.crosses().size());
+		DCEventData.Cross cross = data.crosses().getFirst();
+		assertEquals(DCEventData.ReconKind.HB, cross.kind());
+		assertEquals(5, cross.sector());
+		assertEquals(2, cross.region());
+		assertEquals(17, cross.id());
+		assertEquals(315f, cross.z());
+		assertEquals(.5f, cross.directionY());
+		assertEquals(8, cross.segment1Id());
+		assertEquals(9, cross.segment2Id());
+	}
+
 	private static DataEvent event(Map<String, DataBank> banks) {
 		return (DataEvent) Proxy.newProxyInstance(DataEvent.class.getClassLoader(),
 				new Class<?>[] {DataEvent.class}, (instance, method, args) -> switch (method.getName()) {
