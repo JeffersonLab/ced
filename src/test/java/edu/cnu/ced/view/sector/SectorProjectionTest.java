@@ -90,6 +90,21 @@ class SectorProjectionTest {
 		assertTrue(SectorProjection.paddleSlice(missed, 1, 0.0).length == 0);
 	}
 
+	@Test
+	void volumeSliceBuildsConvexCrossSection() {
+		List<Point3> box = List.of(
+				new Point3(-2, -2, 10), new Point3(-2, -2, 20),
+				new Point3(-2, 2, 10), new Point3(-2, 2, 20),
+				new Point3(2, -2, 10), new Point3(2, -2, 20),
+				new Point3(2, 2, 10), new Point3(2, 2, 20));
+		Point2D.Double[] polygon = SectorProjection.volumeSlice(box, 1, 0.0);
+		assertEquals(4, polygon.length);
+		for (Point2D.Double point : polygon) {
+			assertTrue(Double.isFinite(point.x));
+			assertTrue(Double.isFinite(point.y));
+		}
+	}
+
 	private static Segment3 edge(double x1, double y1, double z1,
 			double x2, double y2, double z2) {
 		return new Segment3(new Point3(x1, y1, z1), new Point3(x2, y2, z2));

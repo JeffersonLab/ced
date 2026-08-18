@@ -37,12 +37,18 @@ import edu.cnu.ced.data.DCEventData.ReconKind;
 import edu.cnu.ced.data.DCEventData.Cluster;
 import edu.cnu.ced.data.DCEventData.Cross;
 import edu.cnu.ced.data.DCEventData.Segment;
+import edu.cnu.ced.data.ECalAccumulation;
+import edu.cnu.ced.data.ECalEventData;
 import edu.cnu.ced.data.FTOFEventData;
 import edu.cnu.ced.data.FTOFEventData.AdcHit;
+import edu.cnu.ced.data.PCalAccumulation;
+import edu.cnu.ced.data.PCalEventData;
 import edu.cnu.ced.event.EventNavigationState;
 import edu.cnu.ced.event.EventNavigator;
 import edu.cnu.ced.geometry.DCGeometry;
+import edu.cnu.ced.geometry.ECGeometry;
 import edu.cnu.ced.geometry.FTOFGeometry;
+import edu.cnu.ced.geometry.PCALGeometry;
 import edu.cnu.ced.geometry.Point3;
 import edu.cnu.ced.style.CedDrawingStyle;
 import edu.cnu.ced.view.CedView;
@@ -76,10 +82,20 @@ public final class SectorView extends CedView implements MagneticFieldChangeList
 	private static final String[] FTOF_PANEL_NAMES = {"Panel 1A", "Panel 1B", "Panel 2"};
 	private static final Color FTOF_FILL = new Color(248, 252, 252);
 	private static final Color FTOF_LINE = new Color(175, 185, 185);
+	private static final Color CALORIMETER_FILL = new Color(248, 249, 246, 120);
+	private static final Color CALORIMETER_LINE = new Color(185, 180, 170, 150);
+	private static final String[] CALORIMETER_VIEWS = {"U", "V", "W"};
+	private static final String[] ECAL_PLANES = {"inner", "outer"};
+	private static final int PCAL = 0;
+	private static final int ECAL = 1;
 
 	private final DCGeometry geometry;
 	private final FTOFGeometry ftofGeometry;
+	private final PCALGeometry pcalGeometry;
+	private final ECGeometry ecGeometry;
 	private final DCAccumulation accumulation;
+	private final PCalAccumulation pcalAccumulation;
+	private final ECalAccumulation ecalAccumulation;
 	private final Pair pair;
 	private final Map<Cell, Polygon> screenCells = new HashMap<>();
 	private final List<ScreenSegment> screenSegments = new ArrayList<>();
@@ -87,15 +103,22 @@ public final class SectorView extends CedView implements MagneticFieldChangeList
 	private final Map<FTOFCell, Polygon> ftofPaddles = new HashMap<>();
 	private final Map<FTOFEventData.ReconHit, Point> ftofHitLocations = new HashMap<>();
 	private final Map<FTOFEventData.Cluster, Point> ftofClusterLocations = new HashMap<>();
+	private final Map<CalorimeterCell, Polygon> calorimeterStrips = new HashMap<>();
+	private final Map<PCalEventData.ReconHit, Point> pcalHitLocations = new HashMap<>();
+	private final Map<ECalEventData.ReconHit, Point> ecalHitLocations = new HashMap<>();
 	private volatile DCEventData data = DCEventData.from(null);
 	private volatile FTOFEventData ftofData = FTOFEventData.from(null);
+	private volatile PCalEventData pcalData = PCalEventData.from(null);
+	private volatile ECalEventData ecalData = ECalEventData.from(null);
 	private volatile FieldProbe fieldProbe = FieldProbe.factory();
 	private volatile boolean showMagneticField;
 	private ColorScaleBar fieldScale;
 	private double phiOffsetDegrees;
 
-	public SectorView(Pair pair, DCGeometry geometry, FTOFGeometry ftofGeometry, EventNavigator navigator,
-			DCAccumulation accumulation) {
+	public SectorView(Pair pair, DCGeometry geometry, FTOFGeometry ftofGeometry,
+			PCALGeometry pcalGeometry, ECGeometry ecGeometry, EventNavigator navigator,
+			DCAccumulation accumulation, PCalAccumulation pcalAccumulation,
+			ECalAccumulation ecalAccumulation) {
 		super(navigator, PropertyUtils.TITLE,
 				"Sectors " + pair.upper + " and " + pair.lower,
 				PropertyUtils.WIDTH, 940, PropertyUtils.HEIGHT, 760,
@@ -106,7 +129,11 @@ public final class SectorView extends CedView implements MagneticFieldChangeList
 		this.pair = pair;
 		this.geometry = geometry;
 		this.ftofGeometry = ftofGeometry;
+		this.pcalGeometry = pcalGeometry;
+		this.ecGeometry = ecGeometry;
 		this.accumulation = accumulation;
+		this.pcalAccumulation = pcalAccumulation;
+		this.ecalAccumulation = ecalAccumulation;
 		setAfterDraw(this::draw);
 		initializeCedView(EnumSet.of(CedDisplayOption.SINGLE_EVENT,
 				CedDisplayOption.ACCUMULATION, CedDisplayOption.RAW_DATA,
@@ -116,7 +143,8 @@ public final class SectorView extends CedView implements MagneticFieldChangeList
 				CedDisplayOption.CLUSTERS, CedDisplayOption.CROSSES, CedDisplayOption.HB_SEGMENTS,
 				CedDisplayOption.TB_SEGMENTS, CedDisplayOption.AI_HB_SEGMENTS,
 				CedDisplayOption.AI_TB_SEGMENTS),
-				List.of("DC::", "HitBasedTrkg::", "TimeBasedTrkg::", "FTOF::"),
+				List.of("DC::", "HitBasedTrkg::", "TimeBasedTrkg::", "FTOF::",
+						"ECAL::", "REC::Calorimeter"),
 				ScientificColorMap.TURBO, "Relative occupancy (95th-percentile ceiling)",
 				340);
 		addControlTab("phi", createPhiPanel());
@@ -128,6 +156,8 @@ public final class SectorView extends CedView implements MagneticFieldChangeList
 	protected void eventChanged(EventNavigationState state) {
 		data = DCEventData.from(state.snapshot());
 		ftofData = FTOFEventData.from(state.snapshot());
+		pcalData = PCalEventData.from(state.snapshot());
+		ecalData = ECalEventData.from(state.snapshot());
 	}
 
 	private void draw(Graphics2D graphics, IContainer container) {
@@ -140,6 +170,9 @@ public final class SectorView extends CedView implements MagneticFieldChangeList
 			ftofPaddles.clear();
 			ftofHitLocations.clear();
 			ftofClusterLocations.clear();
+			calorimeterStrips.clear();
+			pcalHitLocations.clear();
+			ecalHitLocations.clear();
 			if (showMagneticField) drawMagneticField(g, container);
 			drawBeamline(g, container);
 			drawTarget(g, container);
@@ -147,6 +180,8 @@ public final class SectorView extends CedView implements MagneticFieldChangeList
 			drawFramework(g, container, pair.lower);
 			drawFTOFFramework(g, container, pair.upper);
 			drawFTOFFramework(g, container, pair.lower);
+			drawCalorimeterFramework(g, container, pair.upper);
+			drawCalorimeterFramework(g, container, pair.lower);
 			if (isDisplayed(CedDisplayOption.ACCUMULATION)) drawAccumulation(g, container);
 			else {
 				if (isDisplayed(CedDisplayOption.RAW_DATA)) drawRaw(g, container);
@@ -155,6 +190,7 @@ public final class SectorView extends CedView implements MagneticFieldChangeList
 				drawSegments(g, container);
 				drawCrosses(g, container);
 				drawFTOFEvent(g, container);
+				drawCalorimeterEvent(g, container);
 			}
 			drawLabels(g, container);
 			drawScale(g, container);
@@ -356,6 +392,101 @@ public final class SectorView extends CedView implements MagneticFieldChangeList
 				g.drawPolygon(polygon);
 			}
 		}
+	}
+
+	private void drawCalorimeterFramework(Graphics2D g, IContainer container, int sector) {
+		for (int view = 0; view < PCALGeometry.VIEW_COUNT; view++) {
+			for (int strip = 1; strip <= PCALGeometry.STRIP_COUNTS[view]; strip++) {
+				addCalorimeterStrip(g, container, new CalorimeterCell(PCAL, sector, 0, view, strip),
+						pcalGeometry.stripVertices(sector, view, strip));
+			}
+		}
+		for (int stack = 0; stack < ECGeometry.STACK_COUNT; stack++) {
+			for (int view = 0; view < ECGeometry.VIEW_COUNT; view++) {
+				for (int strip = 1; strip <= ECGeometry.STRIP_COUNT; strip++) {
+					addCalorimeterStrip(g, container,
+							new CalorimeterCell(ECAL, sector, stack, view, strip),
+							ecGeometry.stripVertices(sector, stack, view, strip));
+				}
+			}
+		}
+	}
+
+	private void addCalorimeterStrip(Graphics2D g, IContainer container,
+			CalorimeterCell cell, List<Point3> vertices) {
+		Point2D.Double[] slice = SectorProjection.volumeSlice(vertices, cell.sector,
+				phiOffsetDegrees);
+		if (slice.length < 3) return;
+		Polygon polygon = screenPolygon(container, slice);
+		calorimeterStrips.put(cell, polygon);
+		g.setColor(CALORIMETER_FILL);
+		g.fillPolygon(polygon);
+		g.setColor(CALORIMETER_LINE);
+		g.drawPolygon(polygon);
+	}
+
+	private void drawCalorimeterEvent(Graphics2D g, IContainer container) {
+		if (isDisplayed(CedDisplayOption.RAW_DATA)) drawCalorimeterRaw(g);
+		if (!isDisplayed(CedDisplayOption.RECON_HITS)) return;
+
+		for (PCalEventData.ReconHit hit : pcalData.reconHits()) {
+			if (!displayedSector(hit.sector())) continue;
+			Point point = projectedCalorimeterPoint(container, hit.sector(), hit.x(), hit.y(), hit.z());
+			pcalHitLocations.put(hit, point);
+			drawCalorimeterMarker(g, point, new Color(0, 210, 220), Color.RED);
+		}
+		for (ECalEventData.ReconHit hit : ecalData.reconHits()) {
+			if (!displayedSector(hit.sector())) continue;
+			Point point = projectedCalorimeterPoint(container, hit.sector(), hit.x(), hit.y(), hit.z());
+			ecalHitLocations.put(hit, point);
+			drawCalorimeterMarker(g, point, new Color(255, 210, 0), new Color(120, 0, 110));
+		}
+	}
+
+	private void drawCalorimeterRaw(Graphics2D g) {
+		if (pcalData.maximumAdc() > 0) {
+			for (PCalEventData.AdcHit hit : pcalData.adcHits()) {
+				if (!displayedSector(hit.sector()) || hit.adc() <= 0) continue;
+				fillCalorimeter(g, new CalorimeterCell(PCAL, hit.sector(), 0, hit.view(), hit.strip()),
+						ScientificColorMap.TURBO.colorAt((double) hit.adc() / pcalData.maximumAdc()));
+			}
+		}
+		if (ecalData.maximumAdc() > 0) {
+			for (ECalEventData.AdcHit hit : ecalData.adcHits()) {
+				if (!displayedSector(hit.sector()) || hit.adc() <= 0) continue;
+				fillCalorimeter(g,
+						new CalorimeterCell(ECAL, hit.sector(), hit.plane(), hit.view(), hit.strip()),
+						ScientificColorMap.TURBO.colorAt((double) hit.adc() / ecalData.maximumAdc()));
+			}
+		}
+	}
+
+	private void fillCalorimeter(Graphics2D g, CalorimeterCell cell, Color color) {
+		Polygon polygon = calorimeterStrips.get(cell);
+		if (polygon == null) return;
+		Color translucent = new Color(color.getRed(), color.getGreen(), color.getBlue(), 175);
+		g.setColor(translucent);
+		g.fillPolygon(polygon);
+		g.setColor(color.darker());
+		g.drawPolygon(polygon);
+	}
+
+	private Point projectedCalorimeterPoint(IContainer container, int sector,
+			double x, double y, double z) {
+		Point2D.Double world = SectorProjection.labPoint(new Point3(x, y, z), sector,
+				phiOffsetDegrees);
+		return local(container, world.x, world.y);
+	}
+
+	private static void drawCalorimeterMarker(Graphics2D g, Point point,
+			Color fill, Color line) {
+		g.setColor(fill);
+		g.fillOval(point.x - 5, point.y - 5, 11, 11);
+		g.setColor(line);
+		g.setStroke(new BasicStroke(1.5f));
+		g.drawOval(point.x - 5, point.y - 5, 11, 11);
+		g.drawLine(point.x - 7, point.y, point.x + 7, point.y);
+		g.drawLine(point.x, point.y - 7, point.x, point.y + 7);
 	}
 
 	private void drawFTOFEvent(Graphics2D g, IContainer container) {
@@ -588,6 +719,33 @@ public final class SectorView extends CedView implements MagneticFieldChangeList
 								ScientificColorMap.TURBO.colorAt(Math.min(1.0, (double) count / ceiling)));
 					}
 		}
+		drawCalorimeterAccumulation(g);
+	}
+
+	private void drawCalorimeterAccumulation(Graphics2D g) {
+		int pcalMaximum = pcalAccumulation.maximumCount();
+		if (pcalMaximum > 0) {
+			for (int sector : new int[] {pair.upper, pair.lower})
+				for (int view = 0; view < PCALGeometry.VIEW_COUNT; view++)
+					for (int strip = 1; strip <= PCALGeometry.STRIP_COUNTS[view]; strip++) {
+						int count = pcalAccumulation.count(sector, view, strip);
+						if (count > 0) fillCalorimeter(g,
+								new CalorimeterCell(PCAL, sector, 0, view, strip),
+								ScientificColorMap.TURBO.colorAt((double) count / pcalMaximum));
+					}
+		}
+		for (int stack = 0; stack < ECGeometry.STACK_COUNT; stack++) {
+			int maximum = ecalAccumulation.maximumCount(stack);
+			if (maximum == 0) continue;
+			for (int sector : new int[] {pair.upper, pair.lower})
+				for (int view = 0; view < ECGeometry.VIEW_COUNT; view++)
+					for (int strip = 1; strip <= ECGeometry.STRIP_COUNT; strip++) {
+						int count = ecalAccumulation.count(sector, stack, view, strip);
+						if (count > 0) fillCalorimeter(g,
+								new CalorimeterCell(ECAL, sector, stack, view, strip),
+								ScientificColorMap.TURBO.colorAt((double) count / maximum));
+					}
+		}
 	}
 
 	private void fill(Graphics2D g, Cell cell, Color color) {
@@ -720,6 +878,30 @@ public final class SectorView extends CedView implements MagneticFieldChangeList
 				return;
 			}
 		}
+		for (Map.Entry<PCalEventData.ReconHit, Point> entry : pcalHitLocations.entrySet()) {
+			if (entry.getValue().distance(screenPoint) <= 8.0) {
+				PCalEventData.ReconHit hit = entry.getKey();
+				feedback.add(String.format("$cyan$PCAL recon sector %d %s", hit.sector(),
+						CALORIMETER_VIEWS[hit.view()]));
+				feedback.add(String.format("$cyan$PCAL xyz (%.2f, %.2f, %.2f) cm",
+						hit.x(), hit.y(), hit.z()));
+				feedback.add(String.format("$cyan$PCAL energy %.4f GeV time %.3f",
+						hit.energy(), hit.time()));
+				return;
+			}
+		}
+		for (Map.Entry<ECalEventData.ReconHit, Point> entry : ecalHitLocations.entrySet()) {
+			if (entry.getValue().distance(screenPoint) <= 8.0) {
+				ECalEventData.ReconHit hit = entry.getKey();
+				feedback.add(String.format("$orange$ECAL %s sector %d %s",
+						ECAL_PLANES[hit.plane()], hit.sector(), CALORIMETER_VIEWS[hit.view()]));
+				feedback.add(String.format("$orange$ECAL xyz (%.2f, %.2f, %.2f) cm",
+						hit.x(), hit.y(), hit.z()));
+				feedback.add(String.format("$orange$ECAL energy %.4f GeV time %.3f",
+						hit.energy(), hit.time()));
+				return;
+			}
+		}
 		FTOFCell ftofCell = ftofPaddles.entrySet().stream()
 				.filter(e -> e.getValue().contains(screenPoint)).map(Map.Entry::getKey)
 				.findFirst().orElse(null);
@@ -733,6 +915,13 @@ public final class SectorView extends CedView implements MagneticFieldChangeList
 							hit.adc(), hit.time(), hit.order()));
 				}
 			}
+			return;
+		}
+		CalorimeterCell calorimeterCell = calorimeterStrips.entrySet().stream()
+				.filter(e -> e.getValue().contains(screenPoint)).map(Map.Entry::getKey)
+				.findFirst().orElse(null);
+		if (calorimeterCell != null) {
+			addCalorimeterFeedback(calorimeterCell, feedback);
 			return;
 		}
 		Cell cell = screenCells.entrySet().stream().filter(e -> e.getValue().contains(screenPoint))
@@ -753,6 +942,33 @@ public final class SectorView extends CedView implements MagneticFieldChangeList
 			for (ReconHit hit : data.reconHits()) if (show(hit.kind()) && cell.matches(hit))
 				feedback.add(String.format("$orange$%s hit cluster %d status %d trkDOCA %.3f",
 						hit.kind(), hit.clusterId(), hit.status(), hit.trackDoca()));
+		}
+	}
+
+	private void addCalorimeterFeedback(CalorimeterCell cell, List<String> feedback) {
+		String view = CALORIMETER_VIEWS[cell.view()];
+		if (cell.detector() == PCAL) {
+			feedback.add(String.format("$cyan$PCAL sector %d %s strip %d",
+					cell.sector(), view, cell.strip()));
+			if (isDisplayed(CedDisplayOption.ACCUMULATION)) {
+				feedback.add(String.format("$cyan$occupancy %d / %d events",
+						pcalAccumulation.count(cell.sector(), cell.view(), cell.strip()),
+						pcalAccumulation.eventCount()));
+			} else {
+				for (PCalEventData.AdcHit hit : pcalData.adcHits()) if (cell.matches(hit))
+					feedback.add(String.format("$cyan$PCAL adc %d time %.3f", hit.adc(), hit.time()));
+			}
+		} else {
+			feedback.add(String.format("$orange$ECAL %s sector %d %s strip %d",
+					ECAL_PLANES[cell.stack()], cell.sector(), view, cell.strip()));
+			if (isDisplayed(CedDisplayOption.ACCUMULATION)) {
+				feedback.add(String.format("$orange$occupancy %d / %d events",
+						ecalAccumulation.count(cell.sector(), cell.stack(), cell.view(), cell.strip()),
+						ecalAccumulation.eventCount()));
+			} else {
+				for (ECalEventData.AdcHit hit : ecalData.adcHits()) if (cell.matches(hit))
+					feedback.add(String.format("$orange$ECAL adc %d time %.3f", hit.adc(), hit.time()));
+			}
 		}
 	}
 
@@ -799,6 +1015,16 @@ public final class SectorView extends CedView implements MagneticFieldChangeList
 	private record FTOFCell(int sector, int panel, int paddle) {
 		boolean matches(AdcHit hit) { return sector == hit.sector() && panel == hit.panel()
 				&& paddle == hit.paddle(); }
+	}
+	private record CalorimeterCell(int detector, int sector, int stack, int view, int strip) {
+		boolean matches(PCalEventData.AdcHit hit) {
+			return detector == PCAL && sector == hit.sector() && view == hit.view()
+					&& strip == hit.strip();
+		}
+		boolean matches(ECalEventData.AdcHit hit) {
+			return detector == ECAL && sector == hit.sector() && stack == hit.plane()
+					&& view == hit.view() && strip == hit.strip();
+		}
 	}
 
 	private record ScreenSegment(Segment segment, Point start, Point end) { }

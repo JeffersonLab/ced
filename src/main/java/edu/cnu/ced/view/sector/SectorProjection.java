@@ -1,6 +1,8 @@
 package edu.cnu.ced.view.sector;
 
 import java.awt.geom.Point2D;
+import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
 
 import edu.cnu.ced.geometry.DCGeometry;
@@ -72,6 +74,67 @@ final class SectorProjection {
 			polygon[index] = project(interpolate(edge.start(), edge.end(), fraction), sector, angle);
 		}
 		return finiteIntersections > 2 ? polygon : new Point2D.Double[0];
+	}
+
+	/**
+	 * Returns the convex polygon cut from a detector volume by the selected phi
+	 * plane. The input may use any corner ordering; intersecting every corner pair
+	 * and taking the two-dimensional hull makes this suitable for the PCAL and
+	 * ECAL strip volumes without encoding detector-specific edge topology.
+	 */
+	static Point2D.Double[] volumeSlice(List<Point3> corners, int sector,
+			double phiOffsetDegrees) {
+		if (corners == null || corners.size() < 4) return new Point2D.Double[0];
+		double angle = projectionAngle(sector, phiOffsetDegrees);
+		List<Point2D.Double> intersections = new ArrayList<>();
+		for (int i = 0; i < corners.size(); i++) {
+			Point3 a = corners.get(i);
+			double da = planeDistance(a, angle);
+			if (Math.abs(da) < EPSILON) addUnique(intersections, project(a, sector, angle));
+			for (int j = i + 1; j < corners.size(); j++) {
+				Point3 b = corners.get(j);
+				double db = planeDistance(b, angle);
+				if (da * db > EPSILON) continue;
+				double denominator = da - db;
+				if (Math.abs(denominator) < EPSILON) continue;
+				double fraction = da / denominator;
+				if (fraction < -EPSILON || fraction > 1.0 + EPSILON) continue;
+				addUnique(intersections, project(interpolate(a, b, fraction), sector, angle));
+			}
+		}
+		return convexHull(intersections);
+	}
+
+	private static void addUnique(List<Point2D.Double> points, Point2D.Double candidate) {
+		for (Point2D.Double point : points)
+			if (point.distanceSq(candidate) < 1.0e-12) return;
+		points.add(candidate);
+	}
+
+	private static Point2D.Double[] convexHull(List<Point2D.Double> points) {
+		if (points.size() < 3) return new Point2D.Double[0];
+		List<Point2D.Double> sorted = points.stream()
+				.sorted(Comparator.comparingDouble((Point2D.Double p) -> p.x)
+						.thenComparingDouble(p -> p.y)).toList();
+		List<Point2D.Double> hull = new ArrayList<>();
+		for (Point2D.Double point : sorted) {
+			while (hull.size() >= 2 && cross(hull.get(hull.size() - 2),
+					hull.get(hull.size() - 1), point) <= 0.0) hull.remove(hull.size() - 1);
+			hull.add(point);
+		}
+		int lowerSize = hull.size();
+		for (int i = sorted.size() - 2; i >= 0; i--) {
+			Point2D.Double point = sorted.get(i);
+			while (hull.size() > lowerSize && cross(hull.get(hull.size() - 2),
+					hull.get(hull.size() - 1), point) <= 0.0) hull.remove(hull.size() - 1);
+			hull.add(point);
+		}
+		if (hull.size() > 1) hull.remove(hull.size() - 1);
+		return hull.toArray(Point2D.Double[]::new);
+	}
+
+	private static double cross(Point2D.Double a, Point2D.Double b, Point2D.Double c) {
+		return (b.x - a.x) * (c.y - a.y) - (b.y - a.y) * (c.x - a.x);
 	}
 
 	/** Project a point expressed in the reconstruction tilted-sector frame. */
