@@ -207,15 +207,15 @@ public final class CedApplication extends BaseMDIApplication {
 				6, 0, 0, VirtualView.CENTER));
 		ViewManager.getInstance().addConfiguration(ViewConfiguration.eager(
 				"Sectors 3 and 6", () -> new SectorView(Pair.SECTORS_3_6,
-						geometryService.dc(), eventNavigator, accumulationService.dc()),
+						geometryService.dc(), geometryService.ftof(), eventNavigator, accumulationService.dc()),
 				0, 20, 65, VirtualView.UPPERLEFT));
 		ViewManager.getInstance().addConfiguration(ViewConfiguration.eager(
 				"Sectors 2 and 5", () -> new SectorView(Pair.SECTORS_2_5,
-						geometryService.dc(), eventNavigator, accumulationService.dc()),
+						geometryService.dc(), geometryService.ftof(), eventNavigator, accumulationService.dc()),
 				0, 85, 115, VirtualView.UPPERLEFT));
 		ViewManager.getInstance().addConfiguration(ViewConfiguration.eager(
 				"Sectors 1 and 4", () -> new SectorView(Pair.SECTORS_1_4,
-						geometryService.dc(), eventNavigator, accumulationService.dc()),
+						geometryService.dc(), geometryService.ftof(), eventNavigator, accumulationService.dc()),
 				0, 150, 165, VirtualView.UPPERLEFT));
 		Log.getInstance().config("CED MDI application shell initialized with "
 				+ VIRTUAL_DESKTOP_COLUMNS + " virtual desktop columns.");

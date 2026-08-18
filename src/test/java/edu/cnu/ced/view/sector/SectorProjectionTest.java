@@ -1,12 +1,16 @@
 package edu.cnu.ced.view.sector;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-
 import static org.junit.jupiter.api.Assertions.assertTrue;
+
+import java.awt.geom.Point2D;
+import java.util.List;
 
 import org.junit.jupiter.api.Test;
 
 import edu.cnu.ced.geometry.DCGeometry;
+import edu.cnu.ced.geometry.Point3;
+import edu.cnu.ced.geometry.Segment3;
 
 class SectorProjectionTest {
 
@@ -52,6 +56,16 @@ class SectorProjectionTest {
 	}
 
 	@Test
+	void labCoordinatesProjectOntoSelectedSectorPlane() {
+		var sectorOne = SectorProjection.labPoint(new Point3(12.0, 5.0, 240.0), 1, 0.0);
+		var sectorFour = SectorProjection.labPoint(new Point3(-12.0, -5.0, 240.0), 4, 0.0);
+		assertEquals(240.0, sectorOne.x, 1.0e-12);
+		assertEquals(12.0, sectorOne.y, 1.0e-12);
+		assertEquals(240.0, sectorFour.x, 1.0e-12);
+		assertEquals(-12.0, sectorFour.y, 1.0e-12);
+	}
+
+	@Test
 	void nonlinearFieldScaleRoundTripsAndExpandsLowFields() {
 		double maximum = 6.58;
 		for (double fraction : new double[] {0.0, 0.25, 0.5, 0.75, 1.0}) {
@@ -59,5 +73,25 @@ class SectorProjectionTest {
 			assertEquals(fraction, SectorView.fieldColorFraction(value, maximum), 1.0e-12);
 		}
 		assertTrue(SectorView.fieldColorFraction(0.1, maximum) > 0.25);
+	}
+
+	@Test
+	void paddleSliceUsesLongEdgeIntersectionsAndRejectsMisses() {
+		List<Segment3> crossing = List.of(
+				edge(-2, -1, 10, 2, 1, 30), edge(2, -1, 10, -2, 1, 30),
+				edge(-2, -1, 12, 2, 1, 32), edge(2, -1, 12, -2, 1, 32));
+		Point2D.Double[] polygon = SectorProjection.paddleSlice(crossing, 1, 0.0);
+		assertEquals(4, polygon.length);
+		assertEquals(20.0, polygon[0].x, 1.0e-9);
+
+		List<Segment3> missed = List.of(
+				edge(-2, 1, 10, 2, 2, 30), edge(2, 1, 10, -2, 2, 30),
+				edge(-2, 1, 12, 2, 2, 32), edge(2, 1, 12, -2, 2, 32));
+		assertTrue(SectorProjection.paddleSlice(missed, 1, 0.0).length == 0);
+	}
+
+	private static Segment3 edge(double x1, double y1, double z1,
+			double x2, double y2, double z2) {
+		return new Segment3(new Point3(x1, y1, z1), new Point3(x2, y2, z2));
 	}
 }

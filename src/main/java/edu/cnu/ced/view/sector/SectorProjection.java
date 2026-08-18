@@ -1,6 +1,7 @@
 package edu.cnu.ced.view.sector;
 
 import java.awt.geom.Point2D;
+import java.util.List;
 
 import edu.cnu.ced.geometry.DCGeometry;
 import edu.cnu.ced.geometry.Point3;
@@ -37,6 +38,40 @@ final class SectorProjection {
 			double phiOffsetDegrees) {
 		double transverse = x * Math.cos(Math.toRadians(phiOffsetDegrees));
 		return new Point2D.Double(z, sector <= 3 ? transverse : -transverse);
+	}
+
+	/** Orthogonally project a point in lab coordinates onto the selected sector plane. */
+	static Point2D.Double labPoint(Point3 point, int sector, double phiOffsetDegrees) {
+		double angle = projectionAngle(sector, phiOffsetDegrees);
+		return project(point, sector, angle);
+	}
+
+	/**
+	 * Intersects the selected phi plane with the four long edges of a paddle.
+	 * The returned quadrilateral uses intersections with the infinitely extended
+	 * edge lines, as the legacy CED projection did, so its shape remains stable
+	 * near the end of a paddle. An empty array means that fewer than three of the
+	 * intersections lie on the finite edges and the paddle should not be drawn.
+	 */
+	static Point2D.Double[] paddleSlice(List<Segment3> projectionEdges, int sector,
+			double phiOffsetDegrees) {
+		if (projectionEdges == null || projectionEdges.size() != 4) {
+			throw new IllegalArgumentException("A paddle projection requires four edges");
+		}
+		double angle = projectionAngle(sector, phiOffsetDegrees);
+		Point2D.Double[] polygon = new Point2D.Double[projectionEdges.size()];
+		int finiteIntersections = 0;
+		for (int index = 0; index < projectionEdges.size(); index++) {
+			Segment3 edge = projectionEdges.get(index);
+			double da = planeDistance(edge.start(), angle);
+			double db = planeDistance(edge.end(), angle);
+			double denominator = da - db;
+			if (Math.abs(denominator) < EPSILON) return new Point2D.Double[0];
+			double fraction = da / denominator;
+			if (fraction >= -EPSILON && fraction <= 1.0 + EPSILON) finiteIntersections++;
+			polygon[index] = project(interpolate(edge.start(), edge.end(), fraction), sector, angle);
+		}
+		return finiteIntersections > 2 ? polygon : new Point2D.Double[0];
 	}
 
 	/** Project a point expressed in the reconstruction tilted-sector frame. */

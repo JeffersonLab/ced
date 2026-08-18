@@ -37,9 +37,13 @@ import edu.cnu.ced.data.DCEventData.ReconKind;
 import edu.cnu.ced.data.DCEventData.Cluster;
 import edu.cnu.ced.data.DCEventData.Cross;
 import edu.cnu.ced.data.DCEventData.Segment;
+import edu.cnu.ced.data.FTOFEventData;
+import edu.cnu.ced.data.FTOFEventData.AdcHit;
 import edu.cnu.ced.event.EventNavigationState;
 import edu.cnu.ced.event.EventNavigator;
 import edu.cnu.ced.geometry.DCGeometry;
+import edu.cnu.ced.geometry.FTOFGeometry;
+import edu.cnu.ced.geometry.Point3;
 import edu.cnu.ced.style.CedDrawingStyle;
 import edu.cnu.ced.view.CedView;
 import edu.cnu.mdi.container.IContainer;
@@ -69,20 +73,28 @@ public final class SectorView extends CedView implements MagneticFieldChangeList
 	private static final Color CELL_LINE = new Color(170, 180, 185);
 	private static final double[] WIRE_THRESHOLD = {Double.NaN, 2.0, 2.0, 1.7, 1.7, 1.6, 1.6};
 	private static final double[] HEX_THRESHOLD = {Double.NaN, 16.0, 16.0, 12.0, 12.0, 7.0, 7.0};
+	private static final String[] FTOF_PANEL_NAMES = {"Panel 1A", "Panel 1B", "Panel 2"};
+	private static final Color FTOF_FILL = new Color(248, 252, 252);
+	private static final Color FTOF_LINE = new Color(175, 185, 185);
 
 	private final DCGeometry geometry;
+	private final FTOFGeometry ftofGeometry;
 	private final DCAccumulation accumulation;
 	private final Pair pair;
 	private final Map<Cell, Polygon> screenCells = new HashMap<>();
 	private final List<ScreenSegment> screenSegments = new ArrayList<>();
 	private final List<ScreenCross> screenCrosses = new ArrayList<>();
+	private final Map<FTOFCell, Polygon> ftofPaddles = new HashMap<>();
+	private final Map<FTOFEventData.ReconHit, Point> ftofHitLocations = new HashMap<>();
+	private final Map<FTOFEventData.Cluster, Point> ftofClusterLocations = new HashMap<>();
 	private volatile DCEventData data = DCEventData.from(null);
+	private volatile FTOFEventData ftofData = FTOFEventData.from(null);
 	private volatile FieldProbe fieldProbe = FieldProbe.factory();
 	private volatile boolean showMagneticField;
 	private ColorScaleBar fieldScale;
 	private double phiOffsetDegrees;
 
-	public SectorView(Pair pair, DCGeometry geometry, EventNavigator navigator,
+	public SectorView(Pair pair, DCGeometry geometry, FTOFGeometry ftofGeometry, EventNavigator navigator,
 			DCAccumulation accumulation) {
 		super(navigator, PropertyUtils.TITLE,
 				"Sectors " + pair.upper + " and " + pair.lower,
@@ -93,16 +105,18 @@ public final class SectorView extends CedView implements MagneticFieldChangeList
 				PropertyUtils.VISIBLE, true);
 		this.pair = pair;
 		this.geometry = geometry;
+		this.ftofGeometry = ftofGeometry;
 		this.accumulation = accumulation;
 		setAfterDraw(this::draw);
 		initializeCedView(EnumSet.of(CedDisplayOption.SINGLE_EVENT,
 				CedDisplayOption.ACCUMULATION, CedDisplayOption.RAW_DATA,
+				CedDisplayOption.RECON_HITS,
 				CedDisplayOption.HB_HITS, CedDisplayOption.TB_HITS,
 				CedDisplayOption.AI_HB_HITS, CedDisplayOption.AI_TB_HITS,
 				CedDisplayOption.CLUSTERS, CedDisplayOption.CROSSES, CedDisplayOption.HB_SEGMENTS,
 				CedDisplayOption.TB_SEGMENTS, CedDisplayOption.AI_HB_SEGMENTS,
 				CedDisplayOption.AI_TB_SEGMENTS),
-				List.of("DC::", "HitBasedTrkg::", "TimeBasedTrkg::"),
+				List.of("DC::", "HitBasedTrkg::", "TimeBasedTrkg::", "FTOF::"),
 				ScientificColorMap.TURBO, "Relative occupancy (95th-percentile ceiling)",
 				340);
 		addControlTab("phi", createPhiPanel());
@@ -113,6 +127,7 @@ public final class SectorView extends CedView implements MagneticFieldChangeList
 	@Override
 	protected void eventChanged(EventNavigationState state) {
 		data = DCEventData.from(state.snapshot());
+		ftofData = FTOFEventData.from(state.snapshot());
 	}
 
 	private void draw(Graphics2D graphics, IContainer container) {
@@ -122,11 +137,16 @@ public final class SectorView extends CedView implements MagneticFieldChangeList
 			screenCells.clear();
 			screenSegments.clear();
 			screenCrosses.clear();
+			ftofPaddles.clear();
+			ftofHitLocations.clear();
+			ftofClusterLocations.clear();
 			if (showMagneticField) drawMagneticField(g, container);
 			drawBeamline(g, container);
 			drawTarget(g, container);
 			drawFramework(g, container, pair.upper);
 			drawFramework(g, container, pair.lower);
+			drawFTOFFramework(g, container, pair.upper);
+			drawFTOFFramework(g, container, pair.lower);
 			if (isDisplayed(CedDisplayOption.ACCUMULATION)) drawAccumulation(g, container);
 			else {
 				if (isDisplayed(CedDisplayOption.RAW_DATA)) drawRaw(g, container);
@@ -134,6 +154,7 @@ public final class SectorView extends CedView implements MagneticFieldChangeList
 				drawClusters(g);
 				drawSegments(g, container);
 				drawCrosses(g, container);
+				drawFTOFEvent(g, container);
 			}
 			drawLabels(g, container);
 			drawScale(g, container);
@@ -314,6 +335,86 @@ public final class SectorView extends CedView implements MagneticFieldChangeList
 			g.setStroke(new BasicStroke(1.5f));
 			g.drawPolygon(superlayerOutline);
 		}
+	}
+
+	private void drawFTOFFramework(Graphics2D g, IContainer container, int sector) {
+		for (int panel = 0; panel < FTOFGeometry.PANEL_COUNT; panel++) {
+			for (int paddle = 1; paddle <= ftofGeometry.paddleCount(panel); paddle++) {
+				Point2D.Double[] slice = SectorProjection.paddleSlice(
+						ftofGeometry.paddle(sector, panel, paddle).projectionEdges(), sector,
+						phiOffsetDegrees);
+				if (slice.length == 0) continue;
+				Polygon polygon = new Polygon();
+				for (Point2D.Double world : slice) {
+					Point point = local(container, world.x, world.y);
+					polygon.addPoint(point.x, point.y);
+				}
+				ftofPaddles.put(new FTOFCell(sector, panel, paddle), polygon);
+				g.setColor(FTOF_FILL);
+				g.fillPolygon(polygon);
+				g.setColor(FTOF_LINE);
+				g.drawPolygon(polygon);
+			}
+		}
+	}
+
+	private void drawFTOFEvent(Graphics2D g, IContainer container) {
+		if (isDisplayed(CedDisplayOption.RAW_DATA) && ftofData.maximumAdc() > 0) {
+			Map<FTOFCell, Integer> maximumByPaddle = new HashMap<>();
+			for (AdcHit hit : ftofData.adcHits()) {
+				if (!displayedSector(hit.sector())) continue;
+				FTOFCell cell = new FTOFCell(hit.sector(), hit.panel(), hit.paddle());
+				maximumByPaddle.merge(cell, hit.adc(), Math::max);
+			}
+			for (Map.Entry<FTOFCell, Integer> entry : maximumByPaddle.entrySet()) {
+				double fraction = (double) entry.getValue() / ftofData.maximumAdc();
+				fillFTOF(g, entry.getKey(), ScientificColorMap.TURBO.colorAt(fraction));
+			}
+		}
+
+		if (isDisplayed(CedDisplayOption.RECON_HITS)) {
+			for (FTOFEventData.ReconHit hit : ftofData.reconHits()) {
+				if (!displayedSector(hit.sector())) continue;
+				Point point = projectedFTOFPoint(container, hit.sector(), hit.x(), hit.y(), hit.z());
+				ftofHitLocations.put(hit, point);
+				g.setColor(Color.CYAN);
+				g.fillOval(point.x - 5, point.y - 5, 11, 11);
+				g.setColor(Color.RED);
+				g.setStroke(new BasicStroke(1.5f));
+				g.drawOval(point.x - 5, point.y - 5, 11, 11);
+				g.drawLine(point.x - 7, point.y, point.x + 7, point.y);
+				g.drawLine(point.x, point.y - 7, point.x, point.y + 7);
+			}
+		}
+
+		if (isDisplayed(CedDisplayOption.CLUSTERS)) {
+			g.setColor(Color.MAGENTA);
+			g.setStroke(new BasicStroke(2f));
+			for (FTOFEventData.Cluster cluster : ftofData.clusters()) {
+				if (!displayedSector(cluster.sector())) continue;
+				Point point = projectedFTOFPoint(container, cluster.sector(), cluster.x(),
+						cluster.y(), cluster.z());
+				ftofClusterLocations.put(cluster, point);
+				g.drawLine(point.x - 6, point.y, point.x + 6, point.y);
+				g.drawLine(point.x, point.y - 6, point.x, point.y + 6);
+			}
+		}
+	}
+
+	private Point projectedFTOFPoint(IContainer container, int sector,
+			double x, double y, double z) {
+		Point2D.Double world = SectorProjection.labPoint(new Point3(x, y, z), sector,
+				phiOffsetDegrees);
+		return local(container, world.x, world.y);
+	}
+
+	private void fillFTOF(Graphics2D g, FTOFCell cell, Color color) {
+		Polygon polygon = ftofPaddles.get(cell);
+		if (polygon == null) return;
+		g.setColor(color);
+		g.fillPolygon(polygon);
+		g.setColor(color.darker());
+		g.drawPolygon(polygon);
 	}
 
 	private static double meanPixelDensity(IContainer container) {
@@ -597,6 +698,43 @@ public final class SectorView extends CedView implements MagneticFieldChangeList
 				break;
 			}
 		}
+		for (Map.Entry<FTOFEventData.Cluster, Point> entry : ftofClusterLocations.entrySet()) {
+			if (entry.getValue().distance(screenPoint) <= 8.0) {
+				FTOFEventData.Cluster cluster = entry.getKey();
+				feedback.add(String.format("$magenta$FTOF cluster xyz (%.2f, %.2f, %.2f) cm",
+						cluster.x(), cluster.y(), cluster.z()));
+				feedback.add(String.format("$magenta$FTOF cluster energy %.4f GeV",
+						cluster.energy()));
+				feedback.add(String.format("$magenta$FTOF cluster ID %d status %d",
+						cluster.id(), cluster.status()));
+				return;
+			}
+		}
+		for (Map.Entry<FTOFEventData.ReconHit, Point> entry : ftofHitLocations.entrySet()) {
+			if (entry.getValue().distance(screenPoint) <= 8.0) {
+				FTOFEventData.ReconHit hit = entry.getKey();
+				feedback.add(String.format("$cyan$FTOF hit xyz (%.2f, %.2f, %.2f) cm",
+						hit.x(), hit.y(), hit.z()));
+				feedback.add(String.format("$cyan$FTOF hit ID %d energy %.4f GeV time %.3f",
+						hit.id(), hit.energy(), hit.time()));
+				return;
+			}
+		}
+		FTOFCell ftofCell = ftofPaddles.entrySet().stream()
+				.filter(e -> e.getValue().contains(screenPoint)).map(Map.Entry::getKey)
+				.findFirst().orElse(null);
+		if (ftofCell != null) {
+			feedback.add(String.format("$cyan$FTOF %s sector %d paddle %d",
+					FTOF_PANEL_NAMES[ftofCell.panel], ftofCell.sector, ftofCell.paddle));
+			if (!isDisplayed(CedDisplayOption.ACCUMULATION)) {
+				for (AdcHit hit : ftofData.adcHits()) {
+					if (ftofCell.matches(hit)) feedback.add(String.format(
+							"$cyan$FTOF adc %d time %.3f order %d",
+							hit.adc(), hit.time(), hit.order()));
+				}
+			}
+			return;
+		}
 		Cell cell = screenCells.entrySet().stream().filter(e -> e.getValue().contains(screenPoint))
 				.map(Map.Entry::getKey).findFirst().orElse(null);
 		if (cell == null) return;
@@ -657,6 +795,10 @@ public final class SectorView extends CedView implements MagneticFieldChangeList
 				&& layer == hit.layer() && wire == hit.wire(); }
 		boolean matches(ReconHit hit) { return sector == hit.sector() && superlayer == hit.superlayer()
 				&& layer == hit.layer() && wire == hit.wire(); }
+	}
+	private record FTOFCell(int sector, int panel, int paddle) {
+		boolean matches(AdcHit hit) { return sector == hit.sector() && panel == hit.panel()
+				&& paddle == hit.paddle(); }
 	}
 
 	private record ScreenSegment(Segment segment, Point start, Point end) { }
