@@ -30,6 +30,8 @@ import cnuphys.magfield.MagneticFields;
 
 import edu.cnu.ced.component.CedDisplayOption;
 import edu.cnu.ced.data.DCAccumulation;
+import edu.cnu.ced.data.CherenkovAccumulation;
+import edu.cnu.ced.data.CherenkovEventData;
 import edu.cnu.ced.data.DCEventData;
 import edu.cnu.ced.data.DCEventData.RawHit;
 import edu.cnu.ced.data.DCEventData.ReconHit;
@@ -48,6 +50,8 @@ import edu.cnu.ced.event.EventNavigator;
 import edu.cnu.ced.geometry.DCGeometry;
 import edu.cnu.ced.geometry.ECGeometry;
 import edu.cnu.ced.geometry.FTOFGeometry;
+import edu.cnu.ced.geometry.HTCCGeometry;
+import edu.cnu.ced.geometry.LTCCGeometry;
 import edu.cnu.ced.geometry.PCALGeometry;
 import edu.cnu.ced.geometry.Point3;
 import edu.cnu.ced.style.CedDrawingStyle;
@@ -88,6 +92,8 @@ public final class SectorView extends CedView implements MagneticFieldChangeList
 	private static final String[] ECAL_PLANES = {"inner", "outer"};
 	private static final int PCAL = 0;
 	private static final int ECAL = 1;
+	private static final Color HTCC_FILL = new Color(245, 250, 238, 150);
+	private static final Color LTCC_FILL = new Color(238, 248, 248, 145);
 
 	private final DCGeometry geometry;
 	private final FTOFGeometry ftofGeometry;
@@ -96,6 +102,10 @@ public final class SectorView extends CedView implements MagneticFieldChangeList
 	private final DCAccumulation accumulation;
 	private final PCalAccumulation pcalAccumulation;
 	private final ECalAccumulation ecalAccumulation;
+	private final CherenkovAccumulation htccAccumulation;
+	private final CherenkovAccumulation ltccAccumulation;
+	private final HTCCGeometry htccGeometry = new HTCCGeometry();
+	private final LTCCGeometry ltccGeometry = new LTCCGeometry();
 	private final Pair pair;
 	private final Map<Cell, Polygon> screenCells = new HashMap<>();
 	private final List<ScreenSegment> screenSegments = new ArrayList<>();
@@ -106,10 +116,14 @@ public final class SectorView extends CedView implements MagneticFieldChangeList
 	private final Map<CalorimeterCell, Polygon> calorimeterStrips = new HashMap<>();
 	private final Map<PCalEventData.ReconHit, Point> pcalHitLocations = new HashMap<>();
 	private final Map<ECalEventData.ReconHit, Point> ecalHitLocations = new HashMap<>();
+	private final Map<CherenkovCell, Polygon> cherenkovCells = new HashMap<>();
+	private final Map<CherenkovMarker, Point> cherenkovMarkers = new HashMap<>();
 	private volatile DCEventData data = DCEventData.from(null);
 	private volatile FTOFEventData ftofData = FTOFEventData.from(null);
 	private volatile PCalEventData pcalData = PCalEventData.from(null);
 	private volatile ECalEventData ecalData = ECalEventData.from(null);
+	private volatile CherenkovEventData htccData = CherenkovEventData.from(null, "HTCC");
+	private volatile CherenkovEventData ltccData = CherenkovEventData.from(null, "LTCC");
 	private volatile FieldProbe fieldProbe = FieldProbe.factory();
 	private volatile boolean showMagneticField;
 	private ColorScaleBar fieldScale;
@@ -118,7 +132,8 @@ public final class SectorView extends CedView implements MagneticFieldChangeList
 	public SectorView(Pair pair, DCGeometry geometry, FTOFGeometry ftofGeometry,
 			PCALGeometry pcalGeometry, ECGeometry ecGeometry, EventNavigator navigator,
 			DCAccumulation accumulation, PCalAccumulation pcalAccumulation,
-			ECalAccumulation ecalAccumulation) {
+			ECalAccumulation ecalAccumulation, CherenkovAccumulation htccAccumulation,
+			CherenkovAccumulation ltccAccumulation) {
 		super(navigator, PropertyUtils.TITLE,
 				"Sectors " + pair.upper + " and " + pair.lower,
 				PropertyUtils.WIDTH, 940, PropertyUtils.HEIGHT, 760,
@@ -134,6 +149,8 @@ public final class SectorView extends CedView implements MagneticFieldChangeList
 		this.accumulation = accumulation;
 		this.pcalAccumulation = pcalAccumulation;
 		this.ecalAccumulation = ecalAccumulation;
+		this.htccAccumulation = htccAccumulation;
+		this.ltccAccumulation = ltccAccumulation;
 		setAfterDraw(this::draw);
 		initializeCedView(EnumSet.of(CedDisplayOption.SINGLE_EVENT,
 				CedDisplayOption.ACCUMULATION, CedDisplayOption.RAW_DATA,
@@ -144,7 +161,7 @@ public final class SectorView extends CedView implements MagneticFieldChangeList
 				CedDisplayOption.TB_SEGMENTS, CedDisplayOption.AI_HB_SEGMENTS,
 				CedDisplayOption.AI_TB_SEGMENTS),
 				List.of("DC::", "HitBasedTrkg::", "TimeBasedTrkg::", "FTOF::",
-						"ECAL::", "REC::Calorimeter"),
+						"ECAL::", "REC::Calorimeter", "HTCC::", "LTCC::"),
 				ScientificColorMap.TURBO, "Relative occupancy (95th-percentile ceiling)",
 				340);
 		addControlTab("phi", createPhiPanel());
@@ -158,6 +175,8 @@ public final class SectorView extends CedView implements MagneticFieldChangeList
 		ftofData = FTOFEventData.from(state.snapshot());
 		pcalData = PCalEventData.from(state.snapshot());
 		ecalData = ECalEventData.from(state.snapshot());
+		htccData = CherenkovEventData.from(state.snapshot(), "HTCC");
+		ltccData = CherenkovEventData.from(state.snapshot(), "LTCC");
 	}
 
 	private void draw(Graphics2D graphics, IContainer container) {
@@ -173,9 +192,13 @@ public final class SectorView extends CedView implements MagneticFieldChangeList
 			calorimeterStrips.clear();
 			pcalHitLocations.clear();
 			ecalHitLocations.clear();
+			cherenkovCells.clear();
+			cherenkovMarkers.clear();
 			if (showMagneticField) drawMagneticField(g, container);
 			drawBeamline(g, container);
 			drawTarget(g, container);
+			drawCherenkovFramework(g, container, pair.upper);
+			drawCherenkovFramework(g, container, pair.lower);
 			drawFramework(g, container, pair.upper);
 			drawFramework(g, container, pair.lower);
 			drawFTOFFramework(g, container, pair.upper);
@@ -191,6 +214,7 @@ public final class SectorView extends CedView implements MagneticFieldChangeList
 				drawCrosses(g, container);
 				drawFTOFEvent(g, container);
 				drawCalorimeterEvent(g, container);
+				drawCherenkovEvent(g, container);
 			}
 			drawLabels(g, container);
 			drawScale(g, container);
@@ -392,6 +416,83 @@ public final class SectorView extends CedView implements MagneticFieldChangeList
 				g.drawPolygon(polygon);
 			}
 		}
+	}
+
+	private void drawCherenkovFramework(Graphics2D g, IContainer container, int sector) {
+		for (int half = 1; half <= HTCCGeometry.HALF_COUNT; half++) {
+			for (int ring = 1; ring <= HTCCGeometry.RING_COUNT; ring++) {
+				addCherenkovCell(g, container, new CherenkovCell("HTCC", sector, half, ring),
+						htccGeometry.polygon(sector, ring, half, phiOffsetDegrees), HTCC_FILL);
+			}
+		}
+		for (int half = 1; half <= LTCCGeometry.HALF_COUNT; half++) {
+			for (int ring = 1; ring <= LTCCGeometry.RING_COUNT; ring++) {
+				addCherenkovCell(g, container, new CherenkovCell("LTCC", sector, half, ring),
+						ltccGeometry.polygon(sector, ring, half), LTCC_FILL);
+			}
+		}
+	}
+
+	private void addCherenkovCell(Graphics2D g, IContainer container, CherenkovCell cell,
+			Point2D.Double[] world, Color fill) {
+		if (world.length < 3) return;
+		Polygon polygon = screenPolygon(container, world);
+		cherenkovCells.put(cell, polygon);
+		g.setColor(fill);
+		g.fillPolygon(polygon);
+		g.setColor(new Color(135, 150, 145));
+		g.drawPolygon(polygon);
+	}
+
+	private void drawCherenkovEvent(Graphics2D g, IContainer container) {
+		if (isDisplayed(CedDisplayOption.RAW_DATA)) {
+			drawCherenkovRaw(g, htccData);
+			drawCherenkovRaw(g, ltccData);
+		}
+		if (!isDisplayed(CedDisplayOption.RECON_HITS)) return;
+		drawCherenkovRecon(g, container, htccData, new Color(255, 205, 30));
+		drawCherenkovRecon(g, container, ltccData, new Color(65, 205, 160));
+	}
+
+	private void drawCherenkovRaw(Graphics2D g, CherenkovEventData event) {
+		if (event.maximumAdc() <= 0) return;
+		Map<CherenkovCell, Integer> maximumByCell = new HashMap<>();
+		for (CherenkovEventData.AdcHit hit : event.adcHits()) {
+			if (!displayedSector(hit.sector())) continue;
+			maximumByCell.merge(new CherenkovCell(event.detector(), hit.sector(), hit.half(), hit.ring()),
+					hit.adc(), Math::max);
+		}
+		for (Map.Entry<CherenkovCell, Integer> entry : maximumByCell.entrySet()) {
+			fillCherenkov(g, entry.getKey(), ScientificColorMap.TURBO.colorAt(
+					(double) entry.getValue() / event.maximumAdc()));
+		}
+	}
+
+	private void drawCherenkovRecon(Graphics2D g, IContainer container,
+			CherenkovEventData event, Color color) {
+		for (CherenkovEventData.ReconHit hit : event.reconHits()) {
+			if (!displayedSector(hit.sector())) continue;
+			Point2D.Double world = SectorProjection.labPoint(new Point3(hit.x(), hit.y(), hit.z()),
+					hit.sector(), phiOffsetDegrees);
+			Point point = local(container, world.x, world.y);
+			cherenkovMarkers.put(new CherenkovMarker(event.detector(), hit), point);
+			g.setColor(color);
+			g.fillOval(point.x - 5, point.y - 5, 11, 11);
+			g.setColor(Color.BLACK);
+			g.setStroke(new BasicStroke(1.5f));
+			g.drawOval(point.x - 5, point.y - 5, 11, 11);
+			g.drawLine(point.x - 7, point.y, point.x + 7, point.y);
+			g.drawLine(point.x, point.y - 7, point.x, point.y + 7);
+		}
+	}
+
+	private void fillCherenkov(Graphics2D g, CherenkovCell cell, Color color) {
+		Polygon polygon = cherenkovCells.get(cell);
+		if (polygon == null) return;
+		g.setColor(color);
+		g.fillPolygon(polygon);
+		g.setColor(color.darker());
+		g.drawPolygon(polygon);
 	}
 
 	private void drawCalorimeterFramework(Graphics2D g, IContainer container, int sector) {
@@ -720,6 +821,22 @@ public final class SectorView extends CedView implements MagneticFieldChangeList
 					}
 		}
 		drawCalorimeterAccumulation(g);
+		drawCherenkovAccumulation(g, "HTCC", htccAccumulation, HTCCGeometry.RING_COUNT);
+		drawCherenkovAccumulation(g, "LTCC", ltccAccumulation, LTCCGeometry.RING_COUNT);
+	}
+
+	private void drawCherenkovAccumulation(Graphics2D g, String detector,
+			CherenkovAccumulation detectorAccumulation, int ringCount) {
+		int maximum = detectorAccumulation.maximumCount();
+		if (maximum <= 0) return;
+		for (int sector : new int[] {pair.upper, pair.lower})
+			for (int half = 1; half <= 2; half++)
+				for (int ring = 1; ring <= ringCount; ring++) {
+					int count = detectorAccumulation.count(sector, half, ring);
+					if (count > 0) fillCherenkov(g,
+							new CherenkovCell(detector, sector, half, ring),
+							ScientificColorMap.TURBO.colorAt((double) count / maximum));
+				}
 	}
 
 	private void drawCalorimeterAccumulation(Graphics2D g) {
@@ -902,6 +1019,24 @@ public final class SectorView extends CedView implements MagneticFieldChangeList
 				return;
 			}
 		}
+		for (Map.Entry<CherenkovMarker, Point> entry : cherenkovMarkers.entrySet()) {
+			if (entry.getValue().distance(screenPoint) <= 8.0) {
+				CherenkovMarker marker = entry.getKey();
+				CherenkovEventData.ReconHit hit = marker.hit();
+				feedback.add(String.format("$orange$%s rec ID %d sector %d",
+						marker.detector(), hit.id(), hit.sector()));
+				feedback.add(String.format("$orange$%s xyz (%.2f, %.2f, %.2f) cm",
+						marker.detector(), hit.x(), hit.y(), hit.z()));
+				return;
+			}
+		}
+		CherenkovCell cherenkovCell = cherenkovCells.entrySet().stream()
+				.filter(e -> e.getValue().contains(screenPoint)).map(Map.Entry::getKey)
+				.findFirst().orElse(null);
+		if (cherenkovCell != null) {
+			addCherenkovFeedback(cherenkovCell, feedback);
+			return;
+		}
 		FTOFCell ftofCell = ftofPaddles.entrySet().stream()
 				.filter(e -> e.getValue().contains(screenPoint)).map(Map.Entry::getKey)
 				.findFirst().orElse(null);
@@ -943,6 +1078,26 @@ public final class SectorView extends CedView implements MagneticFieldChangeList
 				feedback.add(String.format("$orange$%s hit cluster %d status %d trkDOCA %.3f",
 						hit.kind(), hit.clusterId(), hit.status(), hit.trackDoca()));
 		}
+	}
+
+	private void addCherenkovFeedback(CherenkovCell cell, List<String> feedback) {
+		feedback.add(String.format("$cyan$%s sector %d half %d ring %d",
+				cell.detector(), cell.sector(), cell.half(), cell.ring()));
+		CherenkovAccumulation detectorAccumulation = "HTCC".equals(cell.detector())
+				? htccAccumulation : ltccAccumulation;
+		if (isDisplayed(CedDisplayOption.ACCUMULATION)) {
+			feedback.add(String.format("$cyan$occupancy %d / %d events",
+					detectorAccumulation.count(cell.sector(), cell.half(), cell.ring()),
+					detectorAccumulation.eventCount()));
+			return;
+		}
+		CherenkovEventData event = "HTCC".equals(cell.detector()) ? htccData : ltccData;
+		for (CherenkovEventData.AdcHit hit : event.adcHits()) if (cell.matches(hit))
+			feedback.add(String.format("$cyan$%s adc %d time %.3f order %d",
+					cell.detector(), hit.adc(), hit.time(), hit.order()));
+		for (CherenkovEventData.TdcHit hit : event.tdcHits()) if (cell.matches(hit))
+			feedback.add(String.format("$cyan$%s tdc %d order %d",
+					cell.detector(), hit.tdc(), hit.order()));
 	}
 
 	private void addCalorimeterFeedback(CalorimeterCell cell, List<String> feedback) {
@@ -1026,6 +1181,15 @@ public final class SectorView extends CedView implements MagneticFieldChangeList
 					&& view == hit.view() && strip == hit.strip();
 		}
 	}
+	private record CherenkovCell(String detector, int sector, int half, int ring) {
+		boolean matches(CherenkovEventData.AdcHit hit) {
+			return sector == hit.sector() && half == hit.half() && ring == hit.ring();
+		}
+		boolean matches(CherenkovEventData.TdcHit hit) {
+			return sector == hit.sector() && half == hit.half() && ring == hit.ring();
+		}
+	}
+	private record CherenkovMarker(String detector, CherenkovEventData.ReconHit hit) { }
 
 	private record ScreenSegment(Segment segment, Point start, Point end) { }
 	private record ScreenCross(Cross cross, Point location) { }
