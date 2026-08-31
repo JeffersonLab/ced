@@ -11,41 +11,26 @@ import org.junit.jupiter.api.Test;
 
 import edu.cnu.ced.event.EventSnapshot;
 
-class ECalEventDataTest {
-	@Test
-	void mapsLayersFourThroughNineToPlaneAndView() {
-		DataBank adc = bank(new String[] { "sector", "layer", "component", "ADC", "time" }, 3,
-				Map.of("sector", new byte[] { 2, 2, 2 }, "layer", new byte[] { 3, 4, 9 },
-						"component", new short[] { 1, 17, 36 }, "ADC", new int[] { 99, 250, 300 },
-						"time", new float[] { 1f, 12f, 13f }));
-		ECalEventData data = ECalEventData.from(EventSnapshot.of(event(Map.of(ECalEventData.ADC_BANK, adc))));
-		assertEquals(2, data.adcHits().size());
-		assertEquals(0, data.adcHits().get(0).plane());
-		assertEquals(0, data.adcHits().get(0).view());
-		assertEquals(1, data.adcHits().get(1).plane());
-		assertEquals(2, data.adcHits().get(1).view());
-		assertEquals(300, data.maximumAdc());
-	}
-
+class PCalEventDataTest {
 	@Test
 	void readsOptionalReconstructedRadius() {
 		DataBank recon = bank(new String[] { "sector", "layer", "energy", "time", "x", "y", "z", "radius" }, 1,
-				Map.of("sector", new byte[] { 3 }, "layer", new byte[] { 7 },
-						"energy", new float[] { 1.25f }, "time", new float[] { 42f },
-						"x", new float[] { 10f }, "y", new float[] { 20f },
-						"z", new float[] { 30f }, "radius", new float[] { 12.5f }));
-		ECalEventData data = ECalEventData.from(EventSnapshot.of(event(Map.of(ECalEventData.RECON_BANK, recon))));
+				Map.of("sector", new byte[] { 6 }, "layer", new byte[] { 2 },
+						"energy", new float[] { 0.75f }, "time", new float[] { 24f },
+						"x", new float[] { 11f }, "y", new float[] { 21f },
+						"z", new float[] { 31f }, "radius", new float[] { 8.5f }));
+		PCalEventData data = PCalEventData.from(EventSnapshot.of(event(Map.of(PCalEventData.RECON_BANK, recon))));
 		assertEquals(1, data.reconHits().size());
-		assertEquals(12.5f, data.reconHits().get(0).radius());
+		assertEquals(8.5f, data.reconHits().get(0).radius());
 	}
 
 	@Test
 	void defaultsMissingReconstructedRadiusToZero() {
 		DataBank recon = bank(new String[] { "sector", "layer", "energy", "time", "x", "y", "z" }, 1,
-				Map.of("sector", new byte[] { 3 }, "layer", new byte[] { 7 },
-						"energy", new float[] { 1.25f }, "time", new float[] { 42f },
-						"x", new float[] { 10f }, "y", new float[] { 20f }, "z", new float[] { 30f }));
-		ECalEventData data = ECalEventData.from(EventSnapshot.of(event(Map.of(ECalEventData.RECON_BANK, recon))));
+				Map.of("sector", new byte[] { 6 }, "layer", new byte[] { 2 },
+						"energy", new float[] { 0.75f }, "time", new float[] { 24f },
+						"x", new float[] { 11f }, "y", new float[] { 21f }, "z", new float[] { 31f }));
+		PCalEventData data = PCalEventData.from(EventSnapshot.of(event(Map.of(PCalEventData.RECON_BANK, recon))));
 		assertEquals(0f, data.reconHits().get(0).radius());
 	}
 

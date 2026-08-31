@@ -534,14 +534,29 @@ public final class SectorView extends CedView implements MagneticFieldChangeList
 			if (!displayedSector(hit.sector())) continue;
 			Point point = projectedCalorimeterPoint(container, hit.sector(), hit.x(), hit.y(), hit.z());
 			pcalHitLocations.put(hit, point);
+			drawCalorimeterFootprint(g, container, point, hit.radius());
 			drawCalorimeterMarker(g, point, new Color(0, 210, 220), Color.RED);
 		}
 		for (ECalEventData.ReconHit hit : ecalData.reconHits()) {
 			if (!displayedSector(hit.sector())) continue;
 			Point point = projectedCalorimeterPoint(container, hit.sector(), hit.x(), hit.y(), hit.z());
 			ecalHitLocations.put(hit, point);
+			drawCalorimeterFootprint(g, container, point, hit.radius());
 			drawCalorimeterMarker(g, point, new Color(255, 210, 0), new Color(120, 0, 110));
 		}
+	}
+
+	private static void drawCalorimeterFootprint(Graphics2D g, IContainer container,
+			Point center, double radius) {
+		if (!(radius > 0.0) || !Double.isFinite(radius)) return;
+		Point origin = local(container, 0.0, 0.0);
+		Point horizontal = local(container, radius, 0.0);
+		Point vertical = local(container, 0.0, radius);
+		int rx = Math.abs(horizontal.x - origin.x);
+		int ry = Math.abs(vertical.y - origin.y);
+		if (rx < 1 || ry < 1) return;
+		g.setColor(new Color(255, 0, 0, 64));
+		g.fillOval(center.x - rx, center.y - ry, 2 * rx, 2 * ry);
 	}
 
 	private void drawCalorimeterRaw(Graphics2D g) {

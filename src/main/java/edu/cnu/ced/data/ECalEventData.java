@@ -49,13 +49,15 @@ public record ECalEventData(List<AdcHit> adcHits, List<ReconHit> reconHits,
 
 	private static void readRecon(DataBank bank, List<ReconHit> destination) {
 		if (!hasColumns(bank, "sector", "layer", "energy", "time", "x", "y", "z")) return;
+		boolean hasRadius = BankAccess.hasColumn(bank, "radius");
 		for (int row = 0; row < bank.rows(); row++) {
 			int layer = bank.getByte("layer", row);
 			if (layer < 4 || layer > 9) continue;
 			int relativeLayer = layer - 4;
 			destination.add(new ReconHit(row, bank.getByte("sector", row), relativeLayer / 3,
 					relativeLayer % 3, bank.getFloat("energy", row), bank.getFloat("time", row),
-					bank.getFloat("x", row), bank.getFloat("y", row), bank.getFloat("z", row)));
+					bank.getFloat("x", row), bank.getFloat("y", row), bank.getFloat("z", row),
+					hasRadius ? bank.getFloat("radius", row) : 0f));
 		}
 	}
 
@@ -67,5 +69,5 @@ public record ECalEventData(List<AdcHit> adcHits, List<ReconHit> reconHits,
 
 	public record AdcHit(int sector, int plane, int view, int strip, int adc, float time) { }
 	public record ReconHit(int row, int sector, int plane, int view, float energy,
-			float time, float x, float y, float z) { }
+			float time, float x, float y, float z, float radius) { }
 }
