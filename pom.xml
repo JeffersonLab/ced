@@ -14,7 +14,7 @@
 	<properties>
 		<project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
 		<maven.compiler.release>21</maven.compiler.release>
-		<mdi.version>1.2.2-SNAPSHOT</mdi.version>
+		<mdi.version>1.2.2</mdi.version>
 		<coat-libs.version>14.1.2</coat-libs.version>
 		<junit.version>5.11.4</junit.version>
 		<sqlite.jdbc.version>3.53.1.0</sqlite.jdbc.version>
