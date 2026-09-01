@@ -162,16 +162,37 @@ final class SectorProjection {
 		return (b.x - a.x) * (c.y - a.y) - (b.y - a.y) * (c.x - a.x);
 	}
 
-	/** Project a point expressed in the reconstruction tilted-sector frame. */
-	static Point2D.Double tiltedPoint(double tiltedX, double tiltedY, double tiltedZ,
+	/**
+	 * Projects a point given in the (untilted) sector-local frame -- e.g. a
+	 * DC cross's raw bank coordinates, or {@link #clasPoint}'s output after
+	 * its own lab-to-sector rotation -- onto the tilted display plane.
+	 * <p>
+	 * Despite its name (kept for now to avoid a wider rename; the
+	 * parameters here are sector-frame, not already-tilted, coordinates),
+	 * this previously implemented the rotation in the wrong direction --
+	 * {@code sectorX*cos + sectorZ*sin} / {@code -sectorX*sin + sectorZ*cos}
+	 * is bCNU CED's {@code CedView.tiltedToSector} (tilted frame back to
+	 * sector frame), the inverse of the transform actually needed here.
+	 * The correct forward transform, matching bCNU CED's own {@code
+	 * CedView.sectorToTilted} exactly, flips both cross-term signs. Verified
+	 * against a real feedback-panel reading from legacy CED itself (sector
+	 * 6, lab xyz (2.52, -4.95, 49.49) cm): its own reported "Sector xyz"
+	 * (5.55, -0.29, 49.49) and "Tilted sect xyz" (-15.89, -0.29, 47.20) --
+	 * the panel displays y negated for sector &gt; 3, like the final
+	 * transverse output here -- reproduce to the displayed precision only
+	 * under this corrected formula; the previous formula was off by tens of
+	 * screen-cm at this same point, not a rounding-sized discrepancy.
+	 * </p>
+	 */
+	static Point2D.Double tiltedPoint(double sectorX, double sectorY, double sectorZ,
 			int sector, double phiOffsetDegrees) {
 		double tilt = Math.toRadians(25.0);
-		double sectorX = tiltedX * Math.cos(tilt) + tiltedZ * Math.sin(tilt);
-		double sectorY = tiltedY;
-		double sectorZ = -tiltedX * Math.sin(tilt) + tiltedZ * Math.cos(tilt);
+		double tiltX = sectorX * Math.cos(tilt) - sectorZ * Math.sin(tilt);
+		double tiltY = sectorY;
+		double tiltZ = sectorX * Math.sin(tilt) + sectorZ * Math.cos(tilt);
 		double phi = Math.toRadians(phiOffsetDegrees);
-		double transverse = sectorX * Math.cos(phi) + sectorY * Math.sin(phi);
-		return new Point2D.Double(sectorZ, sector <= 3 ? transverse : -transverse);
+		double transverse = tiltX * Math.cos(phi) + tiltY * Math.sin(phi);
+		return new Point2D.Double(tiltZ, sector <= 3 ? transverse : -transverse);
 	}
 
 	/**

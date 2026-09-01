@@ -44,15 +44,46 @@ class SectorProjectionTest {
 
 	@Test
 	void tiltedCrossCoordinatesRespectSectorSideAndTilt() {
-		var upper = SectorProjection.tiltedPoint(12.0, -3.0, 240.0, 2, 0.0);
-		var lower = SectorProjection.tiltedPoint(12.0, -3.0, 240.0, 5, 0.0);
-		double tilt = Math.toRadians(25.0);
-		double expectedZ = -12.0 * Math.sin(tilt) + 240.0 * Math.cos(tilt);
-		double expectedTransverse = 12.0 * Math.cos(tilt) + 240.0 * Math.sin(tilt);
-		assertEquals(expectedZ, upper.x, 1.0e-12);
-		assertEquals(expectedTransverse, upper.y, 1.0e-12);
-		assertEquals(expectedZ, lower.x, 1.0e-12);
-		assertEquals(-expectedTransverse, lower.y, 1.0e-12);
+		// Ground-truthed against a real bCNU CED session (not just internal
+		// self-consistency, which previously let a real sign bug hide behind
+		// a passing test): its feedback panel, for a mouse position at lab
+		// xyz (2.52, -4.95, 49.49) cm in sector 6, reported "Sector xyz"
+		// (5.55, 0.29, 49.49) and "Tilted sect xyz" (-15.89, 0.29, 47.20) --
+		// the panel negates y for sector > 3, so the underlying (unflipped)
+		// sector/tilted y here is -0.29, not +0.29. tiltedPoint takes
+		// sector-frame input (matching "Sector xyz"), applies bCNU CED's own
+		// CedView.sectorToTilted, and returns (z, transverse) with the same
+		// sector > 3 sign flip CedView's own projectClasToWorld applies
+		// afterward -- so this asserts against +15.89 (the flipped, on-screen
+		// transverse), not the panel's raw, unflipped -15.89.
+		double sectorX = 5.546825748732971;
+		double sectorY = -0.29261598246321485;
+		double sectorZ = 49.49;
+		var sector6 = SectorProjection.tiltedPoint(sectorX, sectorY, sectorZ, 6, 0.0);
+		assertEquals(47.19736223655189, sector6.x, 1.0e-9);
+		assertEquals(15.88824640413513, sector6.y, 1.0e-9);
+		// Loosely against the legacy panel's own displayed (2-decimal) numbers too.
+		assertEquals(47.20, sector6.x, 0.01);
+		assertEquals(15.89, sector6.y, 0.01);
+
+		// Mirror-symmetric sector (2, upper) should land at the same z with
+		// the un-flipped (sector <= 3) transverse sign.
+		var sector2 = SectorProjection.tiltedPoint(sectorX, sectorY, sectorZ, 2, 0.0);
+		assertEquals(sector6.x, sector2.x, 1.0e-9);
+		assertEquals(-sector6.y, sector2.y, 1.0e-9);
+	}
+
+	@Test
+	void clasPointMatchesLegacyCedReferenceReading() {
+		// Same real bCNU CED session as tiltedCrossCoordinatesRespectSectorSideAndTilt,
+		// but exercised through clasPoint's full lab-to-tilted pipeline (the
+		// path a genuine lab-frame swum trajectory point takes), starting
+		// from the panel's own reported raw lab xyz rather than its
+		// already-rotated "Sector xyz" reading.
+		Point3 labPoint = new Point3(2.52, -4.95, 49.49);
+		var projected = SectorProjection.clasPoint(labPoint, 6, 0.0);
+		assertEquals(47.19736223655189, projected.x, 1.0e-9);
+		assertEquals(15.88824640413513, projected.y, 1.0e-9);
 	}
 
 	@Test
