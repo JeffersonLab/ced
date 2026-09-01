@@ -20,6 +20,7 @@ import edu.cnu.ced.dialog.AccumulationDialog;
 import edu.cnu.ced.geometry.GeometryService;
 import edu.cnu.ced.magfield.MagneticFieldService;
 import edu.cnu.ced.resources.Clas12Resources;
+import edu.cnu.ced.swim.SwimTrajectoryCache;
 import edu.cnu.ced.view.CurrentEventView;
 import edu.cnu.ced.view.ftcal.FTCalXYView;
 import edu.cnu.ced.view.ftof.FTOFView;
@@ -78,6 +79,7 @@ public final class CedApplication extends BaseMDIApplication {
 	private CurrentEventView currentEventView;
 	private Clas12Resources clas12Resources;
 	private AccumulationService accumulationService;
+	private final SwimTrajectoryCache swimCache = new SwimTrajectoryCache();
 	private RecentFiles recentEventFiles;
 	private RecentFilesMenu recentEventMenuHelper;
 	private JMenu recentEventMenu;
@@ -209,19 +211,19 @@ public final class CedApplication extends BaseMDIApplication {
 				"Sectors 3 and 6", () -> new SectorView(Pair.SECTORS_3_6,
 						geometryService.dc(), geometryService.ftof(), geometryService.pcal(), geometryService.ec(),
 						eventNavigator, accumulationService.dc(), accumulationService.pcal(), accumulationService.ecal(),
-						accumulationService.htcc(), accumulationService.ltcc()),
+						accumulationService.htcc(), accumulationService.ltcc(), swimCache),
 				0, 20, 65, VirtualView.UPPERLEFT));
 		ViewManager.getInstance().addConfiguration(ViewConfiguration.eager(
 				"Sectors 2 and 5", () -> new SectorView(Pair.SECTORS_2_5,
 						geometryService.dc(), geometryService.ftof(), geometryService.pcal(), geometryService.ec(),
 						eventNavigator, accumulationService.dc(), accumulationService.pcal(), accumulationService.ecal(),
-						accumulationService.htcc(), accumulationService.ltcc()),
+						accumulationService.htcc(), accumulationService.ltcc(), swimCache),
 				0, 85, 115, VirtualView.UPPERLEFT));
 		ViewManager.getInstance().addConfiguration(ViewConfiguration.eager(
 				"Sectors 1 and 4", () -> new SectorView(Pair.SECTORS_1_4,
 						geometryService.dc(), geometryService.ftof(), geometryService.pcal(), geometryService.ec(),
 						eventNavigator, accumulationService.dc(), accumulationService.pcal(), accumulationService.ecal(),
-						accumulationService.htcc(), accumulationService.ltcc()),
+						accumulationService.htcc(), accumulationService.ltcc(), swimCache),
 				0, 150, 165, VirtualView.UPPERLEFT));
 		Log.getInstance().config("CED MDI application shell initialized with "
 				+ VIRTUAL_DESKTOP_COLUMNS + " virtual desktop columns.");

@@ -56,7 +56,7 @@ import edu.cnu.ced.geometry.LTCCGeometry;
 import edu.cnu.ced.geometry.PCALGeometry;
 import edu.cnu.ced.geometry.Point3;
 import edu.cnu.ced.style.CedDrawingStyle;
-import edu.cnu.ced.swim.ParticleSwimmer;
+import edu.cnu.ced.swim.SwimTrajectoryCache;
 import edu.cnu.ced.view.CedView;
 import edu.cnu.mdi.container.IContainer;
 import edu.cnu.mdi.component.CommonBorder;
@@ -106,6 +106,7 @@ public final class SectorView extends CedView implements MagneticFieldChangeList
 	private final ECalAccumulation ecalAccumulation;
 	private final CherenkovAccumulation htccAccumulation;
 	private final CherenkovAccumulation ltccAccumulation;
+	private final SwimTrajectoryCache swimCache;
 	private final HTCCGeometry htccGeometry = new HTCCGeometry();
 	private final LTCCGeometry ltccGeometry = new LTCCGeometry();
 	private final Pair pair;
@@ -137,7 +138,7 @@ public final class SectorView extends CedView implements MagneticFieldChangeList
 			PCALGeometry pcalGeometry, ECGeometry ecGeometry, EventNavigator navigator,
 			DCAccumulation accumulation, PCalAccumulation pcalAccumulation,
 			ECalAccumulation ecalAccumulation, CherenkovAccumulation htccAccumulation,
-			CherenkovAccumulation ltccAccumulation) {
+			CherenkovAccumulation ltccAccumulation, SwimTrajectoryCache swimCache) {
 		super(navigator, PropertyUtils.TITLE,
 				"Sectors " + pair.upper + " and " + pair.lower,
 				PropertyUtils.WIDTH, 940, PropertyUtils.HEIGHT, 760,
@@ -155,6 +156,7 @@ public final class SectorView extends CedView implements MagneticFieldChangeList
 		this.ecalAccumulation = ecalAccumulation;
 		this.htccAccumulation = htccAccumulation;
 		this.ltccAccumulation = ltccAccumulation;
+		this.swimCache = swimCache;
 		setAfterDraw(this::draw);
 		initializeCedView(EnumSet.of(CedDisplayOption.SINGLE_EVENT,
 				CedDisplayOption.ACCUMULATION, CedDisplayOption.RAW_DATA,
@@ -182,6 +184,7 @@ public final class SectorView extends CedView implements MagneticFieldChangeList
 		htccData = CherenkovEventData.from(state.snapshot(), "HTCC");
 		ltccData = CherenkovEventData.from(state.snapshot(), "LTCC");
 		recData = RecEventData.from(state.snapshot());
+		swimCache.forEvent(state.snapshot());
 	}
 
 	private void draw(Graphics2D graphics, IContainer container) {
@@ -613,12 +616,6 @@ public final class SectorView extends CedView implements MagneticFieldChangeList
 	}
 
 	/**
-	 * Path length to swim each reconstructed particle through the magnetic
-	 * field, in cm; comfortably spans the CLAS12 forward detector stack.
-	 */
-	private static final double PARTICLE_SWIM_LENGTH_CM = ParticleSwimmer.DEFAULT_MAX_PATH_LENGTH_CM;
-
-	/**
 	 * Fallback straight-line direction-stub length, in lab-frame cm, used
 	 * only when swimming doesn't produce a usable trajectory (e.g. momentum
 	 * below the swimmer's internal threshold, or the integration failed).
@@ -637,7 +634,7 @@ public final class SectorView extends CedView implements MagneticFieldChangeList
 			int sector = particle.sector();
 			if (!displayedSector(sector)) continue;
 
-			List<Point3> swum = ParticleSwimmer.swim(particle, fieldProbe, PARTICLE_SWIM_LENGTH_CM);
+			List<Point3> swum = swimCache.trajectory(particle, fieldProbe);
 			List<Point> points = swum.size() >= 2
 					? projectTrajectory(container, sector, swum)
 					: stubTrajectory(container, sector, particle);
