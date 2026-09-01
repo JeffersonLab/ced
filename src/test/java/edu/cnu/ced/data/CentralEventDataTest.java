@@ -1,14 +1,48 @@
 package edu.cnu.ced.data;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import java.lang.reflect.Proxy;
 import java.util.Map;
 import org.jlab.io.base.DataBank;
 import org.jlab.io.base.DataEvent;
 import org.junit.jupiter.api.Test;
+import edu.cnu.ced.data.CentralEventData.Detector;
 import edu.cnu.ced.event.EventSnapshot;
 
 class CentralEventDataTest {
+	// CTOF adc/clusters had no dedicated coverage: the one existing test above
+	// only touches "CND::adc" incidentally, as a generic ADC bank for a
+	// BST/BMT-cluster test, without asserting the CND tag or reading any CTOF
+	// bank at all.
+	@Test void extractsCtofAdcHits(){
+		DataBank adc=bank(new String[]{"sector","layer","component","order","ADC","time"},1,Map.of(
+				"sector",new byte[]{3},"layer",new byte[]{0},"component",new short[]{12},
+				"order",new byte[]{0},"ADC",new int[]{555},"time",new float[]{12.5f}));
+		CentralEventData data=CentralEventData.from(EventSnapshot.of(event(Map.of("CTOF::adc",adc))));
+		assertEquals(1,data.adcHits().size());
+		CentralEventData.AdcHit hit=data.adcHits().getFirst();
+		assertEquals(Detector.CTOF,hit.detector()); assertEquals(3,hit.sector()); assertEquals(12,hit.component());
+		assertEquals(555,hit.adc()); assertEquals(555,data.maximumAdc());
+	}
+	@Test void extractsCndAndCtofPointClustersDistinctFromEachOther(){
+		DataBank cndClusters=bank(new String[]{"x","y","z","id","status","energy"},1,Map.of(
+				"x",new float[]{1.5f},"y",new float[]{2.5f},"z",new float[]{3.5f},
+				"id",new short[]{7},"status",new short[]{1},"energy",new float[]{0.8f}));
+		DataBank ctofClusters=bank(new String[]{"x","y","z"},1,Map.of(
+				"x",new float[]{4f},"y",new float[]{5f},"z",new float[]{6f}));
+		CentralEventData data=CentralEventData.from(EventSnapshot.of(event(Map.of(
+				"CND::clusters",cndClusters,"CTOF::clusters",ctofClusters))));
+		assertEquals(2,data.clusters().size());
+		CentralEventData.Cluster cnd=data.clusters().stream()
+				.filter(c->c.detector()==Detector.CND).findFirst().orElseThrow();
+		assertEquals(1.5f,cnd.x1()); assertEquals(2.5f,cnd.y1()); assertEquals(0.8f,cnd.energy());
+		assertTrue(Float.isNaN(cnd.x2()), "point clusters have no second endpoint");
+		CentralEventData.Cluster ctof=data.clusters().stream()
+				.filter(c->c.detector()==Detector.CTOF).findFirst().orElseThrow();
+		assertEquals(4f,ctof.x1()); assertEquals(6f,ctof.z());
+		assertTrue(Float.isNaN(ctof.x2()), "point clusters have no second endpoint");
+	}
 	@Test void extractsPositiveAdcAndUsesPreferredClusterBankWithoutDuplication(){
 		DataBank adc=bank(new String[]{"sector","layer","component","order","ADC","time"},2,Map.of(
 				"sector",new byte[]{10,10},"layer",new byte[]{2,2},"component",new short[]{1,1},
