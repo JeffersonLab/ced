@@ -96,6 +96,54 @@ class SectorProjectionTest {
 	}
 
 	@Test
+	void sectorForPositionUsesTheSameSixtyDegreeConvention() {
+		// Interior points, one per sector -- see RecEventData.Particle's
+		// sectorFollowsClas12SixtyDegreeConvention test for why exact
+		// boundary values (30, 90, ...) aren't asserted here.
+		assertEquals(1, SectorProjection.sectorForPosition(10.0, 0.0));
+		assertEquals(2, SectorProjection.sectorForPosition(5.0, 8.7));
+		assertEquals(3, SectorProjection.sectorForPosition(-5.0, 8.7));
+		assertEquals(4, SectorProjection.sectorForPosition(-10.0, 0.0));
+		assertEquals(5, SectorProjection.sectorForPosition(-5.0, -8.7));
+		assertEquals(6, SectorProjection.sectorForPosition(5.0, -8.7));
+	}
+
+	@Test
+	void autoSectorClasPointMatchesExplicitSectorForThatPointsOwnSector() {
+		// A point sitting on sector 2's own midplane (phi = 60 degrees):
+		// the auto-sector overload should derive sector 2 from the point
+		// itself and agree exactly with calling the explicit-sector
+		// overload with 2 -- not with sector 1, which is what a track
+		// starting in sector 1 but drifting out to this position would
+		// wrongly be projected with with a single fixed starting sector.
+		double rho = 30.0, z = 100.0;
+		Point3 point = new Point3(
+				rho * Math.cos(Math.toRadians(60.0)), rho * Math.sin(Math.toRadians(60.0)), z);
+		var auto = SectorProjection.clasPoint(point, 0.0);
+		var explicitSectorTwo = SectorProjection.clasPoint(point, 2, 0.0);
+		var explicitSectorOne = SectorProjection.clasPoint(point, 1, 0.0);
+		assertEquals(explicitSectorTwo.x, auto.x, 1.0e-12);
+		assertEquals(explicitSectorTwo.y, auto.y, 1.0e-12);
+		assertTrue(Math.abs(explicitSectorOne.x - auto.x) > 1.0e-6
+				|| Math.abs(explicitSectorOne.y - auto.y) > 1.0e-6);
+	}
+
+	@Test
+	void majoritySectorPicksTheSectorMostPointsFallIn() {
+		Point3 sector1 = new Point3(10.0, 0.0, 50.0);
+		Point3 alsoSector1 = new Point3(10.0, 1.0, 60.0);
+		Point3 sector2 = new Point3(5.0, 8.7, 70.0);
+		assertEquals(1, SectorView.majoritySector(List.of(sector1, alsoSector1, sector2)));
+	}
+
+	@Test
+	void majoritySectorBreaksTiesTowardTheLowerSectorNumber() {
+		Point3 sector1 = new Point3(10.0, 0.0, 50.0);
+		Point3 sector2 = new Point3(5.0, 8.7, 70.0);
+		assertEquals(1, SectorView.majoritySector(List.of(sector1, sector2)));
+	}
+
+	@Test
 	void nonlinearFieldScaleRoundTripsAndExpandsLowFields() {
 		double maximum = 6.58;
 		for (double fraction : new double[] {0.0, 0.25, 0.5, 0.75, 1.0}) {

@@ -606,18 +606,34 @@ public final class SectorView extends CedView implements MagneticFieldChangeList
 
 	/**
 	 * Like {@link #projectedPoint}, but for genuine lab-frame ("CLAS") data
-	 * such as a swum particle trajectory -- see {@link
-	 * SectorProjection#clasPoint} for the rotation this applies that {@link
-	 * #projectedPoint} does not. Calorimeter/Cherenkov hits still go through
-	 * {@link #projectedPoint}: their existing on-screen placement already
-	 * matches truth, so this was deliberately left untouched rather than
-	 * changed on the same unverified assumption that broke the particle
-	 * trajectory.
+	 * with an externally-supplied sector, e.g. the short fallback stub
+	 * below, where the vertex is too close to the beamline for its own
+	 * position to meaningfully determine a sector. Real swum trajectory
+	 * points use {@link #projectedClasPoint(IContainer, double, double,
+	 * double)} instead, which derives the sector fresh per point. See
+	 * {@link SectorProjection#clasPoint} for the rotation this applies that
+	 * {@link #projectedPoint} does not. Calorimeter/Cherenkov hits still go
+	 * through {@link #projectedPoint}: their existing on-screen placement
+	 * already matches truth, so this was deliberately left untouched rather
+	 * than changed on the same unverified assumption that broke the
+	 * particle trajectory.
 	 */
 	private Point projectedClasPoint(IContainer container, int sector,
 			double x, double y, double z) {
 		Point2D.Double world = SectorProjection.clasPoint(new Point3(x, y, z), sector,
 				phiOffsetDegrees);
+		return local(container, world.x, world.y);
+	}
+
+	/**
+	 * Like {@link #projectedClasPoint(IContainer, int, double, double,
+	 * double)}, but derives the sector from this point's own position
+	 * instead of taking one externally -- see {@link
+	 * SectorProjection#clasPoint(Point3, double)} for why that matters for a
+	 * curving trajectory.
+	 */
+	private Point projectedClasPoint(IContainer container, double x, double y, double z) {
+		Point2D.Double world = SectorProjection.clasPoint(new Point3(x, y, z), phiOffsetDegrees);
 		return local(container, world.x, world.y);
 	}
 
@@ -642,18 +658,18 @@ public final class SectorView extends CedView implements MagneticFieldChangeList
 	private void drawParticles(Graphics2D g, IContainer container) {
 		if (!isDisplayed(CedDisplayOption.PARTICLES)) return;
 		for (RecEventData.Particle particle : recData.particles()) {
-			// The sector is fixed once, from the particle's starting momentum
-			// direction, and every swum point is projected using that same
-			// sector's midplane. A track that curls enough to actually cross
-			// into a neighbouring sector will look somewhat approximate past
-			// that point -- this view's projection convention (like every
-			// other detector overlay here) is inherently per-sector.
-			int sector = particle.sector();
+			List<Point3> swum = swimCache.trajectory(particle, fieldProbe);
+			// Which sector-pair view should draw this particle at all: the
+			// most common position-derived sector across the swum path
+			// (matching bCNU CED's SwimTrajectoryDrawer.getMostCommonSector,
+			// a majority vote rather than trusting a single point), or the
+			// starting momentum direction when swimming didn't produce a
+			// usable path to vote across.
+			int sector = swum.size() >= 2 ? majoritySector(swum) : particle.sector();
 			if (!displayedSector(sector)) continue;
 
-			List<Point3> swum = swimCache.trajectory(particle, fieldProbe);
 			List<Point> points = swum.size() >= 2
-					? projectTrajectory(container, sector, swum)
+					? projectTrajectory(container, swum)
 					: stubTrajectory(container, sector, particle);
 			if (points.size() < 2) continue;
 
@@ -663,10 +679,23 @@ public final class SectorView extends CedView implements MagneticFieldChangeList
 		}
 	}
 
-	private List<Point> projectTrajectory(IContainer container, int sector, List<Point3> world) {
+	/** @return the sector [1, 6] that the most points of {@code points} fall in */
+	static int majoritySector(List<Point3> points) {
+		int[] votes = new int[7]; // index 0 unused
+		for (Point3 point : points) {
+			votes[SectorProjection.sectorForPosition(point.x(), point.y())]++;
+		}
+		int winner = 1;
+		for (int sector = 2; sector <= 6; sector++) {
+			if (votes[sector] > votes[winner]) winner = sector;
+		}
+		return winner;
+	}
+
+	private List<Point> projectTrajectory(IContainer container, List<Point3> world) {
 		List<Point> screen = new ArrayList<>(world.size());
 		for (Point3 point : world) {
-			screen.add(projectedClasPoint(container, sector, point.x(), point.y(), point.z()));
+			screen.add(projectedClasPoint(container, point.x(), point.y(), point.z()));
 		}
 		return screen;
 	}
