@@ -101,9 +101,33 @@ public record RecEventData(List<Particle> particles) {
 			return Math.max(-1.0, Math.min(1.0, cosTheta));
 		}
 
-		/** @return a short display name for this particle, e.g. {@code "p"}, {@code "π+"} */
+		/** @return a short display name for this particle, e.g. {@code "p"}, {@code "pi+"} */
 		public String displayName() {
 			return ParticleId.name(pid, charge);
+		}
+
+		/**
+		 * The CLAS12 sector [1, 6] this particle's momentum direction points
+		 * into, using the standard 60-degree-wide sector convention: sector 1
+		 * is centered on {@code phi = 0} and spans {@code (-30, 30]} degrees,
+		 * with sectors 2 through 6 following counterclockwise in 60-degree
+		 * steps. Momentum direction is used rather than vertex position,
+		 * since the vertex sits near the beamline (radius near zero) and
+		 * carries no useful azimuthal information; this matches how bCNU
+		 * CED's {@code GeometryManager.getSector(phi)} determines sector
+		 * membership.
+		 *
+		 * @return the sector number, 1 through 6
+		 */
+		public int sector() {
+			double degrees = Math.toDegrees(phi());
+			degrees = ((degrees % 360.0) + 360.0) % 360.0;
+			if (degrees > 30.0 && degrees <= 90.0) return 2;
+			if (degrees > 90.0 && degrees <= 150.0) return 3;
+			if (degrees > 150.0 && degrees <= 210.0) return 4;
+			if (degrees > 210.0 && degrees <= 270.0) return 5;
+			if (degrees > 270.0 && degrees <= 330.0) return 6;
+			return 1;
 		}
 	}
 }

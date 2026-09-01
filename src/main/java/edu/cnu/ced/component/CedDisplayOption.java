@@ -7,6 +7,7 @@ public enum CedDisplayOption {
 	RAW_DATA("Raw Data", true, null),
 	RECON_HITS("Recon Hits", true, null),
 	RECON_CAL("Recon Cal", true, null),
+	PARTICLES("Particles", true, null),
 	CLUSTERS("Clusters", true, null),
 	CROSSES("Crosses", true, null),
 	HB_HITS("HB Hits", true, null),

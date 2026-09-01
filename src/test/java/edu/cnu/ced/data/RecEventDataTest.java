@@ -89,6 +89,35 @@ class RecEventDataTest {
 		assertEquals("unknown-", data.particles().get(0).displayName());
 	}
 
+	@Test
+	void sectorFollowsClas12SixtyDegreeConvention() {
+		// Interior points, one per sector — far enough from every 30/90/150/
+		// 210/270/330-degree boundary that float round-trip through
+		// cos/sin/atan2 can never cross it.
+		assertEquals(1, particleAtPhiDegrees(0.0).sector());
+		assertEquals(2, particleAtPhiDegrees(60.0).sector());
+		assertEquals(3, particleAtPhiDegrees(120.0).sector());
+		assertEquals(4, particleAtPhiDegrees(180.0).sector());
+		assertEquals(5, particleAtPhiDegrees(240.0).sector());
+		assertEquals(6, particleAtPhiDegrees(300.0).sector());
+
+		// Just off the 1/2 boundary on either side, and wrapped negative —
+		// deliberately not testing exactly at 30.0 degrees, since float
+		// round-trip through cos/sin/atan2 isn't guaranteed to reproduce a
+		// boundary value exactly.
+		assertEquals(1, particleAtPhiDegrees(29.9).sector());
+		assertEquals(1, particleAtPhiDegrees(-29.9).sector());
+		assertEquals(2, particleAtPhiDegrees(30.1).sector());
+		assertEquals(1, particleAtPhiDegrees(330.1).sector());
+	}
+
+	private static RecEventData.Particle particleAtPhiDegrees(double degrees) {
+		double radians = Math.toRadians(degrees);
+		float px = (float) Math.cos(radians);
+		float py = (float) Math.sin(radians);
+		return new RecEventData.Particle(0, 2212, 1, px, py, 0f, 0f, 0f, 0f, 0f, 0f, 0f, 0);
+	}
+
 	private static DataEvent event(Map<String, DataBank> banks) {
 		return (DataEvent) Proxy.newProxyInstance(DataEvent.class.getClassLoader(),
 				new Class<?>[] { DataEvent.class }, (instance, method, args) -> switch (method.getName()) {

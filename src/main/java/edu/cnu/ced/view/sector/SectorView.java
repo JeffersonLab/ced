@@ -45,6 +45,7 @@ import edu.cnu.ced.data.FTOFEventData;
 import edu.cnu.ced.data.FTOFEventData.AdcHit;
 import edu.cnu.ced.data.PCalAccumulation;
 import edu.cnu.ced.data.PCalEventData;
+import edu.cnu.ced.data.RecEventData;
 import edu.cnu.ced.event.EventNavigationState;
 import edu.cnu.ced.event.EventNavigator;
 import edu.cnu.ced.geometry.DCGeometry;
@@ -118,12 +119,14 @@ public final class SectorView extends CedView implements MagneticFieldChangeList
 	private final Map<ECalEventData.ReconHit, Point> ecalHitLocations = new HashMap<>();
 	private final Map<CherenkovCell, Polygon> cherenkovCells = new HashMap<>();
 	private final Map<CherenkovMarker, Point> cherenkovMarkers = new HashMap<>();
+	private final List<ScreenParticle> screenParticles = new ArrayList<>();
 	private volatile DCEventData data = DCEventData.from(null);
 	private volatile FTOFEventData ftofData = FTOFEventData.from(null);
 	private volatile PCalEventData pcalData = PCalEventData.from(null);
 	private volatile ECalEventData ecalData = ECalEventData.from(null);
 	private volatile CherenkovEventData htccData = CherenkovEventData.from(null, "HTCC");
 	private volatile CherenkovEventData ltccData = CherenkovEventData.from(null, "LTCC");
+	private volatile RecEventData recData = RecEventData.from(null);
 	private volatile FieldProbe fieldProbe = FieldProbe.factory();
 	private volatile boolean showMagneticField;
 	private ColorScaleBar fieldScale;
@@ -159,9 +162,9 @@ public final class SectorView extends CedView implements MagneticFieldChangeList
 				CedDisplayOption.AI_HB_HITS, CedDisplayOption.AI_TB_HITS,
 				CedDisplayOption.CLUSTERS, CedDisplayOption.CROSSES, CedDisplayOption.HB_SEGMENTS,
 				CedDisplayOption.TB_SEGMENTS, CedDisplayOption.AI_HB_SEGMENTS,
-				CedDisplayOption.AI_TB_SEGMENTS),
+				CedDisplayOption.AI_TB_SEGMENTS, CedDisplayOption.PARTICLES),
 				List.of("DC::", "HitBasedTrkg::", "TimeBasedTrkg::", "FTOF::",
-						"ECAL::", "REC::Calorimeter", "HTCC::", "LTCC::"),
+						"ECAL::", "REC::Calorimeter", "REC::Particle", "HTCC::", "LTCC::"),
 				ScientificColorMap.TURBO, "Relative occupancy (95th-percentile ceiling)",
 				340);
 		addControlTab("phi", createPhiPanel());
@@ -177,6 +180,7 @@ public final class SectorView extends CedView implements MagneticFieldChangeList
 		ecalData = ECalEventData.from(state.snapshot());
 		htccData = CherenkovEventData.from(state.snapshot(), "HTCC");
 		ltccData = CherenkovEventData.from(state.snapshot(), "LTCC");
+		recData = RecEventData.from(state.snapshot());
 	}
 
 	private void draw(Graphics2D graphics, IContainer container) {
@@ -194,6 +198,7 @@ public final class SectorView extends CedView implements MagneticFieldChangeList
 			ecalHitLocations.clear();
 			cherenkovCells.clear();
 			cherenkovMarkers.clear();
+			screenParticles.clear();
 			if (showMagneticField) drawMagneticField(g, container);
 			drawBeamline(g, container);
 			drawTarget(g, container);
@@ -215,6 +220,7 @@ public final class SectorView extends CedView implements MagneticFieldChangeList
 				drawFTOFEvent(g, container);
 				drawCalorimeterEvent(g, container);
 				drawCherenkovEvent(g, container);
+				drawParticles(g, container);
 			}
 			drawLabels(g, container);
 			drawScale(g, container);
@@ -532,14 +538,14 @@ public final class SectorView extends CedView implements MagneticFieldChangeList
 
 		for (PCalEventData.ReconHit hit : pcalData.reconHits()) {
 			if (!displayedSector(hit.sector())) continue;
-			Point point = projectedCalorimeterPoint(container, hit.sector(), hit.x(), hit.y(), hit.z());
+			Point point = projectedPoint(container, hit.sector(), hit.x(), hit.y(), hit.z());
 			pcalHitLocations.put(hit, point);
 			drawCalorimeterFootprint(g, container, point, hit.radius());
 			drawCalorimeterMarker(g, point, new Color(0, 210, 220), Color.RED);
 		}
 		for (ECalEventData.ReconHit hit : ecalData.reconHits()) {
 			if (!displayedSector(hit.sector())) continue;
-			Point point = projectedCalorimeterPoint(container, hit.sector(), hit.x(), hit.y(), hit.z());
+			Point point = projectedPoint(container, hit.sector(), hit.x(), hit.y(), hit.z());
 			ecalHitLocations.put(hit, point);
 			drawCalorimeterFootprint(g, container, point, hit.radius());
 			drawCalorimeterMarker(g, point, new Color(255, 210, 0), new Color(120, 0, 110));
@@ -587,7 +593,7 @@ public final class SectorView extends CedView implements MagneticFieldChangeList
 		g.drawPolygon(polygon);
 	}
 
-	private Point projectedCalorimeterPoint(IContainer container, int sector,
+	private Point projectedPoint(IContainer container, int sector,
 			double x, double y, double z) {
 		Point2D.Double world = SectorProjection.labPoint(new Point3(x, y, z), sector,
 				phiOffsetDegrees);
@@ -603,6 +609,43 @@ public final class SectorView extends CedView implements MagneticFieldChangeList
 		g.drawOval(point.x - 5, point.y - 5, 11, 11);
 		g.drawLine(point.x - 7, point.y, point.x + 7, point.y);
 		g.drawLine(point.x, point.y - 7, point.x, point.y + 7);
+	}
+
+	/**
+	 * Fixed on-screen length, in lab-frame cm, of each reconstructed
+	 * particle's direction stub. Chosen to reach past most of the beamline
+	 * clutter without pretending to be a field-swum trajectory; particle
+	 * swimming through the magnetic field is a separate, not-yet-built
+	 * feature.
+	 */
+	private static final double PARTICLE_STUB_LENGTH_CM = 40.0;
+
+	private void drawParticles(Graphics2D g, IContainer container) {
+		if (!isDisplayed(CedDisplayOption.PARTICLES)) return;
+		for (RecEventData.Particle particle : recData.particles()) {
+			int sector = particle.sector();
+			if (!displayedSector(sector)) continue;
+			float p = particle.p();
+			if (!(p > 0f)) continue;
+			double scale = PARTICLE_STUB_LENGTH_CM / p;
+			Point vertex = projectedPoint(container, sector, particle.vx(), particle.vy(), particle.vz());
+			Point tip = projectedPoint(container, sector,
+					particle.vx() + scale * particle.px(),
+					particle.vy() + scale * particle.py(),
+					particle.vz() + scale * particle.pz());
+			Color color = CedDrawingStyle.particleColor(particle.pid(), particle.charge());
+			drawParticleMarker(g, vertex, tip, color);
+			screenParticles.add(new ScreenParticle(particle, vertex, tip));
+		}
+	}
+
+	private static void drawParticleMarker(Graphics2D g, Point vertex, Point tip, Color color) {
+		g.setColor(color);
+		g.setStroke(new BasicStroke(2f));
+		g.drawLine(vertex.x, vertex.y, tip.x, tip.y);
+		g.fillOval(vertex.x - 3, vertex.y - 3, 6, 6);
+		g.setColor(CedDrawingStyle.outline(color));
+		g.drawOval(vertex.x - 3, vertex.y - 3, 6, 6);
 	}
 
 	private void drawFTOFEvent(Graphics2D g, IContainer container) {
@@ -988,6 +1031,23 @@ public final class SectorView extends CedView implements MagneticFieldChangeList
 				break;
 			}
 		}
+		for (ScreenParticle drawn : screenParticles) {
+			if (Line2D.ptSegDist(drawn.vertex.x, drawn.vertex.y, drawn.tip.x, drawn.tip.y,
+					screenPoint.x, screenPoint.y) <= 5.0) {
+				RecEventData.Particle particle = drawn.particle;
+				feedback.add(String.format("$blue$%s (pid %d, q=%+d) sector %d", particle.displayName(),
+						particle.pid(), particle.charge(), particle.sector()));
+				feedback.add(String.format("$blue$p = %.3f GeV/c  theta = %.1f°  phi = %.1f°",
+						particle.p(), Math.toDegrees(particle.theta()), Math.toDegrees(particle.phi())));
+				feedback.add(String.format("$blue$vertex (%.2f, %.2f, %.2f) cm",
+						particle.vx(), particle.vy(), particle.vz()));
+				if (particle.beta() != 0f || particle.chi2pid() != 0f) {
+					feedback.add(String.format("$blue$beta = %.3f  chi2pid = %.2f",
+							particle.beta(), particle.chi2pid()));
+				}
+				break;
+			}
+		}
 		for (Map.Entry<FTOFEventData.Cluster, Point> entry : ftofClusterLocations.entrySet()) {
 			if (entry.getValue().distance(screenPoint) <= 8.0) {
 				FTOFEventData.Cluster cluster = entry.getKey();
@@ -1208,6 +1268,7 @@ public final class SectorView extends CedView implements MagneticFieldChangeList
 
 	private record ScreenSegment(Segment segment, Point start, Point end) { }
 	private record ScreenCross(Cross cross, Point location) { }
+	private record ScreenParticle(RecEventData.Particle particle, Point vertex, Point tip) { }
 
 	@Override
 	public void magneticFieldChanged() {
