@@ -79,7 +79,7 @@ public final class CedApplication extends BaseMDIApplication {
 	private CurrentEventView currentEventView;
 	private Clas12Resources clas12Resources;
 	private AccumulationService accumulationService;
-	private final SwimTrajectoryCache swimCache = new SwimTrajectoryCache();
+	private SwimTrajectoryCache swimCache;
 	private RecentFiles recentEventFiles;
 	private RecentFilesMenu recentEventMenuHelper;
 	private JMenu recentEventMenu;
@@ -163,6 +163,7 @@ public final class CedApplication extends BaseMDIApplication {
 		eventNavigator = new EventNavigator(eventStore);
 		accumulationService = new AccumulationService();
 		eventNavigator.addSourceListener(accumulationService::clear);
+		swimCache = new SwimTrajectoryCache();
 		if (bootstrap != null) {
 			magneticFieldService = bootstrap.magneticFields();
 			geometryService = bootstrap.geometry();
