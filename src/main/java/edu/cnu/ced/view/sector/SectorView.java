@@ -27,6 +27,8 @@ import javax.swing.JSlider;
 import cnuphys.magfield.FieldProbe;
 import cnuphys.magfield.MagneticFieldChangeListener;
 import cnuphys.magfield.MagneticFields;
+import cnuphys.magfield.Solenoid;
+import cnuphys.magfield.Torus;
 
 import edu.cnu.ced.component.CedDisplayOption;
 import edu.cnu.ced.data.DCAccumulation;
@@ -1085,6 +1087,7 @@ public final class SectorView extends CedView implements MagneticFieldChangeList
 			Point2D.Double worldPoint, List<String> feedback) {
 		feedback.add(String.format("$yellow$(z, transverse) = (%6.2f, %6.2f) cm",
 				worldPoint.x, worldPoint.y));
+		addLocationFeedback(worldPoint, feedback);
 		addFieldFeedback(worldPoint, feedback);
 		for (ScreenCross drawn : screenCrosses) {
 			if (drawn.location.distance(screenPoint) <= 9.0) {
@@ -1285,14 +1288,58 @@ public final class SectorView extends CedView implements MagneticFieldChangeList
 		}
 	}
 
+	/** Which of this view's two sectors {@code worldPoint}'s sign of transverse belongs to. */
+	private int sectorForWorldPoint(Point2D.Double worldPoint) {
+		return worldPoint.y > 0.0 ? pair.upper : pair.lower;
+	}
+
+	/**
+	 * Cursor location feedback in every coordinate system bCNU CED's own
+	 * "Sector view" feedback panel shows, so a mismatch anywhere in the
+	 * projection chain (lab -> sector -> tilted) can be spotted directly
+	 * from the running app -- the way the wrong-tilt-sign bug this guards
+	 * against was actually found: by comparing a live legacy-CED reading
+	 * against this same chain computed by hand.
+	 */
+	private void addLocationFeedback(Point2D.Double worldPoint, List<String> feedback) {
+		int sector = sectorForWorldPoint(worldPoint);
+		Point3 lab = SectorProjection.labPointFromScreen(worldPoint.x, worldPoint.y, sector, phiOffsetDegrees);
+		double x = lab.x(), y = lab.y(), z = lab.z();
+		double r = Math.sqrt(x * x + y * y + z * z);
+		double rho = Math.sqrt(x * x + y * y);
+		double thetaDeg = r > 0 ? Math.toDegrees(Math.acos(z / r)) : 0.0;
+		double phiDeg = Math.toDegrees(Math.atan2(y, x));
+
+		Point3 sectorFrame = SectorProjection.sectorFrame(lab, sector);
+		Point3 tiltedFrame = SectorProjection.tiltedFrame(sectorFrame);
+
+		feedback.add(String.format("$cyan$Sector %d", sector));
+		feedback.add(String.format("$cyan$xyz (%.2f, %.2f, %.2f) cm", x, y, z));
+		feedback.add(String.format("$cyan$r θ φ (%.2fcm, %.2f°, %.2f°)", r, thetaDeg, phiDeg));
+		feedback.add(String.format("$cyan$ρ z φ (%.2fcm, %.2fcm, %.2f°)", rho, z, phiDeg));
+		feedback.add(String.format("$cyan$Sector xyz (%.2f, %.2f, %.2f) cm",
+				sectorFrame.x(), sectorFrame.y(), sectorFrame.z()));
+		feedback.add(String.format("$cyan$Tilted sect xyz (%.2f, %.2f, %.2f) cm",
+				tiltedFrame.x(), tiltedFrame.y(), tiltedFrame.z()));
+
+		Torus torus = MagneticFields.getInstance().getTorus();
+		Solenoid solenoid = MagneticFields.getInstance().getSolenoid();
+		if (torus != null || solenoid != null) {
+			feedback.add(String.format("$cyan$Torus scale %.3f  Solenoid scale %.3f",
+					torus == null ? Double.NaN : torus.getScaleFactor(),
+					solenoid == null ? Double.NaN : solenoid.getScaleFactor()));
+		}
+	}
+
 	private void addFieldFeedback(Point2D.Double worldPoint, List<String> feedback) {
 		if (!showMagneticField) return;
 		FieldProbe probe = fieldProbe;
 		if (probe == null) return;
-		double angle = Math.toRadians(60.0 * (pair.upper - 1) + phiOffsetDegrees);
-		float labX = (float) (worldPoint.y * Math.cos(angle));
-		float labY = (float) (worldPoint.y * Math.sin(angle));
-		float labZ = (float) worldPoint.x;
+		int sector = sectorForWorldPoint(worldPoint);
+		Point3 lab = SectorProjection.labPointFromScreen(worldPoint.x, worldPoint.y, sector, phiOffsetDegrees);
+		float labX = (float) lab.x();
+		float labY = (float) lab.y();
+		float labZ = (float) lab.z();
 		if (!probe.contains(labX, labY, labZ)) return;
 		float[] field = new float[3];
 		probe.field(labX, labY, labZ, field);

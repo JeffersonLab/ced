@@ -87,6 +87,47 @@ class SectorProjectionTest {
 	}
 
 	@Test
+	void labPointFromScreenInvertsClasPointOnTheSectorMidplane() {
+		// labPointFromScreen assumes zero out-of-plane offset (sectorY = 0),
+		// so round-tripping only holds exactly for a lab point that already
+		// sits on the sector's own midplane -- exactly the case a cursor
+		// click in this 2D slice view is implicitly assuming.
+		int sector = 6;
+		double midPlanePhiDeg = 60.0 * (sector - 1);
+		double rho = 37.0, z = 212.0;
+		Point3 onMidplane = new Point3(
+				rho * Math.cos(Math.toRadians(midPlanePhiDeg)),
+				rho * Math.sin(Math.toRadians(midPlanePhiDeg)), z);
+
+		var screen = SectorProjection.clasPoint(onMidplane, sector, 0.0);
+		Point3 recovered = SectorProjection.labPointFromScreen(screen.x, screen.y, sector, 0.0);
+
+		assertEquals(onMidplane.x(), recovered.x(), 1.0e-9);
+		assertEquals(onMidplane.y(), recovered.y(), 1.0e-9);
+		assertEquals(onMidplane.z(), recovered.z(), 1.0e-9);
+	}
+
+	@Test
+	void labPointFromScreenMatchesLegacyCedReferenceReading() {
+		// Inverse of clasPointMatchesLegacyCedReferenceReading: starting
+		// from that same real legacy-CED session's screen point, recover a
+		// lab xyz on sector 6's own midplane. Since the real lab reading
+		// (2.52, -4.95, 49.49) has a nonzero out-of-plane component, this
+		// won't exactly reproduce it (labPointFromScreen assumes zero), but
+		// it must land close, and re-projecting the recovered point must
+		// reproduce the same screen point exactly (round-trip consistency).
+		Point3 recovered = SectorProjection.labPointFromScreen(
+				47.19736223655189, 15.88824640413513, 6, 0.0);
+		assertEquals(2.52, recovered.x(), 0.3);
+		assertEquals(-4.95, recovered.y(), 0.3);
+		assertEquals(49.49, recovered.z(), 0.3);
+
+		var reprojected = SectorProjection.clasPoint(recovered, 6, 0.0);
+		assertEquals(47.19736223655189, reprojected.x, 1.0e-9);
+		assertEquals(15.88824640413513, reprojected.y, 1.0e-9);
+	}
+
+	@Test
 	void labCoordinatesProjectOntoSelectedSectorPlane() {
 		var sectorOne = SectorProjection.labPoint(new Point3(12.0, 5.0, 240.0), 1, 0.0);
 		var sectorFour = SectorProjection.labPoint(new Point3(-12.0, -5.0, 240.0), 4, 0.0);

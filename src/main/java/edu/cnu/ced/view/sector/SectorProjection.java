@@ -65,12 +65,64 @@ final class SectorProjection {
 	 * </p>
 	 */
 	static Point2D.Double clasPoint(Point3 point, int sector, double phiOffsetDegrees) {
+		Point3 sectorPoint = sectorFrame(point, sector);
+		return tiltedPoint(sectorPoint.x(), sectorPoint.y(), sectorPoint.z(), sector, phiOffsetDegrees);
+	}
+
+	/**
+	 * Rotates a lab-frame point into {@code sector}'s own local frame -- the
+	 * same rotation {@link #clasPoint} applies before tilting -- exposed on
+	 * its own so callers can display the intermediate value (e.g.
+	 * reproducing bCNU CED's "Sector xyz" feedback reading) rather than
+	 * only the final 2D screen point.
+	 */
+	static Point3 sectorFrame(Point3 labPoint, int sector) {
 		double midPlanePhi = Math.toRadians(60.0 * (sector - 1));
 		double cosPhi = Math.cos(midPlanePhi);
 		double sinPhi = Math.sin(midPlanePhi);
-		double sectorX = cosPhi * point.x() + sinPhi * point.y();
-		double sectorY = -sinPhi * point.x() + cosPhi * point.y();
-		return tiltedPoint(sectorX, sectorY, point.z(), sector, phiOffsetDegrees);
+		double sectorX = cosPhi * labPoint.x() + sinPhi * labPoint.y();
+		double sectorY = -sinPhi * labPoint.x() + cosPhi * labPoint.y();
+		return new Point3(sectorX, sectorY, labPoint.z());
+	}
+
+	/**
+	 * Applies the 25-degree tilt to a sector-frame point -- the same
+	 * rotation {@link #tiltedPoint} applies -- returning the full 3D tilted
+	 * point rather than collapsing straight to a 2D screen point, so
+	 * callers can display it directly (bCNU CED's "Tilted sect xyz"
+	 * feedback reading).
+	 */
+	static Point3 tiltedFrame(Point3 sectorPoint) {
+		double tilt = Math.toRadians(25.0);
+		double tiltX = sectorPoint.x() * Math.cos(tilt) - sectorPoint.z() * Math.sin(tilt);
+		double tiltY = sectorPoint.y();
+		double tiltZ = sectorPoint.x() * Math.sin(tilt) + sectorPoint.z() * Math.cos(tilt);
+		return new Point3(tiltX, tiltY, tiltZ);
+	}
+
+	/**
+	 * Inverts the {@link #clasPoint}/{@link #tiltedPoint} chain, recovering
+	 * a lab-frame point from a screen {@code (z, transverse)} position --
+	 * under the assumption that the point lies exactly on {@code sector}'s
+	 * own central plane (zero out-of-plane offset), since a 2D slice view's
+	 * mouse position alone can't otherwise determine that depth. Used for
+	 * cursor location feedback and magnetic-field lookups at the cursor.
+	 */
+	static Point3 labPointFromScreen(double screenZ, double screenTransverse, int sector,
+			double phiOffsetDegrees) {
+		double signedTransverse = sector <= 3 ? screenTransverse : -screenTransverse;
+		double phi = Math.toRadians(phiOffsetDegrees);
+		double cosPhi = Math.cos(phi);
+		// transverse = tiltX*cos(phi) + tiltY*sin(phi), with tiltY assumed 0.
+		double tiltX = Math.abs(cosPhi) > 1.0e-9 ? signedTransverse / cosPhi : 0.0;
+		double tiltZ = screenZ;
+		double tilt = Math.toRadians(25.0);
+		double sectorX = tiltX * Math.cos(tilt) + tiltZ * Math.sin(tilt);
+		double sectorZ = -tiltX * Math.sin(tilt) + tiltZ * Math.cos(tilt);
+		double midPlanePhi = Math.toRadians(60.0 * (sector - 1));
+		double x = sectorX * Math.cos(midPlanePhi);
+		double y = sectorX * Math.sin(midPlanePhi);
+		return new Point3(x, y, sectorZ);
 	}
 
 	/**
@@ -186,13 +238,10 @@ final class SectorProjection {
 	 */
 	static Point2D.Double tiltedPoint(double sectorX, double sectorY, double sectorZ,
 			int sector, double phiOffsetDegrees) {
-		double tilt = Math.toRadians(25.0);
-		double tiltX = sectorX * Math.cos(tilt) - sectorZ * Math.sin(tilt);
-		double tiltY = sectorY;
-		double tiltZ = sectorX * Math.sin(tilt) + sectorZ * Math.cos(tilt);
+		Point3 tilted = tiltedFrame(new Point3(sectorX, sectorY, sectorZ));
 		double phi = Math.toRadians(phiOffsetDegrees);
-		double transverse = tiltX * Math.cos(phi) + tiltY * Math.sin(phi);
-		return new Point2D.Double(tiltZ, sector <= 3 ? transverse : -transverse);
+		double transverse = tilted.x() * Math.cos(phi) + tilted.y() * Math.sin(phi);
+		return new Point2D.Double(tilted.z(), sector <= 3 ? transverse : -transverse);
 	}
 
 	/**
