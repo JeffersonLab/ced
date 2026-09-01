@@ -605,35 +605,33 @@ public final class SectorView extends CedView implements MagneticFieldChangeList
 	}
 
 	/**
-	 * Like {@link #projectedPoint}, but for genuine lab-frame ("CLAS") data
-	 * with an externally-supplied sector, e.g. the short fallback stub
-	 * below, where the vertex is too close to the beamline for its own
-	 * position to meaningfully determine a sector. Real swum trajectory
-	 * points use {@link #projectedClasPoint(IContainer, double, double,
-	 * double)} instead, which derives the sector fresh per point. See
-	 * {@link SectorProjection#clasPoint} for the rotation this applies that
-	 * {@link #projectedPoint} does not. Calorimeter/Cherenkov hits still go
-	 * through {@link #projectedPoint}: their existing on-screen placement
-	 * already matches truth, so this was deliberately left untouched rather
-	 * than changed on the same unverified assumption that broke the
-	 * particle trajectory.
+	 * Like {@link #projectedPoint}, but for genuine lab-frame ("CLAS") data,
+	 * e.g. a swum particle trajectory. See {@link SectorProjection#clasPoint}
+	 * for the sector-local rotation this applies that {@link #projectedPoint}
+	 * does not. Calorimeter/Cherenkov hits still go through {@link
+	 * #projectedPoint}: their existing on-screen placement already matches
+	 * truth, so this was deliberately left untouched rather than changed on
+	 * the same unverified assumption that broke the particle trajectory.
+	 * <p>
+	 * {@code sector} is always the one fixed sector this whole trajectory is
+	 * being drawn under (the view's own momentum-direction sector, from
+	 * {@link RecEventData.Particle#sector()}) -- never re-derived from each
+	 * point's own position. {@code clasPoint}'s rotation is a plain change of
+	 * basis onto sector's fixed midplane, well-defined and continuous for
+	 * any point in space, not just ones physically inside that sector's
+	 * wedge. Re-deriving the sector per point (an earlier version of this
+	 * method did, via {@code SectorProjection.sectorForPosition}) flips the
+	 * rotation basis by 60 degrees whenever that per-point estimate crosses a
+	 * boundary -- which, right near the vertex where x and y are both driven
+	 * by sub-cm noise, can happen from one trajectory point to the next,
+	 * producing a jagged, curled-looking path that doesn't correspond to the
+	 * particle's real trajectory at all.
+	 * </p>
 	 */
 	private Point projectedClasPoint(IContainer container, int sector,
 			double x, double y, double z) {
 		Point2D.Double world = SectorProjection.clasPoint(new Point3(x, y, z), sector,
 				phiOffsetDegrees);
-		return local(container, world.x, world.y);
-	}
-
-	/**
-	 * Like {@link #projectedClasPoint(IContainer, int, double, double,
-	 * double)}, but derives the sector from this point's own position
-	 * instead of taking one externally -- see {@link
-	 * SectorProjection#clasPoint(Point3, double)} for why that matters for a
-	 * curving trajectory.
-	 */
-	private Point projectedClasPoint(IContainer container, double x, double y, double z) {
-		Point2D.Double world = SectorProjection.clasPoint(new Point3(x, y, z), phiOffsetDegrees);
 		return local(container, world.x, world.y);
 	}
 
@@ -675,7 +673,7 @@ public final class SectorView extends CedView implements MagneticFieldChangeList
 
 			List<Point3> swum = swimCache.trajectory(particle, fieldProbe);
 			List<Point> points = swum.size() >= 2
-					? projectTrajectory(container, swum)
+					? projectTrajectory(container, sector, swum)
 					: stubTrajectory(container, sector, particle);
 			if (points.size() < 2) continue;
 
@@ -685,10 +683,10 @@ public final class SectorView extends CedView implements MagneticFieldChangeList
 		}
 	}
 
-	private List<Point> projectTrajectory(IContainer container, List<Point3> world) {
+	private List<Point> projectTrajectory(IContainer container, int sector, List<Point3> world) {
 		List<Point> screen = new ArrayList<>(world.size());
 		for (Point3 point : world) {
-			screen.add(projectedClasPoint(container, point.x(), point.y(), point.z()));
+			screen.add(projectedClasPoint(container, sector, point.x(), point.y(), point.z()));
 		}
 		return screen;
 	}

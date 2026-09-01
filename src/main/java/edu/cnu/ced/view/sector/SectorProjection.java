@@ -74,47 +74,6 @@ final class SectorProjection {
 	}
 
 	/**
-	 * Project a point given in true lab ("CLAS") coordinates, determining
-	 * which sector's local frame to rotate into from the point's own
-	 * position, via {@link #sectorForPosition}.
-	 * <p>
-	 * This is the version to use for each individual point of a swum
-	 * trajectory: a curving track's own instantaneous position can drift
-	 * several degrees in phi as it travels outward, so re-deriving the
-	 * sector fresh for every point (rather than fixing one sector for the
-	 * whole track, e.g. from its starting momentum direction) is what
-	 * keeps the projected path aligned with crosses at every point, not
-	 * just near the vertex. This matches bCNU CED's own per-point behaviour:
-	 * {@code SwimTrajectoryDrawer.project()} calls {@code
-	 * view.projectClasToWorld()} once per trajectory point, and that in turn
-	 * calls {@code GeometryManager.clasToSectorNumber()} fresh each time
-	 * rather than reusing one sector for the whole trajectory.
-	 * </p>
-	 */
-	static Point2D.Double clasPoint(Point3 point, double phiOffsetDegrees) {
-		return clasPoint(point, sectorForPosition(point.x(), point.y()), phiOffsetDegrees);
-	}
-
-	/**
-	 * The CLAS12 sector [1, 6] a lab-frame position falls in, using the
-	 * standard 60-degree-wide sector convention (sector 1 centered on
-	 * {@code phi = 0}, spanning {@code (-30, 30]} degrees, sectors 2 through
-	 * 6 following counterclockwise in 60-degree steps) -- the same
-	 * convention as {@link edu.cnu.ced.data.RecEventData.Particle#sector()},
-	 * applied here to a position instead of a momentum direction.
-	 */
-	static int sectorForPosition(double x, double y) {
-		double degrees = Math.toDegrees(Math.atan2(y, x));
-		degrees = ((degrees % 360.0) + 360.0) % 360.0;
-		if (degrees > 30.0 && degrees <= 90.0) return 2;
-		if (degrees > 90.0 && degrees <= 150.0) return 3;
-		if (degrees > 150.0 && degrees <= 210.0) return 4;
-		if (degrees > 210.0 && degrees <= 270.0) return 5;
-		if (degrees > 270.0 && degrees <= 330.0) return 6;
-		return 1;
-	}
-
-	/**
 	 * Intersects the selected phi plane with the four long edges of a paddle.
 	 * The returned quadrilateral uses intersections with the infinitely extended
 	 * edge lines, as the legacy CED projection did, so its shape remains stable

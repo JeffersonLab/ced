@@ -96,36 +96,39 @@ class SectorProjectionTest {
 	}
 
 	@Test
-	void sectorForPositionUsesTheSameSixtyDegreeConvention() {
-		// Interior points, one per sector -- see RecEventData.Particle's
-		// sectorFollowsClas12SixtyDegreeConvention test for why exact
-		// boundary values (30, 90, ...) aren't asserted here.
-		assertEquals(1, SectorProjection.sectorForPosition(10.0, 0.0));
-		assertEquals(2, SectorProjection.sectorForPosition(5.0, 8.7));
-		assertEquals(3, SectorProjection.sectorForPosition(-5.0, 8.7));
-		assertEquals(4, SectorProjection.sectorForPosition(-10.0, 0.0));
-		assertEquals(5, SectorProjection.sectorForPosition(-5.0, -8.7));
-		assertEquals(6, SectorProjection.sectorForPosition(5.0, -8.7));
-	}
-
-	@Test
-	void autoSectorClasPointMatchesExplicitSectorForThatPointsOwnSector() {
-		// A point sitting on sector 2's own midplane (phi = 60 degrees):
-		// the auto-sector overload should derive sector 2 from the point
-		// itself and agree exactly with calling the explicit-sector
-		// overload with 2 -- not with sector 1, which is what a track
-		// starting in sector 1 but drifting out to this position would
-		// wrongly be projected with with a single fixed starting sector.
-		double rho = 30.0, z = 100.0;
-		Point3 point = new Point3(
-				rho * Math.cos(Math.toRadians(60.0)), rho * Math.sin(Math.toRadians(60.0)), z);
-		var auto = SectorProjection.clasPoint(point, 0.0);
-		var explicitSectorTwo = SectorProjection.clasPoint(point, 2, 0.0);
-		var explicitSectorOne = SectorProjection.clasPoint(point, 1, 0.0);
-		assertEquals(explicitSectorTwo.x, auto.x, 1.0e-12);
-		assertEquals(explicitSectorTwo.y, auto.y, 1.0e-12);
-		assertTrue(Math.abs(explicitSectorOne.x - auto.x) > 1.0e-6
-				|| Math.abs(explicitSectorOne.y - auto.y) > 1.0e-6);
+	void clasPointUnderOneFixedSectorIsContinuousEvenNearTheBeamline() {
+		// clasPoint(Point3, sector, ...) rotates any lab-frame point onto
+		// sector's fixed midplane -- a plain, continuous change of basis,
+		// not something limited to points physically inside that sector's
+		// own 60-degree wedge. Projecting a smooth path (e.g. a swum
+		// trajectory) one fixed sector at a time must therefore itself stay
+		// smooth, including right near the beamline where x and y are both
+		// tiny and their own angle is meaningless. This guards against
+		// reintroducing a per-point "which sector is this position really
+		// in" re-derivation, which flips the rotation basis by 60 degrees
+		// whenever that noisy per-point estimate crosses a boundary and
+		// produces exactly this kind of discontinuity -- confirmed against
+		// real event data as a jagged, curled-looking track near the vertex
+		// that didn't correspond to the particle's real trajectory.
+		int sector = 3;
+		double stepCm = 0.5;
+		Point2D.Double previous = null;
+		for (int i = 0; i <= 20; i++) {
+			// A path that starts essentially on the beamline (tiny, noisy
+			// transverse offset) and moves outward into sector 3.
+			double s = i * stepCm;
+			Point3 point = new Point3(
+					1.0e-6 * ((i % 2 == 0) ? 1 : -1) + s * Math.cos(Math.toRadians(120.0)),
+					-3.0e-6 * ((i % 3 == 0) ? 1 : -1) + s * Math.sin(Math.toRadians(120.0)),
+					-5.0 + s * 0.1);
+			Point2D.Double projected = SectorProjection.clasPoint(point, sector, 0.0);
+			if (previous != null) {
+				assertTrue(previous.distance(projected) < 2.0 * stepCm,
+						"consecutive projected points must not jump further apart than the "
+								+ "physical step between them (i=" + i + ")");
+			}
+			previous = projected;
+		}
 	}
 
 	@Test
