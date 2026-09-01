@@ -66,6 +66,36 @@ class SectorProjectionTest {
 	}
 
 	@Test
+	void clasPointMatchesTiltedPointDirectlyForSectorOne() {
+		// Sector 1's own local frame is the lab frame itself (rotation by
+		// zero degrees), so clasPoint should agree with calling tiltedPoint
+		// directly on the same lab-frame coordinates.
+		Point3 point = new Point3(12.0, -3.0, 240.0);
+		var viaClasPoint = SectorProjection.clasPoint(point, 1, 0.0);
+		var viaTiltedPoint = SectorProjection.tiltedPoint(12.0, -3.0, 240.0, 1, 0.0);
+		assertEquals(viaTiltedPoint.x, viaClasPoint.x, 1.0e-12);
+		assertEquals(viaTiltedPoint.y, viaClasPoint.y, 1.0e-12);
+	}
+
+	@Test
+	void clasPointRotatesLabCoordinatesIntoSectorLocalFrameFirst() {
+		// A lab-frame point straight down sector 2's own midplane (60
+		// degrees) should land exactly where a point straight down sector
+		// 1's local +x axis lands when projected through sector 1 -- the
+		// same "distance from the beamline, no transverse offset" case in a
+		// different sector, matching bCNU CED's GeometryManager.clasToSector.
+		double midPlanePhiDeg = 60.0;
+		double rho = 20.0, z = 150.0;
+		Point3 onSector2Midplane = new Point3(
+				rho * Math.cos(Math.toRadians(midPlanePhiDeg)),
+				rho * Math.sin(Math.toRadians(midPlanePhiDeg)), z);
+		var sector2 = SectorProjection.clasPoint(onSector2Midplane, 2, 0.0);
+		var sector1Reference = SectorProjection.clasPoint(new Point3(rho, 0.0, z), 1, 0.0);
+		assertEquals(sector1Reference.x, sector2.x, 1.0e-9);
+		assertEquals(sector1Reference.y, sector2.y, 1.0e-9);
+	}
+
+	@Test
 	void nonlinearFieldScaleRoundTripsAndExpandsLowFields() {
 		double maximum = 6.58;
 		for (double fraction : new double[] {0.0, 0.25, 0.5, 0.75, 1.0}) {

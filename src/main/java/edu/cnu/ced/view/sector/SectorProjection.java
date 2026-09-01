@@ -49,6 +49,31 @@ final class SectorProjection {
 	}
 
 	/**
+	 * Project a point given in true lab ("CLAS") coordinates -- e.g. a swum
+	 * particle trajectory, which is genuine lab-frame data, unlike a DC
+	 * cross's raw bank coordinates which are already sector-local.
+	 * <p>
+	 * Rotates into {@code sector}'s own local frame first (matching bCNU
+	 * CED's {@code GeometryManager.clasToSector}: rotate by {@code
+	 * -60*(sector-1)} degrees around z, exactly undoing that sector's
+	 * placement around the beamline), then defers to {@link #tiltedPoint}
+	 * for the same tilted-plane projection used for crosses. Using {@link
+	 * #labPoint} directly on lab-frame data here would skip that rotation
+	 * entirely, which matches crosses only very close to the beamline and
+	 * increasingly diverges from them with distance -- exactly the growing
+	 * mismatch this method fixes.
+	 * </p>
+	 */
+	static Point2D.Double clasPoint(Point3 point, int sector, double phiOffsetDegrees) {
+		double midPlanePhi = Math.toRadians(60.0 * (sector - 1));
+		double cosPhi = Math.cos(midPlanePhi);
+		double sinPhi = Math.sin(midPlanePhi);
+		double sectorX = cosPhi * point.x() + sinPhi * point.y();
+		double sectorY = -sinPhi * point.x() + cosPhi * point.y();
+		return tiltedPoint(sectorX, sectorY, point.z(), sector, phiOffsetDegrees);
+	}
+
+	/**
 	 * Intersects the selected phi plane with the four long edges of a paddle.
 	 * The returned quadrilateral uses intersections with the infinitely extended
 	 * edge lines, as the legacy CED projection did, so its shape remains stable

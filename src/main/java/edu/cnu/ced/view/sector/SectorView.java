@@ -604,6 +604,23 @@ public final class SectorView extends CedView implements MagneticFieldChangeList
 		return local(container, world.x, world.y);
 	}
 
+	/**
+	 * Like {@link #projectedPoint}, but for genuine lab-frame ("CLAS") data
+	 * such as a swum particle trajectory -- see {@link
+	 * SectorProjection#clasPoint} for the rotation this applies that {@link
+	 * #projectedPoint} does not. Calorimeter/Cherenkov hits still go through
+	 * {@link #projectedPoint}: their existing on-screen placement already
+	 * matches truth, so this was deliberately left untouched rather than
+	 * changed on the same unverified assumption that broke the particle
+	 * trajectory.
+	 */
+	private Point projectedClasPoint(IContainer container, int sector,
+			double x, double y, double z) {
+		Point2D.Double world = SectorProjection.clasPoint(new Point3(x, y, z), sector,
+				phiOffsetDegrees);
+		return local(container, world.x, world.y);
+	}
+
 	private static void drawCalorimeterMarker(Graphics2D g, Point point,
 			Color fill, Color line) {
 		g.setColor(fill);
@@ -649,7 +666,7 @@ public final class SectorView extends CedView implements MagneticFieldChangeList
 	private List<Point> projectTrajectory(IContainer container, int sector, List<Point3> world) {
 		List<Point> screen = new ArrayList<>(world.size());
 		for (Point3 point : world) {
-			screen.add(projectedPoint(container, sector, point.x(), point.y(), point.z()));
+			screen.add(projectedClasPoint(container, sector, point.x(), point.y(), point.z()));
 		}
 		return screen;
 	}
@@ -658,8 +675,8 @@ public final class SectorView extends CedView implements MagneticFieldChangeList
 		float p = particle.p();
 		if (!(p > 0f)) return List.of();
 		double scale = PARTICLE_STUB_LENGTH_CM / p;
-		Point vertex = projectedPoint(container, sector, particle.vx(), particle.vy(), particle.vz());
-		Point tip = projectedPoint(container, sector,
+		Point vertex = projectedClasPoint(container, sector, particle.vx(), particle.vy(), particle.vz());
+		Point tip = projectedClasPoint(container, sector,
 				particle.vx() + scale * particle.px(),
 				particle.vy() + scale * particle.py(),
 				particle.vz() + scale * particle.pz());
