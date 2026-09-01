@@ -53,6 +53,19 @@
 			<version>${coat-libs.version}</version>
 		</dependency>
 
+		<!--
+			Apache Commons Math based CLAS12 swimmer (cnuphys.CLAS12Swim), the
+			modern successor to the older hand-rolled cnuphys.swim/adaptiveSwim
+			integrators. Currently only available as a local SNAPSHOT build from
+			the coatjava source tree (14.1.2-SNAPSHOT); move to a released
+			version once one is published alongside a coatjava 14.1.2 release.
+		-->
+		<dependency>
+			<groupId>cnuphys</groupId>
+			<artifactId>clas12-swimmer</artifactId>
+			<version>14.1.2-SNAPSHOT</version>
+		</dependency>
+
 		<dependency>
 			<groupId>org.xerial</groupId>
 			<artifactId>sqlite-jdbc</artifactId>

@@ -56,6 +56,7 @@ import edu.cnu.ced.geometry.LTCCGeometry;
 import edu.cnu.ced.geometry.PCALGeometry;
 import edu.cnu.ced.geometry.Point3;
 import edu.cnu.ced.style.CedDrawingStyle;
+import edu.cnu.ced.swim.ParticleSwimmer;
 import edu.cnu.ced.view.CedView;
 import edu.cnu.mdi.container.IContainer;
 import edu.cnu.mdi.component.CommonBorder;
@@ -612,37 +613,72 @@ public final class SectorView extends CedView implements MagneticFieldChangeList
 	}
 
 	/**
-	 * Fixed on-screen length, in lab-frame cm, of each reconstructed
-	 * particle's direction stub. Chosen to reach past most of the beamline
-	 * clutter without pretending to be a field-swum trajectory; particle
-	 * swimming through the magnetic field is a separate, not-yet-built
-	 * feature.
+	 * Path length to swim each reconstructed particle through the magnetic
+	 * field, in cm; comfortably spans the CLAS12 forward detector stack.
+	 */
+	private static final double PARTICLE_SWIM_LENGTH_CM = ParticleSwimmer.DEFAULT_MAX_PATH_LENGTH_CM;
+
+	/**
+	 * Fallback straight-line direction-stub length, in lab-frame cm, used
+	 * only when swimming doesn't produce a usable trajectory (e.g. momentum
+	 * below the swimmer's internal threshold, or the integration failed).
 	 */
 	private static final double PARTICLE_STUB_LENGTH_CM = 40.0;
 
 	private void drawParticles(Graphics2D g, IContainer container) {
 		if (!isDisplayed(CedDisplayOption.PARTICLES)) return;
 		for (RecEventData.Particle particle : recData.particles()) {
+			// The sector is fixed once, from the particle's starting momentum
+			// direction, and every swum point is projected using that same
+			// sector's midplane. A track that curls enough to actually cross
+			// into a neighbouring sector will look somewhat approximate past
+			// that point -- this view's projection convention (like every
+			// other detector overlay here) is inherently per-sector.
 			int sector = particle.sector();
 			if (!displayedSector(sector)) continue;
-			float p = particle.p();
-			if (!(p > 0f)) continue;
-			double scale = PARTICLE_STUB_LENGTH_CM / p;
-			Point vertex = projectedPoint(container, sector, particle.vx(), particle.vy(), particle.vz());
-			Point tip = projectedPoint(container, sector,
-					particle.vx() + scale * particle.px(),
-					particle.vy() + scale * particle.py(),
-					particle.vz() + scale * particle.pz());
+
+			List<Point3> swum = ParticleSwimmer.swim(particle, fieldProbe, PARTICLE_SWIM_LENGTH_CM);
+			List<Point> points = swum.size() >= 2
+					? projectTrajectory(container, sector, swum)
+					: stubTrajectory(container, sector, particle);
+			if (points.size() < 2) continue;
+
 			Color color = CedDrawingStyle.particleColor(particle.pid(), particle.charge());
-			drawParticleMarker(g, vertex, tip, color);
-			screenParticles.add(new ScreenParticle(particle, vertex, tip));
+			drawParticleTrajectory(g, points, color);
+			screenParticles.add(new ScreenParticle(particle, points));
 		}
 	}
 
-	private static void drawParticleMarker(Graphics2D g, Point vertex, Point tip, Color color) {
+	private List<Point> projectTrajectory(IContainer container, int sector, List<Point3> world) {
+		List<Point> screen = new ArrayList<>(world.size());
+		for (Point3 point : world) {
+			screen.add(projectedPoint(container, sector, point.x(), point.y(), point.z()));
+		}
+		return screen;
+	}
+
+	private List<Point> stubTrajectory(IContainer container, int sector, RecEventData.Particle particle) {
+		float p = particle.p();
+		if (!(p > 0f)) return List.of();
+		double scale = PARTICLE_STUB_LENGTH_CM / p;
+		Point vertex = projectedPoint(container, sector, particle.vx(), particle.vy(), particle.vz());
+		Point tip = projectedPoint(container, sector,
+				particle.vx() + scale * particle.px(),
+				particle.vy() + scale * particle.py(),
+				particle.vz() + scale * particle.pz());
+		return List.of(vertex, tip);
+	}
+
+	private static void drawParticleTrajectory(Graphics2D g, List<Point> points, Color color) {
 		g.setColor(color);
 		g.setStroke(new BasicStroke(2f));
-		g.drawLine(vertex.x, vertex.y, tip.x, tip.y);
+		for (int i = 1; i < points.size(); i++) {
+			Point a = points.get(i - 1);
+			Point b = points.get(i);
+			g.drawLine(a.x, a.y, b.x, b.y);
+		}
+		Point vertex = points.get(0);
+		g.setColor(color);
 		g.fillOval(vertex.x - 3, vertex.y - 3, 6, 6);
 		g.setColor(CedDrawingStyle.outline(color));
 		g.drawOval(vertex.x - 3, vertex.y - 3, 6, 6);
@@ -980,6 +1016,18 @@ public final class SectorView extends CedView implements MagneticFieldChangeList
 
 	private boolean displayedSector(int sector) { return sector == pair.upper || sector == pair.lower; }
 
+	/** @return {@code true} if {@code screenPoint} lies within {@code tolerance} pixels of any segment of {@code points} */
+	private static boolean nearAnySegment(List<Point> points, Point screenPoint, double tolerance) {
+		for (int i = 1; i < points.size(); i++) {
+			Point a = points.get(i - 1);
+			Point b = points.get(i);
+			if (Line2D.ptSegDist(a.x, a.y, b.x, b.y, screenPoint.x, screenPoint.y) <= tolerance) {
+				return true;
+			}
+		}
+		return false;
+	}
+
 	private boolean show(ReconKind kind) {
 		return switch (kind) {
 			case HB -> isDisplayed(CedDisplayOption.HB_HITS);
@@ -1032,8 +1080,7 @@ public final class SectorView extends CedView implements MagneticFieldChangeList
 			}
 		}
 		for (ScreenParticle drawn : screenParticles) {
-			if (Line2D.ptSegDist(drawn.vertex.x, drawn.vertex.y, drawn.tip.x, drawn.tip.y,
-					screenPoint.x, screenPoint.y) <= 5.0) {
+			if (nearAnySegment(drawn.points, screenPoint, 5.0)) {
 				RecEventData.Particle particle = drawn.particle;
 				feedback.add(String.format("$blue$%s (pid %d, q=%+d) sector %d", particle.displayName(),
 						particle.pid(), particle.charge(), particle.sector()));
@@ -1268,7 +1315,7 @@ public final class SectorView extends CedView implements MagneticFieldChangeList
 
 	private record ScreenSegment(Segment segment, Point start, Point end) { }
 	private record ScreenCross(Cross cross, Point location) { }
-	private record ScreenParticle(RecEventData.Particle particle, Point vertex, Point tip) { }
+	private record ScreenParticle(RecEventData.Particle particle, List<Point> points) { }
 
 	@Override
 	public void magneticFieldChanged() {
