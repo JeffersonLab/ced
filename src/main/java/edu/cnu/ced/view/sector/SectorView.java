@@ -1116,14 +1116,16 @@ public final class SectorView extends CedView implements MagneticFieldChangeList
 		for (ScreenParticle drawn : screenParticles) {
 			if (nearAnySegment(drawn.points, screenPoint, 5.0)) {
 				RecEventData.Particle particle = drawn.particle;
-				feedback.add(String.format("$blue$%s (pid %d, q=%+d) sector %d", particle.displayName(),
+				// "deep sky blue", not plain "blue": plain X11 blue reads as
+				// nearly black against this pane's black background.
+				feedback.add(String.format("$deep sky blue$%s (pid %d, q=%+d) sector %d", particle.displayName(),
 						particle.pid(), particle.charge(), particle.sector()));
-				feedback.add(String.format("$blue$p = %.3f GeV/c  theta = %.1f°  phi = %.1f°",
+				feedback.add(String.format("$deep sky blue$p = %.3f GeV/c  theta = %.1f°  phi = %.1f°",
 						particle.p(), Math.toDegrees(particle.theta()), Math.toDegrees(particle.phi())));
-				feedback.add(String.format("$blue$vertex (%.2f, %.2f, %.2f) cm",
+				feedback.add(String.format("$deep sky blue$vertex (%.2f, %.2f, %.2f) cm",
 						particle.vx(), particle.vy(), particle.vz()));
 				if (particle.beta() != 0f || particle.chi2pid() != 0f) {
-					feedback.add(String.format("$blue$beta = %.3f  chi2pid = %.2f",
+					feedback.add(String.format("$deep sky blue$beta = %.3f  chi2pid = %.2f",
 							particle.beta(), particle.chi2pid()));
 				}
 				break;

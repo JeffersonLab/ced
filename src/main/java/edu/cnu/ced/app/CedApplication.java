@@ -16,9 +16,11 @@ import edu.cnu.ced.event.AccumulationService;
 import edu.cnu.ced.event.EventSource;
 import edu.cnu.ced.event.EventStore;
 import edu.cnu.ced.event.HipoEventSource;
+import edu.cnu.ced.event.RunConfig;
 import edu.cnu.ced.dialog.AccumulationDialog;
 import edu.cnu.ced.geometry.GeometryService;
 import edu.cnu.ced.magfield.MagneticFieldService;
+import edu.cnu.ced.magfield.RunFieldScaleApplier;
 import edu.cnu.ced.resources.Clas12Resources;
 import edu.cnu.ced.swim.SwimTrajectoryCache;
 import edu.cnu.ced.view.CurrentEventView;
@@ -80,6 +82,7 @@ public final class CedApplication extends BaseMDIApplication {
 	private Clas12Resources clas12Resources;
 	private AccumulationService accumulationService;
 	private SwimTrajectoryCache swimCache;
+	private RunFieldScaleApplier runFieldScaleApplier;
 	private RecentFiles recentEventFiles;
 	private RecentFilesMenu recentEventMenuHelper;
 	private JMenu recentEventMenu;
@@ -164,6 +167,9 @@ public final class CedApplication extends BaseMDIApplication {
 		accumulationService = new AccumulationService();
 		eventNavigator.addSourceListener(accumulationService::clear);
 		swimCache = new SwimTrajectoryCache();
+		runFieldScaleApplier = new RunFieldScaleApplier();
+		eventNavigator.addListener(state -> runFieldScaleApplier.apply(
+				RunConfig.from(state.snapshot()).orElse(null)));
 		if (bootstrap != null) {
 			magneticFieldService = bootstrap.magneticFields();
 			geometryService = bootstrap.geometry();
