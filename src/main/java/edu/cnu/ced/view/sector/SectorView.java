@@ -658,16 +658,22 @@ public final class SectorView extends CedView implements MagneticFieldChangeList
 	private void drawParticles(Graphics2D g, IContainer container) {
 		if (!isDisplayed(CedDisplayOption.PARTICLES)) return;
 		for (RecEventData.Particle particle : recData.particles()) {
-			List<Point3> swum = swimCache.trajectory(particle, fieldProbe);
-			// Which sector-pair view should draw this particle at all: the
-			// most common position-derived sector across the swum path
-			// (matching bCNU CED's SwimTrajectoryDrawer.getMostCommonSector,
-			// a majority vote rather than trusting a single point), or the
-			// starting momentum direction when swimming didn't produce a
-			// usable path to vote across.
-			int sector = swum.size() >= 2 ? majoritySector(swum) : particle.sector();
+			// Which sector-pair view should draw this particle at all.
+			// REC::Particle carries no detector-assigned sector of its own
+			// (unlike a per-sector DC track fit), so the starting momentum
+			// direction is the best available proxy -- NOT a vote over the
+			// swum path's own position, which for a low-momentum or
+			// near-boundary particle swum out hundreds of cm can easily
+			// spend more of its length drifted into a neighbouring sector
+			// than in the one it actually started in and was detected in.
+			// Confirmed with real event data: a 0.69 GeV/c proton whose
+			// momentum starts in sector 3 (matching its DC crosses) had a
+			// position-vote majority of sector 2 over its full swim, which
+			// hid it from the view showing its own crosses entirely.
+			int sector = particle.sector();
 			if (!displayedSector(sector)) continue;
 
+			List<Point3> swum = swimCache.trajectory(particle, fieldProbe);
 			List<Point> points = swum.size() >= 2
 					? projectTrajectory(container, swum)
 					: stubTrajectory(container, sector, particle);
@@ -677,19 +683,6 @@ public final class SectorView extends CedView implements MagneticFieldChangeList
 			drawParticleTrajectory(g, points, color);
 			screenParticles.add(new ScreenParticle(particle, points));
 		}
-	}
-
-	/** @return the sector [1, 6] that the most points of {@code points} fall in */
-	static int majoritySector(List<Point3> points) {
-		int[] votes = new int[7]; // index 0 unused
-		for (Point3 point : points) {
-			votes[SectorProjection.sectorForPosition(point.x(), point.y())]++;
-		}
-		int winner = 1;
-		for (int sector = 2; sector <= 6; sector++) {
-			if (votes[sector] > votes[winner]) winner = sector;
-		}
-		return winner;
 	}
 
 	private List<Point> projectTrajectory(IContainer container, List<Point3> world) {

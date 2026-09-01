@@ -129,21 +129,6 @@ class SectorProjectionTest {
 	}
 
 	@Test
-	void majoritySectorPicksTheSectorMostPointsFallIn() {
-		Point3 sector1 = new Point3(10.0, 0.0, 50.0);
-		Point3 alsoSector1 = new Point3(10.0, 1.0, 60.0);
-		Point3 sector2 = new Point3(5.0, 8.7, 70.0);
-		assertEquals(1, SectorView.majoritySector(List.of(sector1, alsoSector1, sector2)));
-	}
-
-	@Test
-	void majoritySectorBreaksTiesTowardTheLowerSectorNumber() {
-		Point3 sector1 = new Point3(10.0, 0.0, 50.0);
-		Point3 sector2 = new Point3(5.0, 8.7, 70.0);
-		assertEquals(1, SectorView.majoritySector(List.of(sector1, sector2)));
-	}
-
-	@Test
 	void nonlinearFieldScaleRoundTripsAndExpandsLowFields() {
 		double maximum = 6.58;
 		for (double fraction : new double[] {0.0, 0.25, 0.5, 0.75, 1.0}) {
