@@ -35,7 +35,17 @@ public final class ParticleSwimmer {
 	public static final double DEFAULT_MAX_PATH_LENGTH_CM = 700.0;
 
 	private static final double INITIAL_STEP_CM = 1.0;
-	private static final double TOLERANCE_CM = 1.0e-4;
+	// CLAS12Swimmer uses this directly as the adaptive integrator's absolute
+	// position tolerance, in cm, on every one of x/y/z at every step. 1e-4
+	// (1 micron) is display-quality overkill by several orders of
+	// magnitude -- a full screen pixel represents multiple cm at any normal
+	// zoom -- and forces far more accepted steps than a visually smooth
+	// curve needs, directly costing wall-clock time on every event change,
+	// especially now that SwimRequestPolicy correctly gives every forward
+	// particle the full 700cm path instead of the 150cm many were wrongly
+	// truncated to before. 1e-2 (100 microns) is still two orders of
+	// magnitude tighter than anything perceptible on screen.
+	private static final double TOLERANCE_CM = 1.0e-2;
 
 	private ParticleSwimmer() { }
 
