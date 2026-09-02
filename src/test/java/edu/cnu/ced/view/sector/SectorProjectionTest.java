@@ -43,51 +43,80 @@ class SectorProjectionTest {
 	}
 
 	@Test
-	void tiltedCrossCoordinatesRespectSectorSideAndTilt() {
-		// Ground-truthed against a real bCNU CED session (not just internal
-		// self-consistency, which previously let a real sign bug hide behind
-		// a passing test): its feedback panel, for a mouse position at lab
-		// xyz (2.52, -4.95, 49.49) cm in sector 6, reported "Sector xyz"
-		// (5.55, 0.29, 49.49) and "Tilted sect xyz" (-15.89, 0.29, 47.20) --
-		// the panel negates y for sector > 3, so the underlying (unflipped)
-		// sector/tilted y here is -0.29, not +0.29.
-		//
-		// tiltedPoint's own final sign choice is NOT simply "flip for
-		// sector > 3" like the legacy panel's display convention (or like
-		// project(), used for wires/paddles): the raw (pre-flip) transverse
-		// component comes out negative for a far point aligned with either
-		// sector's own midplane, so matching project()'s "sector <= 3 is
-		// positive" on-screen convention -- needed so a cross renders in
-		// the same half as the chamber outline it sits on -- means negating
-		// for sector <= 3 here instead. See tiltedPoint's own doc comment.
-		double sectorX = 5.546825748732971;
-		double sectorY = -0.29261598246321485;
-		double sectorZ = 49.49;
-		var sector6 = SectorProjection.tiltedPoint(sectorX, sectorY, sectorZ, 6, 0.0);
-		assertEquals(47.19736223655189, sector6.x, 1.0e-9);
-		assertEquals(-15.88824640413513, sector6.y, 1.0e-9);
-		// Loosely against the legacy panel's own displayed (2-decimal) numbers too.
-		assertEquals(47.20, sector6.x, 0.01);
-		assertEquals(-15.89, sector6.y, 0.01);
+	void clasPointDropsOutOfPlaneOffsetAndTakesAnAbsoluteRadius() {
+		// clasPoint's (and tiltedPoint's) shared final step -- bCNU CED's
+		// own CedView.projectedPoint intersected with the flat y=0 plane,
+		// then CedView.sectorToWorld's sector > 3 sign flip -- drops the
+		// out-of-plane sector-y component entirely and takes the in-plane
+		// sector-x component's ABSOLUTE VALUE as the on-screen radius (via
+		// hypot(x, 0)), not its raw signed value. A lab point whose
+		// sector-frame x comes out negative must still land on the same
+		// side as its mirror image (180 degrees around, in this same
+		// sector's own rotated frame) with positive x.
+		int sector = 6;
+		double midPlanePhiDeg = 60.0 * (sector - 1);
+		double rho = 30.0, z = 40.0;
+		Point3 aligned = new Point3(
+				rho * Math.cos(Math.toRadians(midPlanePhiDeg)),
+				rho * Math.sin(Math.toRadians(midPlanePhiDeg)), z);
+		Point3 opposite = new Point3(
+				rho * Math.cos(Math.toRadians(midPlanePhiDeg + 180.0)),
+				rho * Math.sin(Math.toRadians(midPlanePhiDeg + 180.0)), z);
 
-		// Mirror-symmetric sector (2, upper) should land at the same z with
-		// the opposite transverse sign.
-		var sector2 = SectorProjection.tiltedPoint(sectorX, sectorY, sectorZ, 2, 0.0);
-		assertEquals(sector6.x, sector2.x, 1.0e-9);
-		assertEquals(-sector6.y, sector2.y, 1.0e-9);
+		var alignedScreen = SectorProjection.clasPoint(aligned, sector, 0.0);
+		var oppositeScreen = SectorProjection.clasPoint(opposite, sector, 0.0);
+		assertEquals(alignedScreen.x, oppositeScreen.x, 1.0e-9);
+		assertEquals(alignedScreen.y, oppositeScreen.y, 1.0e-9);
+		assertTrue(alignedScreen.y < 0, "sector 6 (> 3) must land below the divider");
+	}
+
+	@Test
+	void tiltedPointMatchesClasPointForTheSamePhysicalLocation() {
+		// A DC cross and a swum trajectory point at the same physical
+		// location must land on the same screen pixel, even though they
+		// arrive there through different frames (tiltedPoint from the
+		// tilted detector frame a cross's bank values are native to,
+		// clasPoint from lab/CLAS coordinates). Ground-truthed against a
+		// real bCNU CED session: its feedback panel, for a mouse position
+		// at lab xyz (2.52, -4.95, 49.49) cm in sector 6, reported "Sector
+		// xyz" (5.55, 0.29, 49.49) and "Tilted sect xyz" (-15.89, 0.29,
+		// 47.20) (the panel negates y for sector > 3, so the underlying
+		// raw tilted-frame value used below is (-15.89, -0.29, 47.20)).
+		double tiltedX = -15.88824640413513;
+		double tiltedY = -0.29261598246321485;
+		double tiltedZ = 47.19736223655189;
+		var viaTiltedPoint = SectorProjection.tiltedPoint(tiltedX, tiltedY, tiltedZ, 6, 0.0);
+		assertEquals(49.49, viaTiltedPoint.x, 1.0e-9);
+		assertEquals(-5.546825748732971, viaTiltedPoint.y, 1.0e-9);
+
+		Point3 labPoint = new Point3(2.52, -4.95, 49.49);
+		var viaClasPoint = SectorProjection.clasPoint(labPoint, 6, 0.0);
+		assertEquals(viaClasPoint.x, viaTiltedPoint.x, 1.0e-9);
+		assertEquals(viaClasPoint.y, viaTiltedPoint.y, 1.0e-9);
+	}
+
+	@Test
+	void sectorFromTiltedInvertsTiltedFrame() {
+		// sectorFromTilted (tiltedToSector) and tiltedFrame (sectorToTilted)
+		// -- both still used for the diagnostic "Sector xyz"/"Tilted sect
+		// xyz" location feedback -- must be exact inverses of each other.
+		Point3 lab = new Point3(2.52, -4.95, 49.49);
+		Point3 sector = SectorProjection.sectorFrame(lab, 6);
+		Point3 tilted = SectorProjection.tiltedFrame(sector);
+		Point3 recovered = SectorProjection.sectorFromTilted(tilted);
+		assertEquals(sector.x(), recovered.x(), 1.0e-9);
+		assertEquals(sector.y(), recovered.y(), 1.0e-9);
+		assertEquals(sector.z(), recovered.z(), 1.0e-9);
 	}
 
 	@Test
 	void clasPointMatchesLegacyCedReferenceReading() {
-		// Same real bCNU CED session as tiltedCrossCoordinatesRespectSectorSideAndTilt,
-		// but exercised through clasPoint's full lab-to-tilted pipeline (the
-		// path a genuine lab-frame swum trajectory point takes), starting
-		// from the panel's own reported raw lab xyz rather than its
-		// already-rotated "Sector xyz" reading.
+		// Same real bCNU CED session as tiltedPointMatchesClasPointForTheSamePhysicalLocation,
+		// but starting from the panel's own reported raw lab xyz.
 		Point3 labPoint = new Point3(2.52, -4.95, 49.49);
 		var projected = SectorProjection.clasPoint(labPoint, 6, 0.0);
-		assertEquals(47.19736223655189, projected.x, 1.0e-9);
-		assertEquals(-15.88824640413513, projected.y, 1.0e-9);
+		assertEquals(49.49, projected.x, 1.0e-9);
+		assertEquals(-5.546825748732971, projected.y, 1.0e-9);
 	}
 
 	@Test
@@ -115,20 +144,21 @@ class SectorProjectionTest {
 	void labPointFromScreenMatchesLegacyCedReferenceReading() {
 		// Inverse of clasPointMatchesLegacyCedReferenceReading: starting
 		// from that same real legacy-CED session's screen point, recover a
-		// lab xyz on sector 6's own midplane. Since the real lab reading
-		// (2.52, -4.95, 49.49) has a nonzero out-of-plane component, this
-		// won't exactly reproduce it (labPointFromScreen assumes zero), but
-		// it must land close, and re-projecting the recovered point must
-		// reproduce the same screen point exactly (round-trip consistency).
+		// lab xyz along sector 6's own midplane (phiOffsetDegrees = 0).
+		// Since the real lab reading (2.52, -4.95, 49.49) has a nonzero
+		// out-of-plane (sector-y) component, this won't exactly reproduce
+		// it (labPointFromScreen assumes zero), but it must land close, and
+		// re-projecting the recovered point must reproduce the same screen
+		// point exactly (round-trip consistency).
 		Point3 recovered = SectorProjection.labPointFromScreen(
-				47.19736223655189, -15.88824640413513, 6, 0.0);
+				49.49, -5.546825748732971, 6, 0.0);
 		assertEquals(2.52, recovered.x(), 0.3);
 		assertEquals(-4.95, recovered.y(), 0.3);
-		assertEquals(49.49, recovered.z(), 0.3);
+		assertEquals(49.49, recovered.z(), 1.0e-9);
 
 		var reprojected = SectorProjection.clasPoint(recovered, 6, 0.0);
-		assertEquals(47.19736223655189, reprojected.x, 1.0e-9);
-		assertEquals(-15.88824640413513, reprojected.y, 1.0e-9);
+		assertEquals(49.49, reprojected.x, 1.0e-9);
+		assertEquals(-5.546825748732971, reprojected.y, 1.0e-9);
 	}
 
 	@Test
@@ -142,15 +172,21 @@ class SectorProjectionTest {
 	}
 
 	@Test
-	void clasPointMatchesTiltedPointDirectlyForSectorOne() {
-		// Sector 1's own local frame is the lab frame itself (rotation by
-		// zero degrees), so clasPoint should agree with calling tiltedPoint
-		// directly on the same lab-frame coordinates.
+	void clasPointSkipsTheTiltEntirely() {
+		// clasPoint (lab-frame input, e.g. a swum trajectory point) and
+		// tiltedPoint (tilted-frame input, a DC cross's native bank values)
+		// converge on the same flat, untilted final projection, but they
+		// are NOT interchangeable on the same raw numbers: clasPoint's
+		// lab-to-sector rotation (clasToSector) is a plain azimuthal
+		// rotation with no tilt, while tiltedPoint's tilted-to-sector
+		// conversion does apply the 25-degree tilt. Even in sector 1, whose
+		// azimuthal rotation is the identity, the two must disagree unless
+		// the input's own x/z happen to sit exactly along the tilt axis.
 		Point3 point = new Point3(12.0, -3.0, 240.0);
 		var viaClasPoint = SectorProjection.clasPoint(point, 1, 0.0);
 		var viaTiltedPoint = SectorProjection.tiltedPoint(12.0, -3.0, 240.0, 1, 0.0);
-		assertEquals(viaTiltedPoint.x, viaClasPoint.x, 1.0e-12);
-		assertEquals(viaTiltedPoint.y, viaClasPoint.y, 1.0e-12);
+		assertTrue(Math.abs(viaClasPoint.x - viaTiltedPoint.x) > 1.0
+				|| Math.abs(viaClasPoint.y - viaTiltedPoint.y) > 1.0);
 	}
 
 	@Test

@@ -51,22 +51,23 @@ final class SectorProjection {
 	/**
 	 * Project a point given in true lab ("CLAS") coordinates -- e.g. a swum
 	 * particle trajectory, which is genuine lab-frame data, unlike a DC
-	 * cross's raw bank coordinates which are already sector-local.
+	 * cross's raw bank coordinates which are already in the tilted
+	 * detector frame (see {@link #tiltedPoint}).
 	 * <p>
 	 * Rotates into {@code sector}'s own local frame first (matching bCNU
 	 * CED's {@code GeometryManager.clasToSector}: rotate by {@code
 	 * -60*(sector-1)} degrees around z, exactly undoing that sector's
-	 * placement around the beamline), then defers to {@link #tiltedPoint}
-	 * for the same tilted-plane projection used for crosses. Using {@link
-	 * #labPoint} directly on lab-frame data here would skip that rotation
-	 * entirely, which matches crosses only very close to the beamline and
-	 * increasingly diverges from them with distance -- exactly the growing
-	 * mismatch this method fixes.
+	 * placement around the beamline), then defers to {@link
+	 * #sectorFrameToScreen} for the same flat (untilted) display
+	 * projection used for crosses -- both ultimately land in the sector
+	 * frame and share that one final step, matching bCNU CED's own
+	 * {@code CedView.projectClasToWorld}: {@code clasToSector} then
+	 * {@code projectedPoint} (a flat plane intersection, no tilt).
 	 * </p>
 	 */
 	static Point2D.Double clasPoint(Point3 point, int sector, double phiOffsetDegrees) {
 		Point3 sectorPoint = sectorFrame(point, sector);
-		return tiltedPoint(sectorPoint.x(), sectorPoint.y(), sectorPoint.z(), sector, phiOffsetDegrees);
+		return sectorFrameToScreen(sectorPoint, sector, phiOffsetDegrees);
 	}
 
 	/**
@@ -101,28 +102,26 @@ final class SectorProjection {
 	}
 
 	/**
-	 * Inverts the {@link #clasPoint}/{@link #tiltedPoint} chain, recovering
-	 * a lab-frame point from a screen {@code (z, transverse)} position --
-	 * under the assumption that the point lies exactly on {@code sector}'s
-	 * own central plane (zero out-of-plane offset), since a 2D slice view's
-	 * mouse position alone can't otherwise determine that depth. Used for
-	 * cursor location feedback and magnetic-field lookups at the cursor.
+	 * Inverts {@link #clasPoint}'s chain, recovering a lab-frame point from
+	 * a screen {@code (z, transverse)} position -- under the assumption
+	 * that the point lies exactly along the {@code phiOffsetDegrees}-
+	 * rotated axis within {@code sector}'s own frame (the on-screen
+	 * transverse coordinate is that axis's absolute distance, per {@link
+	 * #sectorFrameToScreen}; a 2D slice view's mouse position alone can't
+	 * otherwise recover the sign lost to that {@code abs()}, or any
+	 * perpendicular offset). Used for cursor location feedback and
+	 * magnetic-field lookups at the cursor.
 	 */
 	static Point3 labPointFromScreen(double screenZ, double screenTransverse, int sector,
 			double phiOffsetDegrees) {
-		double signedTransverse = sector <= 3 ? -screenTransverse : screenTransverse;
+		double radius = sector <= 3 ? screenTransverse : -screenTransverse;
 		double phi = Math.toRadians(phiOffsetDegrees);
-		double cosPhi = Math.cos(phi);
-		// transverse = tiltX*cos(phi) + tiltY*sin(phi), with tiltY assumed 0.
-		double tiltX = Math.abs(cosPhi) > 1.0e-9 ? signedTransverse / cosPhi : 0.0;
-		double tiltZ = screenZ;
-		double tilt = Math.toRadians(25.0);
-		double sectorX = tiltX * Math.cos(tilt) + tiltZ * Math.sin(tilt);
-		double sectorZ = -tiltX * Math.sin(tilt) + tiltZ * Math.cos(tilt);
+		double sectorX = radius * Math.cos(phi);
+		double sectorY = radius * Math.sin(phi);
 		double midPlanePhi = Math.toRadians(60.0 * (sector - 1));
-		double x = sectorX * Math.cos(midPlanePhi);
-		double y = sectorX * Math.sin(midPlanePhi);
-		return new Point3(x, y, sectorZ);
+		double x = Math.cos(midPlanePhi) * sectorX - Math.sin(midPlanePhi) * sectorY;
+		double y = Math.sin(midPlanePhi) * sectorX + Math.cos(midPlanePhi) * sectorY;
+		return new Point3(x, y, screenZ);
 	}
 
 	/**
@@ -215,50 +214,74 @@ final class SectorProjection {
 	}
 
 	/**
-	 * Projects a point given in the (untilted) sector-local frame -- e.g. a
-	 * DC cross's raw bank coordinates, or {@link #clasPoint}'s output after
-	 * its own lab-to-sector rotation -- onto the tilted display plane.
+	 * Projects a point given in the tilted detector frame -- a DC cross's
+	 * raw bank coordinates -- onto the display.
 	 * <p>
-	 * Despite its name (kept for now to avoid a wider rename; the
-	 * parameters here are sector-frame, not already-tilted, coordinates),
-	 * this previously implemented the rotation in the wrong direction --
-	 * {@code sectorX*cos + sectorZ*sin} / {@code -sectorX*sin + sectorZ*cos}
-	 * is bCNU CED's {@code CedView.tiltedToSector} (tilted frame back to
-	 * sector frame), the inverse of the transform actually needed here.
-	 * The correct forward transform, matching bCNU CED's own {@code
-	 * CedView.sectorToTilted} exactly, flips both cross-term signs. Verified
-	 * against a real feedback-panel reading from legacy CED itself (sector
-	 * 6, lab xyz (2.52, -4.95, 49.49) cm): its own reported "Sector xyz"
-	 * (5.55, -0.29, 49.49) and "Tilted sect xyz" (-15.89, -0.29, 47.20) --
-	 * the panel displays y negated for sector &gt; 3, so the underlying raw
-	 * value is -0.29 -- reproduce those two intermediate 3D readings
-	 * (before this method's own final sector-side sign choice below) to
-	 * displayed precision only under this corrected formula; the previous
-	 * formula was off by tens of screen-cm at this same point, not a
-	 * rounding-sized discrepancy.
-	 * </p>
-	 * <p>
-	 * The raw (pre-flip) transverse component -- {@code tiltX} in {@link
-	 * #tiltedFrame} -- comes out negative for a far point aligned with
-	 * either sector's own midplane, regardless of which sector: it's
-	 * dominated by the large {@code -sectorZ*sin(tilt)} term for any point
-	 * well away from the vertex. {@link #project} (used for wires/paddle
-	 * volumes, with no tilt at all) instead gives a raw radius that's
-	 * positive for such a point in ANY sector, and separately negates it
-	 * for {@code sector > 3}. To keep this method's on-screen half
-	 * (sector &lt;= 3 above the divider, else below) agreeing with that --
-	 * e.g. so a DC cross renders in the same half as the chamber outline
-	 * it sits on -- this method's sign choice is the mirror image of
-	 * {@code project}'s: negate for {@code sector <= 3}, not for {@code
-	 * sector > 3}.
+	 * <b>This is the method that both crosses and swum trajectories were
+	 * actually wrong through, for most of a long debugging session, and
+	 * this is the real fix.</b> Two earlier fixes in that session corrected
+	 * this method's own tilt-rotation formula (direction, then sign) to
+	 * match bCNU CED's {@code CedView.sectorToTilted} / {@code
+	 * tiltedToSector} -- verified numerically against a real legacy-CED
+	 * feedback-panel reading, and that verification was NOT wrong, but it
+	 * was answering a narrower question than it seemed to: {@code
+	 * sectorToTilted} is genuinely what produces legacy's "Tilted sect xyz"
+	 * feedback text (see {@link #tiltedFrame}, still used for that
+	 * purpose), but that text is purely diagnostic. Checking legacy's own
+	 * {@code CrossDrawer} and {@code SwimTrajectoryDrawer} directly (not a
+	 * single feedback-panel number) shows what actually reaches the
+	 * screen:
+	 * <ul>
+	 * <li>Crosses: {@code tiltedToSector} (bank xyz, genuinely tilted-frame,
+	 * back to sector frame) -- {@link #sectorFromTilted}.</li>
+	 * <li>Swum trajectories: {@code clasToSector} (lab xyz to sector frame)
+	 * -- {@link #sectorFrame}.</li>
+	 * <li>Both then go through {@code CedView.projectedPoint}: intersect
+	 * the sector-frame point with the flat {@code y = 0} plane (i.e. just
+	 * drop the out-of-plane sector-y component -- no tilt at all) and take
+	 * {@code hypot(x, 0) = abs(x)} as the on-screen radius, then negate for
+	 * {@code sector > 3} -- {@link #sectorFrameToScreen}.</li>
+	 * </ul>
+	 * There is no further tilt-mixing step for either path; the 25-degree
+	 * tilt only ever appears converting between a cross's native tilted
+	 * frame and the sector frame both paths converge on.
 	 * </p>
 	 */
-	static Point2D.Double tiltedPoint(double sectorX, double sectorY, double sectorZ,
+	static Point2D.Double tiltedPoint(double tiltedX, double tiltedY, double tiltedZ,
 			int sector, double phiOffsetDegrees) {
-		Point3 tilted = tiltedFrame(new Point3(sectorX, sectorY, sectorZ));
+		Point3 sectorPoint = sectorFromTilted(new Point3(tiltedX, tiltedY, tiltedZ));
+		return sectorFrameToScreen(sectorPoint, sector, phiOffsetDegrees);
+	}
+
+	/**
+	 * Converts a point in the tilted detector frame (a DC cross's raw bank
+	 * coordinates) to the sector frame -- bCNU CED's own {@code
+	 * CedView.tiltedToSector} -- the inverse of {@link #tiltedFrame}.
+	 */
+	static Point3 sectorFromTilted(Point3 tilted) {
+		double tilt = Math.toRadians(25.0);
+		double sectorX = tilted.x() * Math.cos(tilt) + tilted.z() * Math.sin(tilt);
+		double sectorY = tilted.y();
+		double sectorZ = -tilted.x() * Math.sin(tilt) + tilted.z() * Math.cos(tilt);
+		return new Point3(sectorX, sectorY, sectorZ);
+	}
+
+	/**
+	 * Flat (untilted) projection of a sector-frame point onto the display --
+	 * bCNU CED's own {@code CedView.projectedPoint} intersected with the
+	 * flat {@code y = 0} plane (equivalent to simply dropping {@code
+	 * sectorPoint.y()}) composed with its {@code sector > 3} sign flip.
+	 * {@code phiOffsetDegrees} rotates which direction within the sector's
+	 * own (x, y) plane counts as "radius" -- projecting onto that rotated
+	 * axis rather than dropping y outright -- matching how {@link #project}
+	 * folds the same angle into a single combined rotation (the two are
+	 * algebraically identical; see this method's own unit tests).
+	 */
+	private static Point2D.Double sectorFrameToScreen(Point3 sectorPoint, int sector,
+			double phiOffsetDegrees) {
 		double phi = Math.toRadians(phiOffsetDegrees);
-		double transverse = tilted.x() * Math.cos(phi) + tilted.y() * Math.sin(phi);
-		return new Point2D.Double(tilted.z(), sector <= 3 ? -transverse : transverse);
+		double radius = Math.abs(sectorPoint.x() * Math.cos(phi) + sectorPoint.y() * Math.sin(phi));
+		return new Point2D.Double(sectorPoint.z(), sector <= 3 ? radius : -radius);
 	}
 
 	/**
