@@ -2,6 +2,9 @@ package edu.cnu.ced.view;
 
 import java.awt.BorderLayout;
 import java.awt.Color;
+import java.awt.Point;
+import java.awt.geom.Point2D;
+import java.util.ArrayList;
 import java.util.EnumSet;
 import java.util.List;
 import java.util.function.Consumer;
@@ -16,7 +19,10 @@ import edu.cnu.ced.component.PidLegend;
 import edu.cnu.ced.data.RecEventData;
 import edu.cnu.ced.event.EventNavigationState;
 import edu.cnu.ced.event.EventNavigator;
+import edu.cnu.mdi.container.IContainer;
 import edu.cnu.mdi.feedback.FeedbackPane;
+import edu.cnu.mdi.hover.HoverEvent;
+import edu.cnu.mdi.hover.HoverInfoWindow;
 import edu.cnu.mdi.ui.colors.ScientificColorMap;
 import edu.cnu.mdi.view.BaseView;
 
@@ -127,6 +133,54 @@ public abstract class CedView extends BaseView {
 	private void installPidLegend() {
 		if (getToolBar() == null) return;
 		getToolBar().add(pidLegend);
+	}
+
+	/**
+	 * Shows a floating popup near the cursor after it pauses over this
+	 * view -- the same information already shown live in the black
+	 * feedback pane as the mouse moves, reused here rather than gathered a
+	 * second way: this just runs the view's own (possibly overridden)
+	 * {@link #getFeedbackStrings} and reformats the result as plain text.
+	 * Matches bCNU CED's own delayed hover popup, and {@code MapView2D}'s
+	 * identical approach for map feature hover in the {@code mdi}
+	 * framework itself.
+	 */
+	@Override
+	public void hoverUpdate(HoverEvent he) {
+		IContainer container = getIContainer();
+		Point screenPoint = he.getLocation();
+		if (container == null || screenPoint == null) return;
+		HoverInfoWindow window = container.getHoverWindow();
+		if (window == null) return;
+		Point2D.Double worldPoint = new Point2D.Double();
+		container.localToWorld(screenPoint, worldPoint);
+		List<String> hits = new ArrayList<>();
+		getFeedbackStrings(container, screenPoint, worldPoint, hits);
+		String text = hoverText(hits);
+		if (text == null) {
+			window.hideMessage();
+			return;
+		}
+		window.showMessage(he, text);
+	}
+
+	@Override
+	public void hoverClosed(HoverEvent he) {
+		IContainer container = getIContainer();
+		HoverInfoWindow window = container == null ? null : container.getHoverWindow();
+		if (window != null) window.hideMessage();
+	}
+
+	/** Package-private (not private) so a test can exercise it directly. */
+	static String hoverText(List<String> feedbackLines) {
+		StringBuilder text = new StringBuilder();
+		for (String line : feedbackLines) {
+			String plain = FeedbackPane.stripStyle(line);
+			if (plain == null || plain.isEmpty()) continue;
+			if (text.length() > 0) text.append('\n');
+			text.append(plain);
+		}
+		return text.length() == 0 ? null : text.toString();
 	}
 
 	@Override
