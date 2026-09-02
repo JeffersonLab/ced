@@ -7,6 +7,7 @@ import java.awt.Point;
 import java.awt.Polygon;
 import java.awt.RenderingHints;
 import java.awt.Rectangle;
+import java.awt.Stroke;
 import java.awt.geom.Point2D;
 import java.awt.geom.Line2D;
 import java.awt.geom.Rectangle2D;
@@ -722,7 +723,8 @@ public final class SectorView extends CedView implements MagneticFieldChangeList
 			if (points.size() < 2) continue;
 
 			Color color = CedDrawingStyle.particleColor(particle.pid(), particle.charge());
-			drawParticleTrajectory(g, points, color);
+			Stroke stroke = CedDrawingStyle.particleStroke(particle.pid(), particle.charge());
+			drawParticleTrajectory(g, points, color, stroke);
 			screenParticles.add(new ScreenParticle(particle, points));
 		}
 	}
@@ -747,9 +749,9 @@ public final class SectorView extends CedView implements MagneticFieldChangeList
 		return List.of(vertex, tip);
 	}
 
-	private static void drawParticleTrajectory(Graphics2D g, List<Point> points, Color color) {
+	private static void drawParticleTrajectory(Graphics2D g, List<Point> points, Color color, Stroke stroke) {
 		g.setColor(color);
-		g.setStroke(new BasicStroke(2f));
+		g.setStroke(stroke);
 		for (int i = 1; i < points.size(); i++) {
 			Point a = points.get(i - 1);
 			Point b = points.get(i);

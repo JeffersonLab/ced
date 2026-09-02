@@ -1,9 +1,13 @@
 package edu.cnu.ced.style;
 
 import java.awt.Color;
+import java.awt.Stroke;
+
+import cnuphys.lund.LundId;
+import cnuphys.lund.LundStyle;
+import cnuphys.lund.LundSupport;
 
 import edu.cnu.ced.data.DCEventData.ReconKind;
-import edu.cnu.ced.data.ParticleId;
 
 /** Shared semantic colors used by CED detector and reconstruction drawings. */
 public final class CedDrawingStyle {
@@ -18,43 +22,68 @@ public final class CedDrawingStyle {
 	public static final Color RECON_CLUSTER = new Color(205, 0, 205);
 	public static final Color RECON_CROSS = new Color(20, 145, 35);
 
-	// Reconstructed-particle colors, grouped by species family. There is no
-	// universal convention here; this palette just keeps families visually
-	// distinct from each other and from the hit/cluster/cross colors above.
-	public static final Color PARTICLE_LEPTON = new Color(30, 120, 255);
-	public static final Color PARTICLE_PHOTON = new Color(255, 215, 0);
-	public static final Color PARTICLE_NUCLEON = new Color(220, 30, 30);
-	public static final Color PARTICLE_NEUTRAL_BARYON = new Color(120, 120, 120);
-	public static final Color PARTICLE_PION = new Color(0, 160, 60);
-	public static final Color PARTICLE_KAON = new Color(160, 30, 200);
-	public static final Color PARTICLE_NUCLEUS = new Color(255, 120, 0);
-	public static final Color PARTICLE_UNKNOWN = new Color(90, 90, 90);
-
 	private CedDrawingStyle() {
 	}
 
 	/**
-	 * Returns the display color for a reconstructed particle, grouped by
-	 * species family (see the {@code PARTICLE_*} constants).
+	 * Returns the display color for a reconstructed particle, from
+	 * coatjava's own {@code cnuphys.lund.LundStyle} -- the same
+	 * per-species palette used elsewhere across the cnuphys/CLAS12
+	 * ecosystem (e.g. e- red, proton blue, photon deep-sky-blue, pi+/pi-
+	 * distinct purples), rather than a locally invented one. Sharing it
+	 * avoids exactly the kind of mix-up a locally invented palette risks:
+	 * comparing this display against another cnuphys-based tool (or a
+	 * screenshot of one) and mistaking one species' track for another's
+	 * because the two tools colored them differently.
 	 *
 	 * @param pid    PDG/Lund particle id; {@code 0} means reconstruction could
 	 *               not assign one
 	 * @param charge the particle's charge, used only for unrecognized PIDs
-	 * @return the family color, or {@link #PARTICLE_UNKNOWN} for an
-	 *         unrecognized PID
+	 * @return the species color ({@code LundStyle}'s own line color for an
+	 *         unrecognized PID: black/white/gray by charge)
 	 */
 	public static Color particleColor(int pid, int charge) {
-		if (!ParticleId.isKnown(pid)) return PARTICLE_UNKNOWN;
-		return switch (pid) {
-		case 11, -11, 13, -13 -> PARTICLE_LEPTON;
-		case 22 -> PARTICLE_PHOTON;
-		case 2212, -2212 -> PARTICLE_NUCLEON;
-		case 2112, -2112 -> PARTICLE_NEUTRAL_BARYON;
-		case 211, -211, 111 -> PARTICLE_PION;
-		case 321, -321, 311, 310, 130 -> PARTICLE_KAON;
-		case 45 -> PARTICLE_NUCLEUS;
-		default -> PARTICLE_UNKNOWN;
-		};
+		return lundStyle(pid, charge).getLineColor();
+	}
+
+	/**
+	 * Returns the display stroke for a reconstructed particle, from
+	 * coatjava's own {@code cnuphys.lund.LundStyle}: solid for a charged
+	 * particle, dashed for a neutral one -- the same convention used
+	 * elsewhere across the cnuphys/CLAS12 ecosystem, so a neutral
+	 * particle's track reads as dashed here too.
+	 *
+	 * @param pid    PDG/Lund particle id; {@code 0} means reconstruction could
+	 *               not assign one
+	 * @param charge the particle's charge
+	 * @return the species stroke
+	 */
+	public static Stroke particleStroke(int pid, int charge) {
+		return lundStyle(pid, charge).getStroke();
+	}
+
+	private static LundStyle lundStyle(int pid, int charge) {
+		return LundStyle.getStyle(lundId(pid, charge));
+	}
+
+	/**
+	 * {@code LundSupport.get(id, charge)} only falls back to a charge-keyed
+	 * "unknown" id when {@code id} isn't found in its registry at all -- but
+	 * {@code pid == 0} (this codebase's own "reconstruction couldn't assign
+	 * one" convention) IS a registered id there, {@code LundSupport
+	 * .unknownPlus}, so every {@code pid == 0} particle would otherwise come
+	 * back with that one fixed (positive-charge) style regardless of this
+	 * particle's actual charge. Route {@code pid == 0} to the matching
+	 * {@code unknownPlus}/{@code unknownMinus}/{@code unknownNeutral}
+	 * constant by charge directly instead.
+	 */
+	private static LundId lundId(int pid, int charge) {
+		if (pid == 0) {
+			if (charge > 0) return LundSupport.unknownPlus;
+			if (charge < 0) return LundSupport.unknownMinus;
+			return LundSupport.unknownNeutral;
+		}
+		return LundSupport.getInstance().get(pid, charge);
 	}
 
 	public static Color reconstructionColor(ReconKind kind) {
