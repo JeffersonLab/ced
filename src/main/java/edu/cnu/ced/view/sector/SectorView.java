@@ -83,6 +83,10 @@ public final class SectorView extends CedView implements MagneticFieldChangeList
 	private static final double DEFAULT_MAX_FIELD_TESLA = 6.5;
 	private static final double FIELD_SCALE_SPEEDUP = 6.0;
 	private static final Color BACKGROUND = new Color(220, 232, 238);
+	// Alternating dark/light segments of the local-theta-25-degree reference
+	// axis, matching bCNU CED's own SliceView.TRANSCOLOR/TRANSCOLOR2 exactly.
+	private static final Color TILTED_AXIS_DARK = new Color(0, 0, 0, 64);
+	private static final Color TILTED_AXIS_LIGHT = new Color(255, 255, 255, 64);
 	private static final Color[] CELL_FILL = {new Color(248, 251, 252), new Color(235, 242, 246)};
 	private static final Color CELL_LINE = new Color(170, 180, 185);
 	private static final double[] WIRE_THRESHOLD = {Double.NaN, 2.0, 2.0, 1.7, 1.7, 1.6, 1.6};
@@ -208,6 +212,8 @@ public final class SectorView extends CedView implements MagneticFieldChangeList
 			if (showMagneticField) drawMagneticField(g, container);
 			drawBeamline(g, container);
 			drawTarget(g, container);
+			drawTiltedAxis(g, container, pair.upper);
+			drawTiltedAxis(g, container, pair.lower);
 			drawCherenkovFramework(g, container, pair.upper);
 			drawCherenkovFramework(g, container, pair.lower);
 			drawFramework(g, container, pair.upper);
@@ -356,6 +362,38 @@ public final class SectorView extends CedView implements MagneticFieldChangeList
 		g.drawOval(target.x - 5, target.y - 5, 10, 10);
 		g.drawLine(target.x - 8, target.y, target.x + 8, target.y);
 		g.drawLine(target.x, target.y - 8, target.x, target.y + 8);
+	}
+
+	/**
+	 * Draws a fixed reference line at local (sector-frame) theta = 25
+	 * degrees -- the sector's own physical tilt angle, i.e. the direction a
+	 * "textbook" forward track normal to the DC planes would travel --
+	 * from the vertex out to 1000 cm, alternating dark/light every 100 cm.
+	 * Mirrors bCNU CED's own {@code SliceView.drawTiltedAxis} exactly (same
+	 * theta, same phi convention, same colors, same segment length),
+	 * through this view's own forward projection ({@link
+	 * #projectedClasPoint(IContainer, int, double, double, double)}) rather
+	 * than a separately-computed line -- so any mismatch between this
+	 * line's actual on-screen direction and its simple, known 3D direction
+	 * (straight out from the vertex, no curvature) reveals a projection bug
+	 * independent of the swimmer or the magnetic field.
+	 */
+	private void drawTiltedAxis(Graphics2D g, IContainer container, int sector) {
+		double theta = Math.toRadians(25.0);
+		double phi = Math.toRadians(60.0 * (sector - 1));
+		g.setStroke(new BasicStroke(2f));
+		Point previous = projectedClasPoint(container, sector, 0.0, 0.0, 0.0);
+		for (int i = 1; i <= 10; i++) {
+			double r = 100.0 * i;
+			double rho = r * Math.sin(theta);
+			double x = rho * Math.cos(phi);
+			double y = rho * Math.sin(phi);
+			double z = r * Math.cos(theta);
+			Point next = projectedClasPoint(container, sector, x, y, z);
+			g.setColor(i % 2 == 0 ? TILTED_AXIS_DARK : TILTED_AXIS_LIGHT);
+			g.drawLine(previous.x, previous.y, next.x, next.y);
+			previous = next;
+		}
 	}
 
 	private void drawFramework(Graphics2D g, IContainer container, int sector) {
