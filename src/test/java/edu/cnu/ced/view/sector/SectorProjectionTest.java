@@ -50,24 +50,28 @@ class SectorProjectionTest {
 		// xyz (2.52, -4.95, 49.49) cm in sector 6, reported "Sector xyz"
 		// (5.55, 0.29, 49.49) and "Tilted sect xyz" (-15.89, 0.29, 47.20) --
 		// the panel negates y for sector > 3, so the underlying (unflipped)
-		// sector/tilted y here is -0.29, not +0.29. tiltedPoint takes
-		// sector-frame input (matching "Sector xyz"), applies bCNU CED's own
-		// CedView.sectorToTilted, and returns (z, transverse) with the same
-		// sector > 3 sign flip CedView's own projectClasToWorld applies
-		// afterward -- so this asserts against +15.89 (the flipped, on-screen
-		// transverse), not the panel's raw, unflipped -15.89.
+		// sector/tilted y here is -0.29, not +0.29.
+		//
+		// tiltedPoint's own final sign choice is NOT simply "flip for
+		// sector > 3" like the legacy panel's display convention (or like
+		// project(), used for wires/paddles): the raw (pre-flip) transverse
+		// component comes out negative for a far point aligned with either
+		// sector's own midplane, so matching project()'s "sector <= 3 is
+		// positive" on-screen convention -- needed so a cross renders in
+		// the same half as the chamber outline it sits on -- means negating
+		// for sector <= 3 here instead. See tiltedPoint's own doc comment.
 		double sectorX = 5.546825748732971;
 		double sectorY = -0.29261598246321485;
 		double sectorZ = 49.49;
 		var sector6 = SectorProjection.tiltedPoint(sectorX, sectorY, sectorZ, 6, 0.0);
 		assertEquals(47.19736223655189, sector6.x, 1.0e-9);
-		assertEquals(15.88824640413513, sector6.y, 1.0e-9);
+		assertEquals(-15.88824640413513, sector6.y, 1.0e-9);
 		// Loosely against the legacy panel's own displayed (2-decimal) numbers too.
 		assertEquals(47.20, sector6.x, 0.01);
-		assertEquals(15.89, sector6.y, 0.01);
+		assertEquals(-15.89, sector6.y, 0.01);
 
 		// Mirror-symmetric sector (2, upper) should land at the same z with
-		// the un-flipped (sector <= 3) transverse sign.
+		// the opposite transverse sign.
 		var sector2 = SectorProjection.tiltedPoint(sectorX, sectorY, sectorZ, 2, 0.0);
 		assertEquals(sector6.x, sector2.x, 1.0e-9);
 		assertEquals(-sector6.y, sector2.y, 1.0e-9);
@@ -83,7 +87,7 @@ class SectorProjectionTest {
 		Point3 labPoint = new Point3(2.52, -4.95, 49.49);
 		var projected = SectorProjection.clasPoint(labPoint, 6, 0.0);
 		assertEquals(47.19736223655189, projected.x, 1.0e-9);
-		assertEquals(15.88824640413513, projected.y, 1.0e-9);
+		assertEquals(-15.88824640413513, projected.y, 1.0e-9);
 	}
 
 	@Test
@@ -117,14 +121,14 @@ class SectorProjectionTest {
 		// it must land close, and re-projecting the recovered point must
 		// reproduce the same screen point exactly (round-trip consistency).
 		Point3 recovered = SectorProjection.labPointFromScreen(
-				47.19736223655189, 15.88824640413513, 6, 0.0);
+				47.19736223655189, -15.88824640413513, 6, 0.0);
 		assertEquals(2.52, recovered.x(), 0.3);
 		assertEquals(-4.95, recovered.y(), 0.3);
 		assertEquals(49.49, recovered.z(), 0.3);
 
 		var reprojected = SectorProjection.clasPoint(recovered, 6, 0.0);
 		assertEquals(47.19736223655189, reprojected.x, 1.0e-9);
-		assertEquals(15.88824640413513, reprojected.y, 1.0e-9);
+		assertEquals(-15.88824640413513, reprojected.y, 1.0e-9);
 	}
 
 	@Test

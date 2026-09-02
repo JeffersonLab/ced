@@ -110,7 +110,7 @@ final class SectorProjection {
 	 */
 	static Point3 labPointFromScreen(double screenZ, double screenTransverse, int sector,
 			double phiOffsetDegrees) {
-		double signedTransverse = sector <= 3 ? screenTransverse : -screenTransverse;
+		double signedTransverse = sector <= 3 ? -screenTransverse : screenTransverse;
 		double phi = Math.toRadians(phiOffsetDegrees);
 		double cosPhi = Math.cos(phi);
 		// transverse = tiltX*cos(phi) + tiltY*sin(phi), with tiltY assumed 0.
@@ -230,10 +230,27 @@ final class SectorProjection {
 	 * against a real feedback-panel reading from legacy CED itself (sector
 	 * 6, lab xyz (2.52, -4.95, 49.49) cm): its own reported "Sector xyz"
 	 * (5.55, -0.29, 49.49) and "Tilted sect xyz" (-15.89, -0.29, 47.20) --
-	 * the panel displays y negated for sector &gt; 3, like the final
-	 * transverse output here -- reproduce to the displayed precision only
-	 * under this corrected formula; the previous formula was off by tens of
-	 * screen-cm at this same point, not a rounding-sized discrepancy.
+	 * the panel displays y negated for sector &gt; 3, so the underlying raw
+	 * value is -0.29 -- reproduce those two intermediate 3D readings
+	 * (before this method's own final sector-side sign choice below) to
+	 * displayed precision only under this corrected formula; the previous
+	 * formula was off by tens of screen-cm at this same point, not a
+	 * rounding-sized discrepancy.
+	 * </p>
+	 * <p>
+	 * The raw (pre-flip) transverse component -- {@code tiltX} in {@link
+	 * #tiltedFrame} -- comes out negative for a far point aligned with
+	 * either sector's own midplane, regardless of which sector: it's
+	 * dominated by the large {@code -sectorZ*sin(tilt)} term for any point
+	 * well away from the vertex. {@link #project} (used for wires/paddle
+	 * volumes, with no tilt at all) instead gives a raw radius that's
+	 * positive for such a point in ANY sector, and separately negates it
+	 * for {@code sector > 3}. To keep this method's on-screen half
+	 * (sector &lt;= 3 above the divider, else below) agreeing with that --
+	 * e.g. so a DC cross renders in the same half as the chamber outline
+	 * it sits on -- this method's sign choice is the mirror image of
+	 * {@code project}'s: negate for {@code sector <= 3}, not for {@code
+	 * sector > 3}.
 	 * </p>
 	 */
 	static Point2D.Double tiltedPoint(double sectorX, double sectorY, double sectorZ,
@@ -241,7 +258,7 @@ final class SectorProjection {
 		Point3 tilted = tiltedFrame(new Point3(sectorX, sectorY, sectorZ));
 		double phi = Math.toRadians(phiOffsetDegrees);
 		double transverse = tilted.x() * Math.cos(phi) + tilted.y() * Math.sin(phi);
-		return new Point2D.Double(tilted.z(), sector <= 3 ? transverse : -transverse);
+		return new Point2D.Double(tilted.z(), sector <= 3 ? -transverse : transverse);
 	}
 
 	/**
