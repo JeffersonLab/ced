@@ -697,18 +697,22 @@ public final class SectorView extends CedView implements MagneticFieldChangeList
 		if (!isDisplayed(CedDisplayOption.PARTICLES)) return;
 		for (RecEventData.Particle particle : recData.particles()) {
 			// Which sector-pair view should draw this particle at all.
-			// REC::Particle carries no detector-assigned sector of its own
-			// (unlike a per-sector DC track fit), so the starting momentum
-			// direction is the best available proxy -- NOT a vote over the
-			// swum path's own position, which for a low-momentum or
-			// near-boundary particle swum out hundreds of cm can easily
-			// spend more of its length drifted into a neighbouring sector
-			// than in the one it actually started in and was detected in.
-			// Confirmed with real event data: a 0.69 GeV/c proton whose
-			// momentum starts in sector 3 (matching its DC crosses) had a
-			// position-vote majority of sector 2 over its full swim, which
-			// hid it from the view showing its own crosses entirely.
-			int sector = particle.sector();
+			// Prefer REC::Track's own DC sector assignment -- the actual
+			// reconstruction answer -- over the momentum-direction proxy
+			// (Particle#sector()): a particle whose momentum phi lands close
+			// to a 60-degree sector boundary can have its proxy sector
+			// disagree with the sector its real DC hits and track fit are
+			// unambiguously in, hiding it from the view that should show it
+			// entirely (confirmed against real event data). The proxy stays
+			// as the fallback for a particle with no matching DC track row
+			// (e.g. a neutral particle), for which it's the only information
+			// available -- and NOT a vote over the swum path's own position,
+			// which for a low-momentum or near-boundary particle swum out
+			// hundreds of cm can easily spend more of its length drifted
+			// into a neighbouring sector than in the one it actually started
+			// in and was detected in (also confirmed against real event
+			// data, separately from the boundary case above).
+			int sector = recData.trackSector(particle.row()).orElse(particle.sector());
 			if (!displayedSector(sector)) continue;
 
 			List<Point3> swum = swimCache.trajectory(particle, fieldProbe);

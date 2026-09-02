@@ -1,7 +1,10 @@
 package edu.cnu.ced.data;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.OptionalInt;
 
 import org.jlab.io.base.DataBank;
 
@@ -17,21 +20,48 @@ import edu.cnu.ced.event.EventSnapshot;
  * particle with a PID, charge, momentum, and vertex.
  * </p>
  */
-public record RecEventData(List<Particle> particles) {
+public record RecEventData(List<Particle> particles, Map<Integer, Integer> trackSectors) {
 
 	public static final String RECON_BANK = "REC::Particle";
+	public static final String TRACK_BANK = "REC::Track";
 
-	private static final RecEventData EMPTY = new RecEventData(List.of());
+	// org.jlab.detector.base.DetectorType.DC's id -- REC::Track carries one
+	// row per (particle, detector-system) match, and a particle can in
+	// principle have both a DC (forward) and a CVT (central) row; only the
+	// DC one is the "which sector's forward-detector view" answer this is
+	// for.
+	private static final int DC_DETECTOR_ID = 6;
+
+	private static final RecEventData EMPTY = new RecEventData(List.of(), Map.of());
 
 	public RecEventData {
 		particles = List.copyOf(particles);
+		trackSectors = Map.copyOf(trackSectors);
 	}
 
 	public static RecEventData from(EventSnapshot snapshot) {
 		if (snapshot == null || !snapshot.hasEvent()) return EMPTY;
 		ArrayList<Particle> particles = new ArrayList<>();
 		readParticles(snapshot.bank(RECON_BANK).orElse(null), particles);
-		return particles.isEmpty() ? EMPTY : new RecEventData(particles);
+		Map<Integer, Integer> trackSectors = readTrackSectors(snapshot.bank(TRACK_BANK).orElse(null));
+		return particles.isEmpty() ? EMPTY : new RecEventData(particles, trackSectors);
+	}
+
+	/**
+	 * The DC (forward-detector) sector actually assigned by reconstruction
+	 * to the particle at {@code pindex} (its row in {@code REC::Particle}),
+	 * from the {@code REC::Track} bank -- the authoritative answer, unlike
+	 * {@link Particle#sector()}'s momentum-direction proxy, which can pick
+	 * the wrong sector for a particle whose momentum phi lands close to a
+	 * 60-degree sector boundary even though its actual DC hits, and the
+	 * track fit through them, are unambiguously in one specific sector.
+	 * Empty for a particle with no matching DC track row (e.g. a neutral
+	 * particle, or a Central-Detector-only track), for which the
+	 * momentum-direction proxy is the only information available anyway.
+	 */
+	public OptionalInt trackSector(int pindex) {
+		Integer sector = trackSectors.get(pindex);
+		return sector == null ? OptionalInt.empty() : OptionalInt.of(sector);
 	}
 
 	private static void readParticles(DataBank bank, List<Particle> destination) {
@@ -48,6 +78,16 @@ public record RecEventData(List<Particle> particles) {
 					hasChi2Pid ? bank.getFloat("chi2pid", row) : 0f,
 					bank.getShort("status", row)));
 		}
+	}
+
+	private static Map<Integer, Integer> readTrackSectors(DataBank bank) {
+		if (!hasColumns(bank, "pindex", "detector", "sector")) return Map.of();
+		Map<Integer, Integer> sectors = new HashMap<>();
+		for (int row = 0; row < bank.rows(); row++) {
+			if (bank.getByte("detector", row) != DC_DETECTOR_ID) continue;
+			sectors.put((int) bank.getShort("pindex", row), (int) bank.getByte("sector", row));
+		}
+		return sectors;
 	}
 
 	private static boolean hasColumns(DataBank bank, String... names) {

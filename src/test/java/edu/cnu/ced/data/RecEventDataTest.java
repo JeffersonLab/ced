@@ -75,6 +75,69 @@ class RecEventDataTest {
 	}
 
 	@Test
+	void trackSectorPrefersRecTrackDcRowOverMomentumProxy() {
+		DataBank recon = bank(
+				new String[] { "pid", "charge", "px", "py", "pz", "vx", "vy", "vz", "status" },
+				1,
+				Map.of("pid", new int[] { 2212 }, "charge", new byte[] { 1 },
+						"px", new float[] { 1f }, "py", new float[] { 0f }, "pz", new float[] { 0f },
+						"vx", new float[] { 0f }, "vy", new float[] { 0f }, "vz", new float[] { 0f },
+						"status", new short[] { 2000 }));
+		// Momentum along +x puts this particle's proxy sector at 1 (phi =
+		// 0), but its real DC track fit says sector 4 -- standing in for a
+		// real event where the momentum phi lands close enough to a
+		// 60-degree boundary for the two to disagree.
+		DataBank track = bank(
+				new String[] { "pindex", "detector", "sector" },
+				1,
+				Map.of("pindex", new short[] { 0 }, "detector", new byte[] { 6 }, "sector", new byte[] { 4 }));
+
+		RecEventData data = RecEventData.from(EventSnapshot.of(event(
+				Map.of(RecEventData.RECON_BANK, recon, RecEventData.TRACK_BANK, track))));
+
+		RecEventData.Particle p = data.particles().get(0);
+		assertEquals(1, p.sector());
+		assertEquals(4, data.trackSector(p.row()).orElseThrow());
+	}
+
+	@Test
+	void trackSectorIsEmptyWithoutAMatchingDcTrackRow() {
+		DataBank recon = bank(
+				new String[] { "pid", "charge", "px", "py", "pz", "vx", "vy", "vz", "status" },
+				1,
+				Map.of("pid", new int[] { 22 }, "charge", new byte[] { 0 },
+						"px", new float[] { 1f }, "py", new float[] { 0f }, "pz", new float[] { 0f },
+						"vx", new float[] { 0f }, "vy", new float[] { 0f }, "vz", new float[] { 0f },
+						"status", new short[] { 2000 }));
+
+		RecEventData data = RecEventData.from(EventSnapshot.of(event(Map.of(RecEventData.RECON_BANK, recon))));
+
+		assertTrue(data.trackSector(data.particles().get(0).row()).isEmpty());
+	}
+
+	@Test
+	void trackSectorIgnoresNonDcDetectorRows() {
+		DataBank recon = bank(
+				new String[] { "pid", "charge", "px", "py", "pz", "vx", "vy", "vz", "status" },
+				1,
+				Map.of("pid", new int[] { 2212 }, "charge", new byte[] { 1 },
+						"px", new float[] { 1f }, "py", new float[] { 0f }, "pz", new float[] { 0f },
+						"vx", new float[] { 0f }, "vy", new float[] { 0f }, "vz", new float[] { 0f },
+						"status", new short[] { 4000 }));
+		// A non-DC detector row (Central Detector, e.g.) for this particle
+		// must not be mistaken for a forward-detector sector assignment.
+		DataBank track = bank(
+				new String[] { "pindex", "detector", "sector" },
+				1,
+				Map.of("pindex", new short[] { 0 }, "detector", new byte[] { 5 }, "sector", new byte[] { 4 }));
+
+		RecEventData data = RecEventData.from(EventSnapshot.of(event(
+				Map.of(RecEventData.RECON_BANK, recon, RecEventData.TRACK_BANK, track))));
+
+		assertTrue(data.trackSector(data.particles().get(0).row()).isEmpty());
+	}
+
+	@Test
 	void unrecognizedPidFallsBackToChargeBasedName() {
 		DataBank recon = bank(
 				new String[] { "pid", "charge", "px", "py", "pz", "vx", "vy", "vz", "status" },
