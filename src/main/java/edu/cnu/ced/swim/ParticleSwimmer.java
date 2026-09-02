@@ -30,9 +30,12 @@ public final class ParticleSwimmer {
 	 * Default maximum path length to swim, in cm. Comfortably spans the
 	 * CLAS12 forward detector stack out to FTOF/the calorimeters; a particle
 	 * that curls tightly at low momentum will simply loop within a smaller
-	 * region well before reaching this.
+	 * region well before reaching this. Kept in sync with {@link
+	 * edu.cnu.ced.swim.SwimRequestPolicy#FORWARD_MAX_PATH_CM}, the value the
+	 * app actually uses; this one is the fallback for calling {@link
+	 * #swim(RecEventData.Particle, FieldProbe)} directly.
 	 */
-	public static final double DEFAULT_MAX_PATH_LENGTH_CM = 700.0;
+	public static final double DEFAULT_MAX_PATH_LENGTH_CM = 1000.0;
 
 	private static final double INITIAL_STEP_CM = 1.0;
 	// CLAS12Swimmer uses this directly as the adaptive integrator's absolute

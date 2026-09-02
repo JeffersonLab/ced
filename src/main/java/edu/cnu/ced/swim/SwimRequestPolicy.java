@@ -32,8 +32,15 @@ import edu.cnu.ced.data.RecEventData;
  */
 public final class SwimRequestPolicy {
 
-	/** Maximum path length for Forward Detector tracks, cm; spans the forward detector stack. */
-	public static final double FORWARD_MAX_PATH_CM = 700.0;
+	/**
+	 * Maximum path length for Forward Detector tracks, cm. Raised from an
+	 * earlier 700 (found, against real event data, to sometimes fall short
+	 * of FTOF -- a shallow-angle track's path length to a given z is much
+	 * longer than its z itself). 1000 also matches the span bCNU CED itself
+	 * uses for its own theta-25-degree reference axis line (see
+	 * SectorView#drawTiltedAxis).
+	 */
+	public static final double FORWARD_MAX_PATH_CM = 1000.0;
 
 	/** Maximum path length for Central Detector tracks, cm. */
 	public static final double CENTRAL_MAX_PATH_CM = 150.0;
