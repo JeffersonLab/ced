@@ -7,14 +7,20 @@ import java.awt.Point;
 import java.awt.Polygon;
 import java.awt.RenderingHints;
 import java.awt.Font;
+import java.awt.Stroke;
 import java.awt.geom.Arc2D;
 import java.awt.geom.Line2D;
 import java.awt.geom.Point2D;
 import java.awt.geom.Rectangle2D;
+import java.util.ArrayList;
 import java.util.EnumSet;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+
+import cnuphys.magfield.FieldProbe;
+import cnuphys.magfield.MagneticFieldChangeListener;
+import cnuphys.magfield.MagneticFields;
 
 import edu.cnu.ced.component.CedDisplayOption;
 import edu.cnu.ced.data.CentralAccumulation;
@@ -24,6 +30,7 @@ import edu.cnu.ced.data.CentralEventData.Cluster;
 import edu.cnu.ced.data.CentralEventData.Cross;
 import edu.cnu.ced.data.CentralEventData.Detector;
 import edu.cnu.ced.data.CentralEventData.ReconHit;
+import edu.cnu.ced.data.RecEventData;
 import edu.cnu.ced.event.EventNavigationState;
 import edu.cnu.ced.event.EventNavigator;
 import edu.cnu.ced.geometry.BMTGeometry;
@@ -32,6 +39,8 @@ import edu.cnu.ced.geometry.CNDGeometry;
 import edu.cnu.ced.geometry.CTOFGeometry;
 import edu.cnu.ced.geometry.Point2;
 import edu.cnu.ced.geometry.Point3;
+import edu.cnu.ced.style.CedDrawingStyle;
+import edu.cnu.ced.swim.SwimTrajectoryCache;
 import edu.cnu.ced.view.CedXYView;
 import edu.cnu.mdi.container.IContainer;
 import edu.cnu.mdi.graphics.toolbar.ToolBits;
@@ -40,7 +49,7 @@ import edu.cnu.mdi.util.PropertyUtils;
 
 /** Transverse display of the silicon, micromegas, CND, and CTOF detectors. */
 @SuppressWarnings("serial")
-public final class CentralXYView extends CedXYView {
+public final class CentralXYView extends CedXYView implements MagneticFieldChangeListener {
 	private static final Color EMPTY = new Color(245,248,248);
 	private static final Color BST_OUTLINE = new Color(95,175,175);
 	private static final Color BMT_C = new Color(220,255,220);
@@ -55,29 +64,59 @@ public final class CentralXYView extends CedXYView {
 	private static final Color CLUSTER_COLOR = new Color(205, 0, 205);
 	private final BSTGeometry bst; private final BMTGeometry bmt; private final CNDGeometry cnd; private final CTOFGeometry ctof;
 	private final CentralAccumulation accumulation;
+	private final SwimTrajectoryCache swimCache;
 	private final Map<Element,Polygon> polygons=new HashMap<>();
 	private final Map<Object,Point> markers=new HashMap<>();
 	private volatile CentralEventData data=CentralEventData.from(null);
+	private volatile RecEventData recData=RecEventData.from(null);
+	private volatile FieldProbe fieldProbe=FieldProbe.factory();
 
 	public CentralXYView(BSTGeometry bst,BMTGeometry bmt,CNDGeometry cnd,CTOFGeometry ctof,
-			EventNavigator navigator,CentralAccumulation accumulation){
+			EventNavigator navigator,CentralAccumulation accumulation,SwimTrajectoryCache swimCache){
 		super(navigator,PropertyUtils.TITLE,"Central XY",PropertyUtils.WIDTH,860,PropertyUtils.HEIGHT,760,
 				PropertyUtils.WORLDSYSTEM,new Rectangle2D.Double(40,-40,-80,80),PropertyUtils.BACKGROUND,Color.WHITE,
 				PropertyUtils.TOOLBARBITS,ToolBits.NAVIGATIONTOOLS,PropertyUtils.WHEELZOOM,true,PropertyUtils.VISIBLE,true);
-		this.bst=bst;this.bmt=bmt;this.cnd=cnd;this.ctof=ctof;this.accumulation=accumulation;
+		this.bst=bst;this.bmt=bmt;this.cnd=cnd;this.ctof=ctof;this.accumulation=accumulation;this.swimCache=swimCache;
 		setAfterDraw(this::draw); initializeCedView(EnumSet.of(CedDisplayOption.SINGLE_EVENT,CedDisplayOption.ACCUMULATION,
 				CedDisplayOption.RAW_DATA,CedDisplayOption.RECON_HITS,CedDisplayOption.CLUSTERS,CedDisplayOption.CROSSES,
-				CedDisplayOption.CONNECT_CLUSTER_ENDPOINTS),
+				CedDisplayOption.CONNECT_CLUSTER_ENDPOINTS,CedDisplayOption.PARTICLES),
 				List.of("BST","BMT","CND","CTOF","CVT"),ScientificColorMap.TURBO,"Relative ADC / accumulation");
+		MagneticFields.getInstance().addMagneticFieldChangeListener(this);
 	}
-	@Override protected void eventChanged(EventNavigationState state){data=CentralEventData.from(state.snapshot());}
+	@Override protected void eventChanged(EventNavigationState state){data=CentralEventData.from(state.snapshot());recData=RecEventData.from(state.snapshot());swimCache.forEvent(state.snapshot());}
 
 	private void draw(Graphics2D graphics,IContainer container){Graphics2D g=(Graphics2D)graphics.create();try{
 		g.setRenderingHint(RenderingHints.KEY_ANTIALIASING,RenderingHints.VALUE_ANTIALIAS_ON);polygons.clear();markers.clear();
 		drawBST(g,container);drawBMT(g,container);drawCTOF(g,container);drawCND(g,container);
-		if(!isDisplayed(CedDisplayOption.ACCUMULATION)){if(isDisplayed(CedDisplayOption.RECON_HITS))drawRecon(g,container);if(isDisplayed(CedDisplayOption.CLUSTERS))drawClusters(g,container);if(isDisplayed(CedDisplayOption.CROSSES))drawCrosses(g,container);}
+		if(!isDisplayed(CedDisplayOption.ACCUMULATION)){if(isDisplayed(CedDisplayOption.RECON_HITS))drawRecon(g,container);if(isDisplayed(CedDisplayOption.CLUSTERS))drawClusters(g,container);if(isDisplayed(CedDisplayOption.CROSSES))drawCrosses(g,container);if(isDisplayed(CedDisplayOption.PARTICLES))drawParticles(g,container);}
 		drawXYAxes(g,container);
 	}finally{g.dispose();}}
+
+	/**
+	 * Draws each reconstructed particle's swum trajectory projected onto the
+	 * transverse (x, y) plane -- a plain world-coordinate projection, unlike
+	 * SectorView's sector-rotated one, since this view already shows all
+	 * sectors at once. Uses the same {@link SwimTrajectoryCache} SectorView
+	 * shares, so a particle with both Central and Forward hits gets the
+	 * identical trajectory (and {@link edu.cnu.ced.swim.SwimRequestPolicy}'s own path-length
+	 * choice) in both views; a Forward-going particle's initial near-vertex
+	 * curve still shows here even though most of its length swims off this
+	 * view's small (80cm-wide) window.
+	 */
+	private void drawParticles(Graphics2D g,IContainer c){for(RecEventData.Particle particle:recData.particles()){
+		List<Point3> swum=swimCache.trajectory(particle,fieldProbe);
+		if(swum.size()<2)continue;
+		Color color=CedDrawingStyle.particleColor(particle.pid(),particle.charge());
+		Stroke stroke=CedDrawingStyle.particleStroke(particle.pid(),particle.charge());
+		List<Point> points=new ArrayList<>(swum.size());
+		for(Point3 p:swum)points.add(screen(c,p.x(),p.y()));
+		g.setColor(color);g.setStroke(stroke);
+		for(int i=1;i<points.size();i++){Point a=points.get(i-1),b=points.get(i);g.drawLine(a.x,a.y,b.x,b.y);}
+		Point vertex=points.get(0);
+		markers.put(particle,vertex);
+		g.setColor(color);g.fillOval(vertex.x-3,vertex.y-3,6,6);
+		g.setColor(CedDrawingStyle.outline(color));g.setStroke(new BasicStroke(1f));g.drawOval(vertex.x-3,vertex.y-3,6,6);
+	}}
 
 	private void drawBST(Graphics2D g,IContainer c){g.setStroke(new BasicStroke(2.2f));for(int layer=0;layer<BSTGeometry.LAYER_COUNT;layer++)for(int sector=0;sector<BSTGeometry.SECTORS_PER_LAYER[layer];sector++){
 		Point3 a=bst.midpoint(sector,layer,0),b=bst.midpoint(sector,layer,BSTGeometry.STRIP_COUNT-1);Point p1=screen(c,a.x()/10,a.y()/10),p2=screen(c,b.x()/10,b.y()/10);
@@ -137,7 +176,7 @@ public final class CentralXYView extends CedXYView {
 	private void addAdcFeedback(Element e,List<String> feedback){for(AdcHit h:data.adcHits())if(matches(e,h))feedback.add(String.format("$cyan$adc %d time %.3f order %d",h.adc(),h.time(),h.order()));if(isDisplayed(CedDisplayOption.ACCUMULATION))feedback.add("$cyan$occupancy "+accumulation.count(e.detector,e.sector,e.layer,e.component,e.order)+" / "+accumulation.eventCount()+" events");}
 	private boolean addBSTGeometryFeedback(IContainer c,Point sp,List<String> feedback){double best=Double.POSITIVE_INFINITY;PanelAddress closest=null;for(int layer=0;layer<BSTGeometry.LAYER_COUNT;layer++)for(int sector=0;sector<BSTGeometry.SECTORS_PER_LAYER[layer];sector++){Point3 a=bst.midpoint(sector,layer,0),b=bst.midpoint(sector,layer,BSTGeometry.STRIP_COUNT-1);Point p1=screen(c,a.x()/10,a.y()/10),p2=screen(c,b.x()/10,b.y()/10);double d=Line2D.ptSegDist(p1.x,p1.y,p2.x,p2.y,sp.x,sp.y);if(d<best){best=d;closest=new PanelAddress(sector+1,layer+1);}}if(best>7||closest==null)return false;feedback.add("$red$BST layer "+closest.layer());feedback.add("$red$BST region "+((closest.layer()+1)/2));feedback.add("$red$BST sector "+closest.sector());for(AdcHit h:data.adcHits())if(h.detector()==Detector.BST&&h.sector()==closest.sector()&&h.layer()==closest.layer())feedback.add(String.format("$cyan$BST strip %d adc %d time %.3f order %d",h.component(),h.adc(),h.time(),h.order()));return true;}
 	private boolean addBMTGeometryFeedback(Point2D.Double wp,List<String> feedback){double radius=Math.hypot(wp.x,wp.y),phi=normalizeDegrees(Math.toDegrees(Math.atan2(wp.y,wp.x)));for(int layer=1;layer<=BMTGeometry.LAYER_COUNT;layer++){BMTGeometry.Layer info=bmt.layer(layer);if(Math.abs(radius-info.radiusMm()/10)>.55)continue;for(int sector=1;sector<=3;sector++){double start=normalizeDegrees(info.phiMinDeg()+120*bmtSector(sector));if(!angleContains(phi,start,info.phiMaxDeg()-info.phiMinDeg()))continue;feedback.add("$green$BMT type "+(info.axis()==1?"Z":"C"));feedback.add("$green$BMT sector "+sector+" layer "+layer);feedback.add("$green$BMT region "+info.region());feedback.add(String.format("$green$radius %.3f cm",info.radiusMm()/10));if(info.axis()==1){double relative=normalizeDegrees(phi-start);int strip=(int)Math.floor(relative/Math.max(.0001,info.phiMaxDeg()-info.phiMinDeg())*info.stripCount())+1;feedback.add("$green$BMT strip "+Math.max(1,Math.min(info.stripCount(),strip)));}return true;}}return false;}
-	private static void addMarkerFeedback(Object o,List<String> f){if(o instanceof ReconHit h){f.add("$wheat$"+h.detector()+" recon hit sector "+h.sector()+" layer "+h.layer()+" strip "+h.strip());f.add(String.format("$wheat$energy %.3f time %.3f cluster %d track %d",h.energy(),h.time(),h.clusterId(),h.trackId()));}else if(o instanceof Cluster x){f.add(String.format("$magenta$%s cluster xy (%.3f, %.3f) cm",x.detector(),x.x1(),x.y1()));if(!Float.isNaN(x.energy()))f.add(String.format("$magenta$energy %.3f id %d status %d",x.energy(),x.id(),x.status()));}else if(o instanceof Cross x)f.add(String.format("$green$%s cross id %d sector %d region %d xyz (%.3f, %.3f, %.3f) cm",x.detector(),x.id(),x.sector(),x.region(),x.x(),x.y(),x.z()));}
+	private static void addMarkerFeedback(Object o,List<String> f){if(o instanceof ReconHit h){f.add("$wheat$"+h.detector()+" recon hit sector "+h.sector()+" layer "+h.layer()+" strip "+h.strip());f.add(String.format("$wheat$energy %.3f time %.3f cluster %d track %d",h.energy(),h.time(),h.clusterId(),h.trackId()));}else if(o instanceof Cluster x){f.add(String.format("$magenta$%s cluster xy (%.3f, %.3f) cm",x.detector(),x.x1(),x.y1()));if(!Float.isNaN(x.energy()))f.add(String.format("$magenta$energy %.3f id %d status %d",x.energy(),x.id(),x.status()));}else if(o instanceof Cross x)f.add(String.format("$green$%s cross id %d sector %d region %d xyz (%.3f, %.3f, %.3f) cm",x.detector(),x.id(),x.sector(),x.region(),x.x(),x.y(),x.z()));else if(o instanceof RecEventData.Particle p){f.add(String.format("$deep sky blue$%s (pid %d, q=%+d)",p.displayName(),p.pid(),p.charge()));f.add(String.format("$deep sky blue$p = %.3f GeV/c  theta = %.1f°  phi = %.1f°",p.p(),Math.toDegrees(p.theta()),Math.toDegrees(p.phi())));f.add(String.format("$deep sky blue$vertex (%.2f, %.2f, %.2f) cm",p.vx(),p.vy(),p.vz()));}}
 
 	private static void drawMarker(Graphics2D g,Point p,Color color){g.setColor(color);g.fillRect(p.x-MARKER,p.y-MARKER,2*MARKER,2*MARKER);g.setColor(Color.DARK_GRAY);g.drawRect(p.x-MARKER,p.y-MARKER,2*MARKER,2*MARKER);}
 	private static void drawReconMarker(Graphics2D g,Point p){g.setStroke(new BasicStroke(1.5f));g.setColor(RECON_COLOR);g.drawLine(p.x-6,p.y-6,p.x+6,p.y+6);g.drawLine(p.x-6,p.y+6,p.x+6,p.y-6);g.fillRect(p.x-3,p.y-3,7,7);g.setColor(Color.DARK_GRAY);g.drawRect(p.x-3,p.y-3,7,7);}
@@ -158,4 +197,7 @@ public final class CentralXYView extends CedXYView {
 	private static void drawArc(Graphics2D g,IContainer c,double radius,double start,double extent,Color color){drawArcStroke(g,c,radius,start,extent,color,4f);drawArcStroke(g,c,radius,start,extent,Color.DARK_GRAY,1f);}
 	private record Element(Detector detector,int sector,int layer,int component,int order){}
 	private record PanelAddress(int sector,int layer){}
+
+	@Override public void magneticFieldChanged(){fieldProbe=FieldProbe.factory();refresh();}
+	@Override public void dispose(){MagneticFields.getInstance().removeMagneticFieldChangeListener(this);super.dispose();}
 }
