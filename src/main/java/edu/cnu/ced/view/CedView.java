@@ -12,6 +12,8 @@ import javax.swing.JToolBar;
 
 import edu.cnu.ced.component.CedControlPanel;
 import edu.cnu.ced.component.CedDisplayOption;
+import edu.cnu.ced.component.PidLegend;
+import edu.cnu.ced.data.RecEventData;
 import edu.cnu.ced.event.EventNavigationState;
 import edu.cnu.ced.event.EventNavigator;
 import edu.cnu.mdi.feedback.FeedbackPane;
@@ -27,11 +29,13 @@ public abstract class CedView extends BaseView {
 	private final Runnable sourceListener = this::acceptSourceChange;
 	private CedControlPanel controls;
 	private boolean listening;
+	private final PidLegend pidLegend = new PidLegend();
 
 	protected CedView(EventNavigator navigator, Object... properties) {
 		super(properties);
 		this.navigator = navigator;
 		installNextButton();
+		installPidLegend();
 	}
 
 	/**
@@ -89,6 +93,7 @@ public abstract class CedView extends BaseView {
 		Runnable update = () -> {
 			eventChanged(state);
 			if (controls != null) controls.update(state);
+			pidLegend.update(RecEventData.from(state.snapshot()).particles());
 			refresh();
 		};
 		if (SwingUtilities.isEventDispatchThread()) update.run();
@@ -111,6 +116,17 @@ public abstract class CedView extends BaseView {
 		next.addActionListener(event -> navigator.next());
 		getToolBar().add(next, 0);
 		getToolBar().add(new JToolBar.Separator(), 1);
+	}
+
+	/**
+	 * Adds the shared {@link PidLegend} to this view's toolbar, right after
+	 * the standard controls. Every {@code CedView} gets one, kept current on
+	 * every event change via {@link #acceptEventState}, regardless of
+	 * whether this particular view draws particles itself.
+	 */
+	private void installPidLegend() {
+		if (getToolBar() == null) return;
+		getToolBar().add(pidLegend);
 	}
 
 	@Override
