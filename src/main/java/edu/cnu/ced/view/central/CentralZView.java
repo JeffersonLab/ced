@@ -104,10 +104,14 @@ public final class CentralZView extends CedView implements MagneticFieldChangeLi
 
 	private JPanel createPhiControl() {
 		JSlider slider = new JSlider(-PHI_LIMIT, PHI_LIMIT, 0);
-		slider.setMajorTickSpacing(30);
+		slider.setMajorTickSpacing(60);
 		slider.setMinorTickSpacing(10);
 		slider.setPaintTicks(true);
 		slider.setPaintLabels(true);
+		// The default tick-label font is too large for this narrow sidebar
+		// control at -180..180's width -- the labels ran together and
+		// became unreadable.
+		slider.setFont(Fonts.smallFont);
 		slider.addChangeListener(event -> {
 			setPhi(slider.getValue());
 			refresh();
