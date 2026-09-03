@@ -96,9 +96,11 @@ public final class CedApplication extends BaseMDIApplication {
 				PropertyUtils.BACKGROUNDIMAGE, BACKGROUND_RESOURCE,
 				PropertyUtils.FRACTION, 0.9,
 				PropertyUtils.CONSOLELOG, true);
-		addCedFileActions();
-		addCedEventActions();
-		addCedOptions();
+		Log.getInstance().config("Startup timing - super() done (BaseMDIApplication ctor incl. "
+				+ "addInitialViews), JVM uptime: " + jvmUptimeMillis() + " ms");
+		timeStep("addCedFileActions", this::addCedFileActions);
+		timeStep("addCedEventActions", this::addCedEventActions);
+		timeStep("addCedOptions", this::addCedOptions);
 	}
 
 	private void addCedOptions() {
@@ -423,6 +425,16 @@ public final class CedApplication extends BaseMDIApplication {
 		}
 		Log.getInstance().config("Startup timing - bootstrap done, launching MDI shell, JVM uptime: "
 				+ jvmUptimeMillis() + " ms");
-		BaseMDIApplication.launch(CedApplication::getInstance);
+		BaseMDIApplication.launch(() -> {
+			CedApplication app = CedApplication.getInstance();
+			// Splits the bootstrap-done-to-windowOpened gap in two: everything up to
+			// here is CedApplication's own constructor (addInitialViews plus its
+			// menu-building calls); everything after is BaseMDIApplication's
+			// setVisible(true) -- native peer creation, layout, and realizing the
+			// window -- which this constructor-scoped timing can't otherwise see.
+			Log.getInstance().config("Startup timing - CedApplication constructed (before setVisible), "
+					+ "JVM uptime: " + jvmUptimeMillis() + " ms");
+			return app;
+		});
 	}
 }
