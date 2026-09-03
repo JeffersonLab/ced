@@ -2,6 +2,7 @@ package edu.cnu.ced.app;
 
 import java.io.File;
 import java.io.IOException;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.concurrent.TimeUnit;
 import java.util.prefs.Preferences;
@@ -354,8 +355,18 @@ public final class CedApplication extends BaseMDIApplication {
 		// 3.4s across otherwise-identical runs (every detector a cache hit both
 		// times) -- this is that variance's most likely source. Must be set before
 		// any class touches org.sqlite.JDBC, so it comes before everything else.
-		System.setProperty("org.sqlite.tmpdir",
-				Path.of(System.getProperty("user.home"), ".ced", "sqlite-native").toString());
+		// The directory must exist first: sqlite-jdbc does not reliably create a
+		// missing org.sqlite.tmpdir itself, and failing to load its native library
+		// leaves every detector's geometry silently uninitialized (GeometryService
+		// swallows the exception into a GeometryStatus), surfacing much later as
+		// an IllegalStateException from deep inside painting code.
+		try {
+			Path sqliteNativeDir = Path.of(System.getProperty("user.home"), ".ced", "sqlite-native");
+			Files.createDirectories(sqliteNativeDir);
+			System.setProperty("org.sqlite.tmpdir", sqliteNativeDir.toString());
+		} catch (IOException exception) {
+			// fall back to sqlite-jdbc's own default extraction location
+		}
 		launchOptions = CedLaunchOptions.parse(args);
 		StartupWindow[] holder = new StartupWindow[1];
 		try {
