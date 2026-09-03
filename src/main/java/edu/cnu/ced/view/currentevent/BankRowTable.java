@@ -2,11 +2,15 @@ package edu.cnu.ced.view.currentevent;
 
 import java.awt.Color;
 import java.awt.Component;
+import java.awt.Dimension;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
 
+import javax.swing.BorderFactory;
+import javax.swing.JComponent;
 import javax.swing.JTable;
 import javax.swing.ListSelectionModel;
+import javax.swing.border.Border;
 import javax.swing.table.JTableHeader;
 import javax.swing.table.TableCellRenderer;
 import javax.swing.table.TableColumn;
@@ -30,12 +34,17 @@ public final class BankRowTable extends JTable {
 	// stripe against black text; this is a subtle zebra background instead.
 	private static final Color ALTERNATE_ROW_BACKGROUND = new Color(235, 235, 235);
 
+	// a border painted on every cell's renderer, so each cell reads as a
+	// distinct boxed field rather than relying on JTable's built-in grid
+	// lines (easy to lose against the zebra background at 1px).
+	private static final Border CELL_BORDER = BorderFactory.createLineBorder(Color.gray);
+
 	public BankRowTable(String bankName, DataBank initialBank) {
 		super(new BankRowTableModel(bankName, initialBank));
 		setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
 		setFont(Fonts.tweenFont);
-		setShowGrid(true);
-		setGridColor(Color.gray);
+		setShowGrid(false);
+		setIntercellSpacing(new Dimension(0, 0));
 
 		JTableHeader header = getTableHeader();
 		header.setResizingAllowed(true);
@@ -60,6 +69,9 @@ public final class BankRowTable extends JTable {
 		Component cell = super.prepareRenderer(renderer, row, column);
 		if (!isRowSelected(row)) {
 			cell.setBackground((row % 2 == 0) ? Color.white : ALTERNATE_ROW_BACKGROUND);
+		}
+		if (cell instanceof JComponent jComponent) {
+			jComponent.setBorder(CELL_BORDER);
 		}
 		return cell;
 	}
