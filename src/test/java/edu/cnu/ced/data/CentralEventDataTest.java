@@ -43,6 +43,19 @@ class CentralEventDataTest {
 		assertEquals(4f,ctof.x1()); assertEquals(6f,ctof.z());
 		assertTrue(Float.isNaN(ctof.x2()), "point clusters have no second endpoint");
 	}
+	@Test void extractsCndTdcHits(){
+		DataBank tdc=bank(new String[]{"sector","layer","component","order","TDC"},2,Map.of(
+				"sector",new byte[]{5,5},"layer",new byte[]{2,2},"component",new short[]{1,1},
+				"order",new byte[]{2,3},"TDC",new int[]{1234,1250}));
+		CentralEventData data=CentralEventData.from(EventSnapshot.of(event(Map.of("CND::tdc",tdc))));
+		assertEquals(2,data.tdcHits().size());
+		CentralEventData.TdcHit left=data.tdcHits().stream()
+				.filter(h->h.order()==2).findFirst().orElseThrow();
+		assertEquals(5,left.sector()); assertEquals(2,left.layer()); assertEquals(1234,left.tdc());
+		CentralEventData.TdcHit right=data.tdcHits().stream()
+				.filter(h->h.order()==3).findFirst().orElseThrow();
+		assertEquals(1250,right.tdc());
+	}
 	@Test void extractsPositiveAdcAndUsesPreferredClusterBankWithoutDuplication(){
 		DataBank adc=bank(new String[]{"sector","layer","component","order","ADC","time"},2,Map.of(
 				"sector",new byte[]{10,10},"layer",new byte[]{2,2},"component",new short[]{1,1},
