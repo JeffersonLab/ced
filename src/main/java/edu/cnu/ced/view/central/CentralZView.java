@@ -62,7 +62,7 @@ public final class CentralZView extends CedView implements MagneticFieldChangeLi
 	private static final Color BMT_Z = new Color(242, 242, 242, 175);
 	private static final Color RECON = new Color(225, 35, 25);
 	private static final Color CROSS_COLOR = new Color(30, 145, 35);
-	private static final int PHI_LIMIT = 25;
+	private static final int PHI_LIMIT = 180;
 
 	private final BSTGeometry bst;
 	private final BMTGeometry bmt;
@@ -104,8 +104,8 @@ public final class CentralZView extends CedView implements MagneticFieldChangeLi
 
 	private JPanel createPhiControl() {
 		JSlider slider = new JSlider(-PHI_LIMIT, PHI_LIMIT, 0);
-		slider.setMajorTickSpacing(5);
-		slider.setMinorTickSpacing(1);
+		slider.setMajorTickSpacing(30);
+		slider.setMinorTickSpacing(10);
 		slider.setPaintTicks(true);
 		slider.setPaintLabels(true);
 		slider.addChangeListener(event -> {
