@@ -5,6 +5,9 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.sql.SQLException;
 import java.util.List;
+import java.util.concurrent.TimeUnit;
+
+import edu.cnu.mdi.log.Log;
 
 /** Coordinates cold/source and warm/cache detector initialization. */
 public final class GeometryCacheCoordinator {
@@ -30,18 +33,28 @@ public final class GeometryCacheCoordinator {
 			throws IOException, SQLException {
 		try (SQLiteGeometryCache cache = new SQLiteGeometryCache(
 				cachePath, applicationVersion, geometryVariation)) {
+			long openStarted = System.nanoTime();
 			cache.open();
+			Log.getInstance().config("Geometry timing - cache.open(): " + elapsedMillis(openStarted) + " ms");
 			java.util.ArrayList<String> cached = new java.util.ArrayList<>();
 			for (CacheableGeometry geometry : geometries) {
-				if (cache.read(geometry)) {
+				long started = System.nanoTime();
+				boolean fromCache = cache.read(geometry);
+				if (fromCache) {
 					cached.add(geometry.name());
 				} else {
 					geometry.initializeFromSource(geometryVariation);
 					cache.write(geometry);
 				}
+				Log.getInstance().config("Geometry timing - " + geometry.name() + " ("
+						+ (fromCache ? "cache" : "source") + "): " + elapsedMillis(started) + " ms");
 			}
 			return List.copyOf(cached);
 		}
+	}
+
+	private static long elapsedMillis(long startedNanos) {
+		return TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - startedNanos);
 	}
 
 	public boolean delete() throws IOException {
