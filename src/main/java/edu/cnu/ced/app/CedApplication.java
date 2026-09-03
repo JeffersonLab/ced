@@ -196,7 +196,15 @@ public final class CedApplication extends BaseMDIApplication {
 		}
 		timeStep("LogView", () -> logView = new LogView());
 		timeStep("JSON Viewer (lazy registration)", () -> ViewManager.getInstance().addConfiguration(
-				ViewConfiguration.lazy("JSON Viewer", JsonView::new, 17, 0, 0, VirtualView.BOTTOMRIGHT)));
+				// JsonView's no-arg constructor deliberately starts hidden (its own
+				// javadoc: "initially hidden") -- fine for direct construction where
+				// callers push content and show it themselves, but wrong for a lazy
+				// ViewConfiguration, whose menu item only realizes the view once and
+				// otherwise just toggles visibility on an already-realized one. Using
+				// the (width, height, visible) constructor with visible=true matches
+				// what JsonView's own no-arg constructor passes for width/height.
+				ViewConfiguration.lazy("JSON Viewer", () -> new JsonView(900, 600, true),
+						17, 0, 0, VirtualView.BOTTOMRIGHT)));
 		timeStep("CurrentEventView", () -> currentEventView = new CurrentEventView(eventNavigator));
 		timeStep("FTCal XY (lazy registration)", () -> ViewManager.getInstance().addConfiguration(
 				ViewConfiguration.lazy("FTCal XY", () -> new FTCalXYView(geometryService.ftcal(),
