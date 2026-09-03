@@ -1,5 +1,7 @@
 package edu.cnu.ced.event;
 
+import java.util.HashMap;
+import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.function.Consumer;
@@ -19,6 +21,13 @@ public final class EventNavigator implements AutoCloseable {
 
 	private EventSource source;
 	private volatile EventNavigationState state = EventNavigationState.closed();
+
+	// RUN::config true-event-number -> one-based sequence number, built lazily
+	// (and only once per source) the first time goToTrueEventNumber is called --
+	// matching legacy CED's own ScanManager, which also walks the whole file on
+	// first use rather than indexing it up front.
+	private Map<Integer, Integer> trueEventIndex;
+	private EventSource trueEventIndexSource;
 
 	public EventNavigator(EventStore store) {
 		this.store = Objects.requireNonNull(store, "store");
@@ -114,6 +123,50 @@ public final class EventNavigator implements AutoCloseable {
 		}
 		publish(source.goTo(sequenceNumber - 1));
 		return true;
+	}
+
+	/**
+	 * Navigate to the event whose {@code RUN::config} true event number is
+	 * {@code trueEventNumber}. Builds (and caches, per source) a full
+	 * true-number-to-sequence index on first use, which requires walking every
+	 * event in the source once -- this can be slow for a large file, exactly as
+	 * it is in legacy CED.
+	 *
+	 * @return {@code true} if an event with that true number was found
+	 */
+	public boolean goToTrueEventNumber(int trueEventNumber) {
+		if (source == null) {
+			return false;
+		}
+		ensureTrueEventIndex();
+		Integer sequence = trueEventIndex.get(trueEventNumber);
+		return sequence != null && goToSequence(sequence);
+	}
+
+	private void ensureTrueEventIndex() {
+		if (trueEventIndex != null && trueEventIndexSource == source) {
+			return;
+		}
+		Map<Integer, Integer> index = new HashMap<>();
+		int savedSequence = state.sequenceNumber();
+		if (goToSequence(1)) {
+			recordTrueEventNumber(index, state.snapshot(), 1);
+			int[] nextSequence = { 2 };
+			scanNext(Math.max(0, source.size() - 1), snapshot -> {
+				recordTrueEventNumber(index, snapshot, nextSequence[0]);
+				nextSequence[0]++;
+			});
+			if (savedSequence >= 1) {
+				goToSequence(savedSequence);
+			}
+		}
+		trueEventIndex = index;
+		trueEventIndexSource = source;
+	}
+
+	private static void recordTrueEventNumber(Map<Integer, Integer> index, EventSnapshot snapshot,
+			int sequenceNumber) {
+		RunConfig.from(snapshot).ifPresent(config -> index.put(config.event(), sequenceNumber));
 	}
 
 	@Override

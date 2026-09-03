@@ -8,10 +8,76 @@ import java.lang.reflect.Proxy;
 import java.util.ArrayList;
 import java.util.List;
 
+import org.jlab.io.base.DataBank;
 import org.jlab.io.base.DataEvent;
 import org.junit.jupiter.api.Test;
 
 class EventNavigatorTest {
+
+	@Test
+	void goesToTheEventWithAMatchingTrueEventNumber() {
+		EventNavigator navigator = new EventNavigator(new EventStore());
+		// true event numbers 100..104 at sequence numbers 1..5, one-to-one
+		navigator.open(new RunConfigSource(5, 100));
+
+		assertTrue(navigator.goToTrueEventNumber(103));
+		assertEquals(4, navigator.state().sequenceNumber());
+
+		// already-built index is reused for a second, different lookup
+		assertTrue(navigator.goToTrueEventNumber(100));
+		assertEquals(1, navigator.state().sequenceNumber());
+	}
+
+	@Test
+	void unmatchedTrueEventNumberLeavesPositionUnchanged() {
+		EventNavigator navigator = new EventNavigator(new EventStore());
+		navigator.open(new RunConfigSource(3, 100));
+		navigator.next();
+		assertEquals(2, navigator.state().sequenceNumber());
+
+		assertFalse(navigator.goToTrueEventNumber(999));
+		assertEquals(2, navigator.state().sequenceNumber());
+	}
+
+	private static final class RunConfigSource implements EventSource {
+		private final List<DataEvent> events;
+		private int index = -1;
+
+		RunConfigSource(int count, int firstTrueEventNumber) {
+			events = new ArrayList<>();
+			for (int i = 0; i < count; i++) {
+				events.add(runConfigEvent(firstTrueEventNumber + i));
+			}
+		}
+
+		private static DataEvent runConfigEvent(int trueEventNumber) {
+			DataBank runConfig = (DataBank) Proxy.newProxyInstance(DataBank.class.getClassLoader(),
+					new Class<?>[] { DataBank.class }, (bankProxy, bankMethod, bankArgs) ->
+							switch (bankMethod.getName()) {
+								case "getColumnList" -> new String[] { "run", "event", "solenoid", "torus" };
+								case "rows" -> 1;
+								case "getInt" -> "event".equals(bankArgs[0]) ? trueEventNumber : 11;
+								case "getFloat" -> 1.0f;
+								default -> null;
+							});
+			return (DataEvent) Proxy.newProxyInstance(DataEvent.class.getClassLoader(),
+					new Class<?>[] { DataEvent.class }, (proxy, method, args) -> switch (method.getName()) {
+						case "getBankList" -> new String[] { "RUN::config" };
+						case "hasBank" -> "RUN::config".equals(args[0]);
+						case "getBank" -> "RUN::config".equals(args[0]) ? runConfig : null;
+						default -> null;
+					});
+		}
+
+		@Override public String description() { return "run-config.hipo"; }
+		@Override public int size() { return events.size(); }
+		@Override public int index() { return index; }
+		@Override public boolean hasNext() { return index + 1 < events.size(); }
+		@Override public DataEvent next() { return events.get(++index); }
+		@Override public DataEvent previous() { return events.get(--index); }
+		@Override public DataEvent goTo(int target) { index = target; return events.get(index); }
+		@Override public void close() { }
+	}
 
 	@Test
 	void publishesOneBasedNavigationStatesAndClosesOldSource() {
