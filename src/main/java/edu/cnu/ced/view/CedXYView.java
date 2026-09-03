@@ -74,6 +74,7 @@ public abstract class CedXYView extends CedView {
 			drawXTicks(g, container, screen, world, metrics);
 			drawYTicks(g, container, screen, world, metrics);
 			drawOrientation(g, screen, metrics, xAxisPointsLeft(world));
+			drawAxisUnits(g, screen, metrics);
 		} finally {
 			g.dispose();
 		}
@@ -138,6 +139,23 @@ public abstract class CedXYView extends CedView {
 		g.drawString("x", horizontalEnd + (xToLeft ? -metrics.stringWidth("x") - 3 : 3),
 				bottom + metrics.getAscent() / 2);
 		g.drawString("y", anchorX + 3, top + metrics.getAscent() / 2);
+	}
+
+	/**
+	 * Labels each axis with its unit, since the tick labels themselves are
+	 * bare numbers -- every length in a CED view is centimeters, but that
+	 * shouldn't be something a reader has to already know or infer from the
+	 * feedback pane. Placed at fixed screen corners rather than attached to
+	 * the outermost tick, so this stays correctly positioned at any zoom or
+	 * pan.
+	 */
+	private static void drawAxisUnits(Graphics2D g, Rectangle screen, FontMetrics metrics) {
+		g.setColor(Color.BLACK);
+		String xUnit = "x (cm)";
+		g.drawString(xUnit, screen.x + screen.width - metrics.stringWidth(xUnit) - 6,
+				screen.y + screen.height - 6);
+		String yUnit = "y (cm)";
+		g.drawString(yUnit, screen.x + 6, screen.y + metrics.getAscent() + 4);
 	}
 
 	private static String axisValue(double value) {
