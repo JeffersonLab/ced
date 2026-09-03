@@ -345,6 +345,17 @@ public final class CedApplication extends BaseMDIApplication {
 
 	/** Launches the MDI application on the Swing event-dispatch thread. */
 	public static void main(String[] args) {
+		// sqlite-jdbc (used by the geometry cache) extracts its native library to
+		// java.io.tmpdir by default, under a fresh path most launches -- rewriting
+		// and (on macOS) re-scanning that executable every time. Pointing it at a
+		// stable, reused directory instead lets it detect the already-extracted,
+		// already-verified copy and skip that work. Startup timing showed
+		// GeometryCacheCoordinator's cache.open() taking anywhere from 440ms to
+		// 3.4s across otherwise-identical runs (every detector a cache hit both
+		// times) -- this is that variance's most likely source. Must be set before
+		// any class touches org.sqlite.JDBC, so it comes before everything else.
+		System.setProperty("org.sqlite.tmpdir",
+				Path.of(System.getProperty("user.home"), ".ced", "sqlite-native").toString());
 		launchOptions = CedLaunchOptions.parse(args);
 		StartupWindow[] holder = new StartupWindow[1];
 		try {
