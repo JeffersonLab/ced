@@ -11,12 +11,16 @@ import javax.swing.DefaultListModel;
 import javax.swing.JLabel;
 import javax.swing.JList;
 import javax.swing.JComponent;
+import javax.swing.ListSelectionModel;
 import javax.swing.JPanel;
 import javax.swing.JScrollPane;
 import javax.swing.JTabbedPane;
 import javax.swing.JTextArea;
 
 import edu.cnu.ced.event.EventNavigationState;
+import edu.cnu.ced.event.EventNavigator;
+import edu.cnu.ced.event.EventSnapshot;
+import edu.cnu.ced.view.currentevent.BankViewerOpener;
 import edu.cnu.mdi.component.CommonBorder;
 import edu.cnu.mdi.feedback.FeedbackPane;
 import edu.cnu.mdi.ui.colors.ColorScaleBar;
@@ -34,19 +38,22 @@ public final class CedControlPanel extends JPanel {
 	private final List<String> bankPrefixes;
 	private final JPanel displayPanel;
 	private final JTabbedPane tabs;
+	private final BankViewerOpener bankViewerOpener;
+	private EventSnapshot snapshot = EventSnapshot.empty();
 
-	public CedControlPanel(EnumSet<CedDisplayOption> options, List<String> bankPrefixes,
-			FeedbackPane feedback, ScientificColorMap colorMap, String legendTitle,
-			Runnable displayChanged) {
-		this(options, bankPrefixes, feedback, colorMap, legendTitle, displayChanged,
+	public CedControlPanel(EventNavigator navigator, EnumSet<CedDisplayOption> options,
+			List<String> bankPrefixes, FeedbackPane feedback, ScientificColorMap colorMap,
+			String legendTitle, Runnable displayChanged) {
+		this(navigator, options, bankPrefixes, feedback, colorMap, legendTitle, displayChanged,
 				DEFAULT_WIDTH);
 	}
 
-	public CedControlPanel(EnumSet<CedDisplayOption> options, List<String> bankPrefixes,
-			FeedbackPane feedback, ScientificColorMap colorMap, String legendTitle,
-			Runnable displayChanged, int width) {
+	public CedControlPanel(EventNavigator navigator, EnumSet<CedDisplayOption> options,
+			List<String> bankPrefixes, FeedbackPane feedback, ScientificColorMap colorMap,
+			String legendTitle, Runnable displayChanged, int width) {
 		super(new BorderLayout());
 		this.bankPrefixes = List.copyOf(bankPrefixes);
+		this.bankViewerOpener = BankViewerOpener.sharedFor(navigator);
 		int panelWidth = Math.max(DEFAULT_WIDTH, width);
 		setPreferredSize(new Dimension(panelWidth, 420));
 		displayArray = new CedDisplayArray(options, 3, 4, 3, displayChanged);
@@ -91,6 +98,12 @@ public final class CedControlPanel extends JPanel {
 		tabs.addTab("display", displayPanel);
 
 		JList<String> banks = new JList<>(bankModel);
+		banks.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
+		banks.getSelectionModel().addListSelectionListener(event -> {
+			if (event.getValueIsAdjusting()) return;
+			String bankName = banks.getSelectedValue();
+			if (bankName != null) bankViewerOpener.open(bankName, snapshot);
+		});
 		tabs.addTab("banks", new JScrollPane(banks));
 		add(tabs, BorderLayout.NORTH);
 		add(feedback, BorderLayout.CENTER);
@@ -132,8 +145,9 @@ public final class CedControlPanel extends JPanel {
 		} else {
 			eventSummary.setText("No event source open");
 		}
+		snapshot = state.snapshot();
 		bankModel.clear();
-		state.snapshot().bankNames().stream().filter(this::matches).forEach(bankModel::addElement);
+		snapshot.bankNames().stream().filter(this::matches).forEach(bankModel::addElement);
 	}
 
 	private boolean matches(String bank) {

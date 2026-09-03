@@ -2,6 +2,7 @@ package edu.cnu.ced.view.currentevent;
 
 import java.util.HashMap;
 import java.util.Map;
+import java.util.WeakHashMap;
 
 import org.jlab.io.base.DataBank;
 
@@ -10,12 +11,19 @@ import edu.cnu.ced.event.EventSnapshot;
 
 /**
  * Opens and caches per-bank data viewers -- the double-click behavior of the
- * present-banks list -- dispatching to a free floating window or an
- * MDI-internal view per {@link BankViewerDisplayMode}, exactly like legacy
- * CED's Ced.isFloatingBankDisplay() switch between CedDataWindow and
- * CedDataView.
+ * present-banks list, and also the single-click behavior of a detector
+ * view's own "banks" tab (see {@code CedControlPanel}) -- dispatching to a
+ * free floating window or an MDI-internal view per
+ * {@link BankViewerDisplayMode}, exactly like legacy CED's
+ * Ced.isFloatingBankDisplay() switch between CedDataWindow and CedDataView.
  */
 public final class BankViewerOpener {
+
+	// one opener per navigator, so every entry point that can open a bank
+	// viewer -- the Current Event view's present-banks list, and every
+	// detector view's own banks tab -- reuses the very same cached window
+	// for a given bank name instead of each keeping an independent cache.
+	private static final Map<EventNavigator, BankViewerOpener> SHARED = new WeakHashMap<>();
 
 	private final EventNavigator navigator;
 	private final BankColumnVisibility visibility;
@@ -28,6 +36,12 @@ public final class BankViewerOpener {
 		this.navigator = navigator;
 		this.visibility = visibility;
 		this.displayMode = displayMode;
+	}
+
+	/** @return the single {@link BankViewerOpener} shared by every view driven by {@code navigator} */
+	public static synchronized BankViewerOpener sharedFor(EventNavigator navigator) {
+		return SHARED.computeIfAbsent(navigator, nav -> new BankViewerOpener(nav,
+				new BankColumnVisibility(), new BankViewerDisplayMode()));
 	}
 
 	/**

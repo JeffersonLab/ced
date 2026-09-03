@@ -60,7 +60,7 @@ public abstract class CedView extends BaseView {
 			List<String> bankPrefixes, ScientificColorMap colorMap, String legendTitle,
 			int controlWidth) {
 		FeedbackPane feedback = initFeedback(Color.CYAN, Color.BLACK, 10);
-		controls = new CedControlPanel(options, bankPrefixes, feedback, colorMap,
+		controls = new CedControlPanel(navigator, options, bankPrefixes, feedback, colorMap,
 				legendTitle, this::refresh, controlWidth);
 		add(controls, BorderLayout.EAST);
 		// BaseView packs its canvas before detector-specific controls are installed.

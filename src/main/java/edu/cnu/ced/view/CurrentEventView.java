@@ -31,8 +31,6 @@ import edu.cnu.ced.event.RunConfig;
 import edu.cnu.ced.view.currentevent.BankColumnCatalog;
 import edu.cnu.ced.view.currentevent.BankColumnEntry;
 import edu.cnu.ced.view.currentevent.BankColumnTable;
-import edu.cnu.ced.view.currentevent.BankColumnVisibility;
-import edu.cnu.ced.view.currentevent.BankViewerDisplayMode;
 import edu.cnu.ced.view.currentevent.BankViewerOpener;
 import edu.cnu.ced.view.currentevent.PresentBanksPanel;
 import edu.cnu.ced.view.currentevent.SeenBankTally;
@@ -71,8 +69,7 @@ public final class CurrentEventView extends BaseView {
 				PropertyUtils.HEIGHT, 650,
 				PropertyUtils.USECONTAINER, false);
 		this.navigator = navigator;
-		this.bankViewerOpener = new BankViewerOpener(navigator, new BankColumnVisibility(),
-				new BankViewerDisplayMode());
+		this.bankViewerOpener = BankViewerOpener.sharedFor(navigator);
 
 		JPanel header = new JPanel(new BorderLayout(8, 4));
 		header.setBorder(BorderFactory.createEmptyBorder(8, 8, 4, 8));
