@@ -176,6 +176,7 @@ public final class CedApplication extends BaseMDIApplication {
 		// BaseMDIApplication invokes this callback from its constructor, before
 		// subclass field initializers run. Construct application services here.
 		long startupStarted = System.nanoTime();
+		installStartupMarker();
 		eventStore = new EventStore();
 		eventNavigator = new EventNavigator(eventStore);
 		accumulationService = new AccumulationService();
@@ -344,8 +345,38 @@ public final class CedApplication extends BaseMDIApplication {
 		super.prepareForShutdown();
 	}
 
+	/** @return milliseconds since the JVM itself started (not since main() began) */
+	private static long jvmUptimeMillis() {
+		return java.lang.management.ManagementFactory.getRuntimeMXBean().getUptime();
+	}
+
+	/**
+	 * Diagnostic only: logs when this frame's windowOpened fires (the point
+	 * Swing itself considers the main window shown), then posts a further
+	 * invokeLater from inside that handler to catch any work Swing queued
+	 * alongside opening it (typically the first real paint) that would
+	 * otherwise run invisibly between "window shown" and "actually settled".
+	 * Isolates whether a slow startup is still CED/EDT work at that point, or
+	 * something outside the JVM's control (OS/window-manager) once this fires.
+	 */
+	private void installStartupMarker() {
+		addWindowListener(new java.awt.event.WindowAdapter() {
+			@Override
+			public void windowOpened(java.awt.event.WindowEvent event) {
+				Log.getInstance().config("Startup timing - windowOpened, JVM uptime: "
+						+ jvmUptimeMillis() + " ms");
+				SwingUtilities.invokeLater(() -> Log.getInstance().config(
+						"Startup timing - EDT drained after windowOpened, JVM uptime: "
+								+ jvmUptimeMillis() + " ms"));
+				removeWindowListener(this);
+			}
+		});
+	}
+
 	/** Launches the MDI application on the Swing event-dispatch thread. */
 	public static void main(String[] args) {
+		Log.getInstance().config("Startup timing - main() entered, JVM uptime: "
+				+ jvmUptimeMillis() + " ms");
 		// sqlite-jdbc (used by the geometry cache) extracts its native library to
 		// java.io.tmpdir by default, under a fresh path most launches -- rewriting
 		// and (on macOS) re-scanning that executable every time. Pointing it at a
@@ -390,6 +421,8 @@ public final class CedApplication extends BaseMDIApplication {
 				}
 			}
 		}
+		Log.getInstance().config("Startup timing - bootstrap done, launching MDI shell, JVM uptime: "
+				+ jvmUptimeMillis() + " ms");
 		BaseMDIApplication.launch(CedApplication::getInstance);
 	}
 }
