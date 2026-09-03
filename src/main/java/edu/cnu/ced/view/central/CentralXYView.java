@@ -63,6 +63,9 @@ public final class CentralXYView extends CedXYView implements MagneticFieldChang
 	private static final Color BMT_LABEL = new Color(35, 75, 145, 145);
 	private static final Color RECON_COLOR = new Color(225, 35, 25);
 	private static final Color CLUSTER_COLOR = new Color(205, 0, 205);
+	// CND::adc's own bank schema documents order 0=ADCL/1=ADCR; CND::tdc's documents
+	// order 2=TDCL/3=TDCR -- a constant +2 offset, not the same raw values.
+	private static final int TDC_ORDER_OFFSET = 2;
 	private final BSTGeometry bst; private final BMTGeometry bmt; private final CNDGeometry cnd; private final CTOFGeometry ctof;
 	private final CentralAccumulation accumulation;
 	private final SwimTrajectoryCache swimCache;
@@ -194,8 +197,9 @@ public final class CentralXYView extends CedXYView implements MagneticFieldChang
 	private static void drawCenteredLabel(Graphics2D g,Point p,String text,Color color){Font old=g.getFont();g.setFont(old.deriveFont(Font.BOLD,Math.max(10f,old.getSize2D())));g.setColor(color);g.drawString(text,p.x-g.getFontMetrics().stringWidth(text)/2,p.y+g.getFontMetrics().getAscent()/3);g.setFont(old);}
 	private static Point screen(IContainer c,double x,double y){Point p=new Point();c.worldToLocal(p,x,y);return p;}
 	private static boolean matches(Element e,AdcHit h){return e.detector==h.detector()&&e.sector==h.sector()&&e.layer==h.layer()&&e.component==h.component()&&(e.detector!=Detector.CND||e.order==h.order());}
-	// CND::tdc shares CND::adc's (sector, layer, component, order) addressing convention, so this mirrors matches(Element, AdcHit)'s CND branch exactly.
-	private static boolean matchesTdc(Element e,TdcHit h){return e.sector==h.sector()&&e.layer==h.layer()&&e.component==h.component()&&e.order==h.order();}
+	// e.order was derived to match CND::adc's (0/1) convention; see TDC_ORDER_OFFSET.
+	/** Package-private (not private) so a test can exercise this directly. */
+	static boolean matchesTdc(Element e,TdcHit h){return e.sector==h.sector()&&e.layer==h.layer()&&e.component==h.component()&&(e.order+TDC_ORDER_OFFSET)==h.order();}
 	private static boolean validBST(int sector,int layer,int strip){return layer>=1&&layer<=6&&sector>=1&&sector<=BSTGeometry.SECTORS_PER_LAYER[layer-1]&&strip>=1&&strip<=256;}
 	private static int bmtSector(int dataSector){return dataSector==2?0:dataSector==1?1:2;}
 	private static double normalizeDegrees(double degrees){double d=degrees%360;return d<0?d+360:d;}
@@ -204,7 +208,8 @@ public final class CentralXYView extends CedXYView implements MagneticFieldChang
 	private static Arc2D arc(IContainer c,double radius,double start,double extent){Point center=screen(c,0,0),edge=screen(c,radius,0);double rp=Math.abs(edge.x-center.x);return new Arc2D.Double(center.x-rp,center.y-rp,2*rp,2*rp,start,extent,Arc2D.OPEN);}
 	private static void drawArcStroke(Graphics2D g,IContainer c,double radius,double start,double extent,Color color,float width){g.setColor(color);g.setStroke(new BasicStroke(width));g.draw(arc(c,radius,start,extent));}
 	private static void drawArc(Graphics2D g,IContainer c,double radius,double start,double extent,Color color){drawArcStroke(g,c,radius,start,extent,color,4f);drawArcStroke(g,c,radius,start,extent,Color.DARK_GRAY,1f);}
-	private record Element(Detector detector,int sector,int layer,int component,int order){}
+	/** Package-private (not private) so a test can construct one to exercise matchesTdc directly. */
+	record Element(Detector detector,int sector,int layer,int component,int order){}
 	private record PanelAddress(int sector,int layer){}
 
 	@Override public void magneticFieldChanged(){fieldProbe=FieldProbe.factory();refresh();}
