@@ -428,7 +428,9 @@ public final class CentralZView extends CedView implements MagneticFieldChangeLi
 		Point origin = screen(c, 0, 0);
 		g.setColor(new Color(110, 0, 90));
 		g.drawLine(0, origin.y, screen.width, origin.y);
-		g.drawString("z", screen.width - fm.stringWidth("z") - 6, origin.y - 4);
+		g.drawString("z (cm)", screen.width - fm.stringWidth("z (cm)") - 6, origin.y - 4);
+		g.setColor(Color.BLACK);
+		g.drawString("transverse (cm)", 10, 34);
 		g.drawString(String.format("projection φ = %.1f°", phiDegrees), 10, 18);
 		drawTicks(g, c, fm);
 		drawCompass(g, screen, fm);
@@ -507,8 +509,29 @@ public final class CentralZView extends CedView implements MagneticFieldChangeLi
 		return p;
 	}
 
+	/**
+	 * Projects lab (x, y) onto the current projection-phi direction to get
+	 * this view's "transverse" screen coordinate. Previously negated the
+	 * result ({@code -(x*cosPhi + y*sinPhi)}), which put every object at
+	 * the mirror-image position of its own reported coordinates -- caught
+	 * against a real BST cross: hovering it showed "xyz (-6.139, ...)" in
+	 * one feedback line and "(z, transverse) = (..., 6.13)" (the positive
+	 * mirror) in another, for the very same point. This also disagreed
+	 * with {@link #drawCompass}'s own (unnegated) direction arrows, which
+	 * had -- correctly -- always assumed the un-negated convention used
+	 * here now.
+	 */
 	private double projected(double x, double y) {
-		return -(x * cosPhi + y * sinPhi);
+		return projectTransverse(x, y, cosPhi, sinPhi);
+	}
+
+	/**
+	 * The pure formula behind {@link #projected}, exposed statically
+	 * (package-private, not private) so a test can exercise it directly
+	 * without constructing a full view.
+	 */
+	static double projectTransverse(double x, double y, double cosPhi, double sinPhi) {
+		return x * cosPhi + y * sinPhi;
 	}
 
 	private int maximumTrackerAdc() {
