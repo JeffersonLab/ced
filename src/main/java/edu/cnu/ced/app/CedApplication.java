@@ -81,7 +81,6 @@ public final class CedApplication extends BaseMDIApplication {
 	private MagneticFieldService magneticFieldService;
 	private GeometryService geometryService;
 	private LogView logView;
-	private JsonView jsonView;
 	private CurrentEventView currentEventView;
 	private Clas12Resources clas12Resources;
 	private AccumulationService accumulationService;
@@ -196,7 +195,8 @@ public final class CedApplication extends BaseMDIApplication {
 			geometryService = new GeometryService();
 		}
 		timeStep("LogView", () -> logView = new LogView());
-		timeStep("JsonView", () -> jsonView = new JsonView());
+		timeStep("JSON Viewer (lazy registration)", () -> ViewManager.getInstance().addConfiguration(
+				ViewConfiguration.lazy("JSON Viewer", JsonView::new, 17, 0, 0, VirtualView.BOTTOMRIGHT)));
 		timeStep("CurrentEventView", () -> currentEventView = new CurrentEventView(eventNavigator));
 		timeStep("FTCal XY (lazy registration)", () -> ViewManager.getInstance().addConfiguration(
 				ViewConfiguration.lazy("FTCal XY", () -> new FTCalXYView(geometryService.ftcal(),
@@ -338,7 +338,9 @@ public final class CedApplication extends BaseMDIApplication {
 	protected void defaultViewLayout() {
 		virtualViewMove(currentEventView, 1, VirtualView.CENTER);
 		virtualViewMove(logView, 17, VirtualView.UPPERLEFT);
-		virtualViewMove(jsonView, 17, VirtualView.BOTTOMRIGHT);
+		// JSON Viewer is now lazy (see addInitialViews): its own ViewConfiguration
+		// placement (column 17, BOTTOMRIGHT) applies automatically once it's first
+		// opened from the Views menu, so there's nothing to position here.
 	}
 
 	@Override
