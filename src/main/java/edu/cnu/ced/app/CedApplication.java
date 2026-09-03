@@ -4,6 +4,7 @@ import java.io.File;
 import java.io.IOException;
 import java.nio.file.Path;
 import java.util.prefs.Preferences;
+import javax.swing.JCheckBoxMenuItem;
 import javax.swing.JMenu;
 import javax.swing.JMenuItem;
 import javax.swing.JOptionPane;
@@ -24,6 +25,7 @@ import edu.cnu.ced.magfield.RunFieldScaleApplier;
 import edu.cnu.ced.resources.Clas12Resources;
 import edu.cnu.ced.swim.SwimTrajectoryCache;
 import edu.cnu.ced.view.CurrentEventView;
+import edu.cnu.ced.view.currentevent.BankViewerDisplayMode;
 import edu.cnu.ced.view.ftcal.FTCalXYView;
 import edu.cnu.ced.view.ftof.FTOFView;
 import edu.cnu.ced.view.pcal.PCalView;
@@ -99,6 +101,15 @@ public final class CedApplication extends BaseMDIApplication {
 
 	private void addCedOptions() {
 		JMenu options = new JMenu("Options");
+
+		BankViewerDisplayMode bankViewerDisplayMode = new BankViewerDisplayMode();
+		JCheckBoxMenuItem floatingBankViews = new JCheckBoxMenuItem("Bank Views are Free Floating",
+				bankViewerDisplayMode.isFloating());
+		floatingBankViews.addActionListener(
+				event -> bankViewerDisplayMode.setFloating(floatingBankViews.isSelected()));
+		options.add(floatingBankViews);
+		options.addSeparator();
+
 		JMenuItem deleteCache = new JMenuItem("Delete Geometry Cache…");
 		deleteCache.addActionListener(event -> deleteGeometryCache());
 		options.add(deleteCache);

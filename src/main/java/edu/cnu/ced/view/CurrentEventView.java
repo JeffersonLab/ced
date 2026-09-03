@@ -31,6 +31,10 @@ import edu.cnu.ced.event.RunConfig;
 import edu.cnu.ced.view.currentevent.BankColumnCatalog;
 import edu.cnu.ced.view.currentevent.BankColumnEntry;
 import edu.cnu.ced.view.currentevent.BankColumnTable;
+import edu.cnu.ced.view.currentevent.BankColumnVisibility;
+import edu.cnu.ced.view.currentevent.BankViewerDisplayMode;
+import edu.cnu.ced.view.currentevent.BankViewerOpener;
+import edu.cnu.ced.view.currentevent.PresentBanksPanel;
 import edu.cnu.ced.view.currentevent.SeenBankTally;
 import edu.cnu.mdi.ui.fonts.Fonts;
 import edu.cnu.mdi.util.PropertyUtils;
@@ -53,6 +57,9 @@ public final class CurrentEventView extends BaseView {
 	private final BankColumnTable columnTable = new BankColumnTable();
 	private final SeenBankTally seenBankTally = new SeenBankTally();
 	private final DefaultListModel<String> seenBankModel = new DefaultListModel<>();
+	private final PresentBanksPanel presentBanksPanel =
+			new PresentBanksPanel(this::scrollToBank, this::openBankViewer);
+	private final BankViewerOpener bankViewerOpener;
 	private final Consumer<EventNavigationState> stateListener = this::acceptState;
 	private final Runnable sourceListener = this::acceptNewSource;
 
@@ -64,6 +71,8 @@ public final class CurrentEventView extends BaseView {
 				PropertyUtils.HEIGHT, 650,
 				PropertyUtils.USECONTAINER, false);
 		this.navigator = navigator;
+		this.bankViewerOpener = new BankViewerOpener(navigator, new BankColumnVisibility(),
+				new BankViewerDisplayMode());
 
 		JPanel header = new JPanel(new BorderLayout(8, 4));
 		header.setBorder(BorderFactory.createEmptyBorder(8, 8, 4, 8));
@@ -106,6 +115,7 @@ public final class CurrentEventView extends BaseView {
 		add(header, BorderLayout.NORTH);
 		add(center, BorderLayout.CENTER);
 		add(seenBanksPanel(), BorderLayout.WEST);
+		add(presentBanksPanel, BorderLayout.EAST);
 		navigator.addListener(stateListener);
 		navigator.addSourceListener(sourceListener);
 		applyState(navigator.state());
@@ -213,9 +223,20 @@ public final class CurrentEventView extends BaseView {
 		snapshot = state.snapshot();
 		valueListModel.clear();
 		columnTable.bankColumnModel().setEntries(BankColumnCatalog.build(snapshot));
+		presentBanksPanel.setBankNames(snapshot.bankNames());
 
 		seenBankTally.accept(snapshot);
 		refreshSeenBanks();
+	}
+
+	// single-click on the present-banks list: scroll/select that bank in the central table
+	private void scrollToBank(String bankName) {
+		columnTable.makeBankVisible(bankName);
+	}
+
+	// double-click on the present-banks list: open (or bring to front) that bank's data viewer
+	private void openBankViewer(String bankName) {
+		bankViewerOpener.open(bankName, snapshot);
 	}
 
 	@Override
