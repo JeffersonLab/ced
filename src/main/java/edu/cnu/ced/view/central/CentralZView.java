@@ -11,8 +11,11 @@ import java.awt.Point;
 import java.awt.Polygon;
 import java.awt.Rectangle;
 import java.awt.RenderingHints;
+import java.awt.Stroke;
+import java.awt.geom.Line2D;
 import java.awt.geom.Point2D;
 import java.awt.geom.Rectangle2D;
+import java.util.ArrayList;
 import java.util.EnumSet;
 import java.util.HashMap;
 import java.util.List;
@@ -22,6 +25,10 @@ import javax.swing.BorderFactory;
 import javax.swing.JPanel;
 import javax.swing.JSlider;
 
+import cnuphys.magfield.FieldProbe;
+import cnuphys.magfield.MagneticFieldChangeListener;
+import cnuphys.magfield.MagneticFields;
+
 import edu.cnu.ced.component.CedDisplayOption;
 import edu.cnu.ced.data.CentralAccumulation;
 import edu.cnu.ced.data.CentralEventData;
@@ -29,11 +36,14 @@ import edu.cnu.ced.data.CentralEventData.AdcHit;
 import edu.cnu.ced.data.CentralEventData.Cross;
 import edu.cnu.ced.data.CentralEventData.Detector;
 import edu.cnu.ced.data.CentralEventData.ReconHit;
+import edu.cnu.ced.data.RecEventData;
 import edu.cnu.ced.event.EventNavigationState;
 import edu.cnu.ced.event.EventNavigator;
 import edu.cnu.ced.geometry.BMTGeometry;
 import edu.cnu.ced.geometry.BSTGeometry;
 import edu.cnu.ced.geometry.Point3;
+import edu.cnu.ced.style.CedDrawingStyle;
+import edu.cnu.ced.swim.SwimTrajectoryCache;
 import edu.cnu.ced.view.CedView;
 import edu.cnu.mdi.component.AspectRatioPanel;
 import edu.cnu.mdi.container.IContainer;
@@ -44,7 +54,7 @@ import edu.cnu.mdi.util.PropertyUtils;
 
 /** Longitudinal projection of the central tracking detectors. */
 @SuppressWarnings("serial")
-public final class CentralZView extends CedView {
+public final class CentralZView extends CedView implements MagneticFieldChangeListener {
 
 	private static final Color BST_FILL = new Color(128, 128, 128, 28);
 	private static final Color BST_EDGE = new Color(120, 120, 120, 105);
@@ -57,16 +67,20 @@ public final class CentralZView extends CedView {
 	private final BSTGeometry bst;
 	private final BMTGeometry bmt;
 	private final CentralAccumulation accumulation;
+	private final SwimTrajectoryCache swimCache;
 	private final Map<PanelAddress, List<Polygon>> panels = new HashMap<>();
 	private final Map<Object, Point> markers = new HashMap<>();
 	private final Map<Integer, Rectangle[]> bmtLayers = new HashMap<>();
+	private final List<ScreenParticle> screenParticles = new ArrayList<>();
 	private double phiDegrees;
 	private double cosPhi = 1;
 	private double sinPhi;
 	private volatile CentralEventData data = CentralEventData.from(null);
+	private volatile RecEventData recData = RecEventData.from(null);
+	private volatile FieldProbe fieldProbe = FieldProbe.factory();
 
 	public CentralZView(BSTGeometry bst, BMTGeometry bmt, EventNavigator navigator,
-			CentralAccumulation accumulation) {
+			CentralAccumulation accumulation, SwimTrajectoryCache swimCache) {
 		super(navigator, PropertyUtils.TITLE, "Central Z", PropertyUtils.WIDTH, 900,
 				PropertyUtils.HEIGHT, 780, PropertyUtils.WORLDSYSTEM,
 				new Rectangle2D.Double(-24, -23, 52, 46), PropertyUtils.BACKGROUND,
@@ -75,14 +89,17 @@ public final class CentralZView extends CedView {
 		this.bst = bst;
 		this.bmt = bmt;
 		this.accumulation = accumulation;
+		this.swimCache = swimCache;
 		installAspectRatioCanvas(52.0 / 46.0);
 		setAfterDraw(this::draw);
 		initializeCedView(EnumSet.of(CedDisplayOption.SINGLE_EVENT,
 				CedDisplayOption.ACCUMULATION, CedDisplayOption.RAW_DATA,
-				CedDisplayOption.RECON_HITS, CedDisplayOption.CROSSES),
+				CedDisplayOption.RECON_HITS, CedDisplayOption.CROSSES,
+				CedDisplayOption.PARTICLES),
 				List.of("BST", "BMT", "CND", "CTOF", "CVT"),
 				ScientificColorMap.TURBO, "Relative ADC / accumulation");
 		addDisplayControl(createPhiControl());
+		MagneticFields.getInstance().addMagneticFieldChangeListener(this);
 	}
 
 	private JPanel createPhiControl() {
@@ -113,6 +130,8 @@ public final class CentralZView extends CedView {
 	@Override
 	protected void eventChanged(EventNavigationState state) {
 		data = CentralEventData.from(state.snapshot());
+		recData = RecEventData.from(state.snapshot());
+		swimCache.forEvent(state.snapshot());
 	}
 
 	private void draw(Graphics2D graphics, IContainer container) {
@@ -123,6 +142,7 @@ public final class CentralZView extends CedView {
 			panels.clear();
 			markers.clear();
 			bmtLayers.clear();
+			screenParticles.clear();
 			drawBMT(g, container);
 			drawBST(g, container);
 			if (isDisplayed(CedDisplayOption.ACCUMULATION)) drawAccumulation(g, container);
@@ -130,10 +150,44 @@ public final class CentralZView extends CedView {
 				if (isDisplayed(CedDisplayOption.RAW_DATA)) drawAdc(g, container);
 				if (isDisplayed(CedDisplayOption.RECON_HITS)) drawRecon(g, container);
 				if (isDisplayed(CedDisplayOption.CROSSES)) drawCrosses(g, container);
+				if (isDisplayed(CedDisplayOption.PARTICLES)) drawParticles(g, container);
 			}
 			drawAxes(g, container);
 		} finally {
 			g.dispose();
+		}
+	}
+
+	/**
+	 * Draws each reconstructed particle's swum trajectory projected onto
+	 * this view's (z, transverse) plane, using the same {@link #projected}
+	 * azimuthal projection (and its live phi slider) that BST/BMT hits and
+	 * crosses already use -- so a trajectory rotates in sync with the rest
+	 * of the display as the slider moves. Uses the same shared {@link
+	 * SwimTrajectoryCache} as SectorView/CentralXYView, so a particle
+	 * already swum for another view isn't re-swum here.
+	 */
+	private void drawParticles(Graphics2D g, IContainer c) {
+		for (RecEventData.Particle particle : recData.particles()) {
+			List<Point3> swum = swimCache.trajectory(particle, fieldProbe);
+			if (swum.size() < 2) continue;
+			Color color = CedDrawingStyle.particleColor(particle.pid(), particle.charge());
+			Stroke stroke = CedDrawingStyle.particleStroke(particle.pid(), particle.charge());
+			List<Point> points = new ArrayList<>(swum.size());
+			for (Point3 p : swum) points.add(screen(c, p.z(), projected(p.x(), p.y())));
+			g.setColor(color);
+			g.setStroke(stroke);
+			for (int i = 1; i < points.size(); i++) {
+				Point a = points.get(i - 1), b = points.get(i);
+				g.drawLine(a.x, a.y, b.x, b.y);
+			}
+			Point vertex = points.get(0);
+			screenParticles.add(new ScreenParticle(particle, points));
+			g.setColor(color);
+			g.fillOval(vertex.x - 3, vertex.y - 3, 6, 6);
+			g.setColor(CedDrawingStyle.outline(color));
+			g.setStroke(new BasicStroke(1f));
+			g.drawOval(vertex.x - 3, vertex.y - 3, 6, 6);
 		}
 	}
 
@@ -334,7 +388,35 @@ public final class CentralZView extends CedView {
 						cross.detector(), cross.id(), cross.sector(), cross.region(),
 						cross.x(), cross.y(), cross.z()));
 		}
+		for (ScreenParticle drawn : screenParticles) {
+			if (nearAnySegment(drawn.points(), sp, 5.0)) {
+				addParticleFeedback(drawn.particle(), feedback);
+				break;
+			}
+		}
 	}
+
+	/** Hover feedback for anywhere along a drawn trajectory, not just its vertex marker. */
+	private static void addParticleFeedback(RecEventData.Particle p, List<String> f) {
+		f.add(String.format("$deep sky blue$%s (pid %d, q=%+d)", p.displayName(), p.pid(), p.charge()));
+		f.add(String.format("$deep sky blue$p = %.3f GeV/c  theta = %.1f°  phi = %.1f°",
+				p.p(), Math.toDegrees(p.theta()), Math.toDegrees(p.phi())));
+		f.add(String.format("$deep sky blue$vertex (%.2f, %.2f, %.2f) cm", p.vx(), p.vy(), p.vz()));
+		if (p.beta() != 0f || p.chi2pid() != 0f) {
+			f.add(String.format("$deep sky blue$beta = %.3f  chi2pid = %.2f", p.beta(), p.chi2pid()));
+		}
+	}
+
+	/** @return true if screenPoint lies within tolerance pixels of any segment of the polyline points. */
+	private static boolean nearAnySegment(List<Point> points, Point screenPoint, double tolerance) {
+		for (int i = 1; i < points.size(); i++) {
+			Point a = points.get(i - 1), b = points.get(i);
+			if (Line2D.ptSegDist(a.x, a.y, b.x, b.y, screenPoint.x, screenPoint.y) <= tolerance) return true;
+		}
+		return false;
+	}
+
+	private record ScreenParticle(RecEventData.Particle particle, List<Point> points) { }
 
 	private void drawAxes(Graphics2D g, IContainer c) {
 		Rectangle screen = new Rectangle(0, 0, c.getComponent().getWidth() - 1,
@@ -483,4 +565,16 @@ public final class CentralZView extends CedView {
 	}
 
 	private record PanelAddress(int sector, int layer) { }
+
+	@Override
+	public void magneticFieldChanged() {
+		fieldProbe = FieldProbe.factory();
+		refresh();
+	}
+
+	@Override
+	public void dispose() {
+		MagneticFields.getInstance().removeMagneticFieldChangeListener(this);
+		super.dispose();
+	}
 }

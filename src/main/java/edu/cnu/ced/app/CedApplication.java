@@ -205,7 +205,7 @@ public final class CedApplication extends BaseMDIApplication {
 				7, 0, 0, VirtualView.CENTER));
 		ViewManager.getInstance().addConfiguration(ViewConfiguration.eager(
 				"Central Z", () -> new CentralZView(geometryService.bst(), geometryService.bmt(),
-						eventNavigator, accumulationService.central()),
+						eventNavigator, accumulationService.central(), swimCache),
 				8, 0, 0, VirtualView.CENTER));
 		ViewManager.getInstance().addConfiguration(ViewConfiguration.eager(
 				"All Drift Chambers", () -> new AllDCView(geometryService.dc(), eventNavigator,
