@@ -3,6 +3,7 @@ package edu.cnu.ced.app;
 import java.io.File;
 import java.io.IOException;
 import java.nio.file.Path;
+import java.util.concurrent.TimeUnit;
 import java.util.prefs.Preferences;
 import javax.swing.JCheckBoxMenuItem;
 import javax.swing.JMenu;
@@ -173,6 +174,7 @@ public final class CedApplication extends BaseMDIApplication {
 	protected void addInitialViews() {
 		// BaseMDIApplication invokes this callback from its constructor, before
 		// subclass field initializers run. Construct application services here.
+		long startupStarted = System.nanoTime();
 		eventStore = new EventStore();
 		eventNavigator = new EventNavigator(eventStore);
 		accumulationService = new AccumulationService();
@@ -189,65 +191,77 @@ public final class CedApplication extends BaseMDIApplication {
 			magneticFieldService = new MagneticFieldService();
 			geometryService = new GeometryService();
 		}
-		logView = new LogView();
-
-        jsonView = new JsonView();
-		currentEventView = new CurrentEventView(eventNavigator);
-		ViewManager.getInstance().addConfiguration(ViewConfiguration.lazy(
-				"FTCal XY", () -> new FTCalXYView(geometryService.ftcal(), eventNavigator,
-						accumulationService.ftcal()),
-				8, 0, 0, VirtualView.CENTER));
-		ViewManager.getInstance().addConfiguration(ViewConfiguration.eager(
+		timeStep("LogView", () -> logView = new LogView());
+		timeStep("JsonView", () -> jsonView = new JsonView());
+		timeStep("CurrentEventView", () -> currentEventView = new CurrentEventView(eventNavigator));
+		timeStep("FTCal XY (lazy registration)", () -> ViewManager.getInstance().addConfiguration(
+				ViewConfiguration.lazy("FTCal XY", () -> new FTCalXYView(geometryService.ftcal(),
+						eventNavigator, accumulationService.ftcal()),
+						8, 0, 0, VirtualView.CENTER)));
+		timeStep("PCAL", () -> ViewManager.getInstance().addConfiguration(ViewConfiguration.eager(
 				"PCAL", () -> new PCalView(geometryService.pcal(), eventNavigator,
 						accumulationService.pcal()),
-				4, 0, 0, VirtualView.CENTERRIGHT));
-		ViewManager.getInstance().addConfiguration(ViewConfiguration.eager(
+				4, 0, 0, VirtualView.CENTERRIGHT)));
+		timeStep("ECAL", () -> ViewManager.getInstance().addConfiguration(ViewConfiguration.eager(
 				"ECAL", () -> new ECalView(geometryService.ec(), eventNavigator,
 						accumulationService.ecal()),
-				4, 0, 0, VirtualView.CENTERLEFT));
-		ViewManager.getInstance().addConfiguration(ViewConfiguration.lazy(
-				"FTOF", () -> new FTOFView(geometryService.ftof(), eventNavigator,
-						accumulationService.ftof()),
-				6, 0, 0, VirtualView.CENTER));
-		ViewManager.getInstance().addConfiguration(ViewConfiguration.eager(
+				4, 0, 0, VirtualView.CENTERLEFT)));
+		timeStep("FTOF (lazy registration)", () -> ViewManager.getInstance().addConfiguration(
+				ViewConfiguration.lazy("FTOF", () -> new FTOFView(geometryService.ftof(),
+						eventNavigator, accumulationService.ftof()),
+						6, 0, 0, VirtualView.CENTER)));
+		timeStep("Central XY", () -> ViewManager.getInstance().addConfiguration(ViewConfiguration.eager(
 				"Central XY", () -> new CentralXYView(geometryService.bst(), geometryService.bmt(),
 						geometryService.cnd(), geometryService.ctof(), eventNavigator,
 						accumulationService.central(), swimCache),
-				7, 0, 0, VirtualView.CENTER));
-		ViewManager.getInstance().addConfiguration(ViewConfiguration.eager(
+				7, 0, 0, VirtualView.CENTER)));
+		timeStep("Central Z", () -> ViewManager.getInstance().addConfiguration(ViewConfiguration.eager(
 				"Central Z", () -> new CentralZView(geometryService.bst(), geometryService.bmt(),
 						eventNavigator, accumulationService.central(), swimCache),
-				8, 0, 0, VirtualView.CENTER));
-		ViewManager.getInstance().addConfiguration(ViewConfiguration.eager(
-				"All Drift Chambers", () -> new AllDCView(geometryService.dc(), eventNavigator,
+				8, 0, 0, VirtualView.CENTER)));
+		timeStep("All Drift Chambers", () -> ViewManager.getInstance().addConfiguration(
+				ViewConfiguration.eager("All Drift Chambers", () -> new AllDCView(geometryService.dc(),
+						eventNavigator, accumulationService.dc()),
+						3, 0, 0, VirtualView.CENTER)));
+		timeStep("DC Hex (lazy registration)", () -> ViewManager.getInstance().addConfiguration(
+				ViewConfiguration.lazy("DC Hex", () -> new DCHexView(eventNavigator,
 						accumulationService.dc()),
-				3, 0, 0, VirtualView.CENTER));
-		ViewManager.getInstance().addConfiguration(ViewConfiguration.lazy(
-				"DC Hex", () -> new DCHexView(eventNavigator, accumulationService.dc()),
-				6, 0, 0, VirtualView.CENTER));
-		ViewManager.getInstance().addConfiguration(ViewConfiguration.eager(
+						6, 0, 0, VirtualView.CENTER)));
+		timeStep("Sectors 3 and 6", () -> ViewManager.getInstance().addConfiguration(ViewConfiguration.eager(
 				"Sectors 3 and 6", () -> new SectorView(Pair.SECTORS_3_6,
 						geometryService.dc(), geometryService.ftof(), geometryService.pcal(), geometryService.ec(),
 						eventNavigator, accumulationService.dc(), accumulationService.pcal(), accumulationService.ecal(),
 						accumulationService.htcc(), accumulationService.ltcc(), swimCache),
-				0, 20, 65, VirtualView.UPPERLEFT));
-		ViewManager.getInstance().addConfiguration(ViewConfiguration.eager(
+				0, 20, 65, VirtualView.UPPERLEFT)));
+		timeStep("Sectors 2 and 5", () -> ViewManager.getInstance().addConfiguration(ViewConfiguration.eager(
 				"Sectors 2 and 5", () -> new SectorView(Pair.SECTORS_2_5,
 						geometryService.dc(), geometryService.ftof(), geometryService.pcal(), geometryService.ec(),
 						eventNavigator, accumulationService.dc(), accumulationService.pcal(), accumulationService.ecal(),
 						accumulationService.htcc(), accumulationService.ltcc(), swimCache),
-				0, 85, 115, VirtualView.UPPERLEFT));
-		ViewManager.getInstance().addConfiguration(ViewConfiguration.eager(
+				0, 85, 115, VirtualView.UPPERLEFT)));
+		timeStep("Sectors 1 and 4", () -> ViewManager.getInstance().addConfiguration(ViewConfiguration.eager(
 				"Sectors 1 and 4", () -> new SectorView(Pair.SECTORS_1_4,
 						geometryService.dc(), geometryService.ftof(), geometryService.pcal(), geometryService.ec(),
 						eventNavigator, accumulationService.dc(), accumulationService.pcal(), accumulationService.ecal(),
 						accumulationService.htcc(), accumulationService.ltcc(), swimCache),
-				0, 150, 165, VirtualView.UPPERLEFT));
+				0, 150, 165, VirtualView.UPPERLEFT)));
+		Log.getInstance().config("addInitialViews total: " + elapsedMillis(startupStarted) + " ms");
 		Log.getInstance().config("CED MDI application shell initialized with "
 				+ VIRTUAL_DESKTOP_COLUMNS + " virtual desktop columns.");
 		Log.getInstance().config("CED launch configuration: geometry variation="
 				+ launchOptions.geometryVariation() + ", 3D=" + launchOptions.enable3D()
 				+ ", experimental=" + launchOptions.experimental());
+	}
+
+	/** Run one startup step and log how long it took, to isolate what's slow at launch. */
+	private static void timeStep(String label, Runnable step) {
+		long started = System.nanoTime();
+		step.run();
+		Log.getInstance().config("Startup timing - " + label + ": " + elapsedMillis(started) + " ms");
+	}
+
+	private static long elapsedMillis(long startedNanos) {
+		return TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - startedNanos);
 	}
 
 	private void addCedEventActions() {
