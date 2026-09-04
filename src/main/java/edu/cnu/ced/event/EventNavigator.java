@@ -51,6 +51,17 @@ public final class EventNavigator implements AutoCloseable {
 		this.filter = (filter == null) ? EventFilter.ALWAYS_PASS : filter;
 	}
 
+	/**
+	 * Re-notify every listener with the current, unchanged state -- for a
+	 * change that doesn't move to a different event but that listeners still
+	 * derive something from, e.g. whether any {@link EventFilters} criterion
+	 * is now active, so every open view's "Filtering Active" indicator
+	 * updates immediately rather than waiting for the next navigation.
+	 */
+	public void refresh() {
+		notifyListeners();
+	}
+
 	public void addListener(Consumer<EventNavigationState> listener) {
 		listeners.addIfAbsent(Objects.requireNonNull(listener, "listener"));
 	}

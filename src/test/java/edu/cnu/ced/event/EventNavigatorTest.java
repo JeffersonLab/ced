@@ -42,6 +42,20 @@ class EventNavigatorTest {
 		assertEquals(2, navigator.state().sequenceNumber());
 	}
 
+	@Test
+	void refreshRenotifiesListenersWithoutChangingPosition() {
+		EventNavigator navigator = new EventNavigator(new EventStore());
+		navigator.open(new TaggedSource(3, 0, 1, 2));
+		List<Integer> observed = new ArrayList<>();
+		navigator.addListener(state -> observed.add(state.sequenceNumber()));
+
+		navigator.refresh();
+		navigator.refresh();
+
+		assertEquals(1, navigator.state().sequenceNumber(), "refresh doesn't navigate");
+		assertEquals(List.of(1, 1), observed, "one notification per refresh call, same state each time");
+	}
+
 	private static final class RunConfigSource implements EventSource {
 		private final List<DataEvent> events;
 		private int index = -1;

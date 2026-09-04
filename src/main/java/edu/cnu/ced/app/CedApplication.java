@@ -21,9 +21,11 @@ import edu.cnu.ced.event.EventSource;
 import edu.cnu.ced.event.EventStore;
 import edu.cnu.ced.event.HipoEventSource;
 import edu.cnu.ced.event.RunConfig;
+import edu.cnu.ced.event.EventFilters;
 import edu.cnu.ced.event.RunTrigger;
 import edu.cnu.ced.component.TriggerBitsPanel;
 import edu.cnu.ced.dialog.AccumulationDialog;
+import edu.cnu.ced.dialog.FilterDialog;
 import edu.cnu.ced.geometry.GeometryService;
 import edu.cnu.ced.magfield.MagneticFieldService;
 import edu.cnu.ced.magfield.RunFieldScaleApplier;
@@ -92,6 +94,7 @@ public final class CedApplication extends BaseMDIApplication {
 	private RecentFiles recentEventFiles;
 	private RecentFilesMenu recentEventMenuHelper;
 	private JMenu recentEventMenu;
+	private FilterDialog filterDialog;
 
 	private CedApplication() {
 		super(PropertyUtils.TITLE, CedVersion.title(),
@@ -205,6 +208,7 @@ public final class CedApplication extends BaseMDIApplication {
 		installStartupMarker();
 		eventStore = new EventStore();
 		eventNavigator = new EventNavigator(eventStore);
+		eventNavigator.setFilter(EventFilters.sharedFor(eventNavigator));
 		accumulationService = new AccumulationService();
 		eventNavigator.addSourceListener(accumulationService::clear);
 		swimCache = new SwimTrajectoryCache();
@@ -306,6 +310,9 @@ public final class CedApplication extends BaseMDIApplication {
 		JMenuItem accumulate = new JMenuItem("Accumulate Events…");
 		accumulate.addActionListener(event -> accumulateEvents());
 		events.add(accumulate);
+		JMenuItem filter = new JMenuItem("Filter…");
+		filter.addActionListener(event -> showFilterDialog());
+		events.add(filter);
 		MenuManager.getInstance().addContribution(new MenuContribution(EVENTS_MENU_ID, events, 150));
 	}
 
@@ -316,6 +323,15 @@ public final class CedApplication extends BaseMDIApplication {
 			return;
 		}
 		new AccumulationDialog(this, eventNavigator, accumulationService).setVisible(true);
+	}
+
+	private void showFilterDialog() {
+		if (filterDialog == null) {
+			filterDialog = new FilterDialog(this, EventFilters.sharedFor(eventNavigator),
+					eventNavigator::refresh);
+		}
+		filterDialog.setVisible(true);
+		filterDialog.toFront();
 	}
 
 	private void addCedFileActions() {

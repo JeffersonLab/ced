@@ -1,11 +1,14 @@
 package edu.cnu.ced.component;
 
 import java.awt.BorderLayout;
+import java.awt.Color;
 import java.awt.Dimension;
 import java.awt.Component;
+import java.awt.Font;
 import java.util.EnumSet;
 import java.util.List;
 
+import javax.swing.BorderFactory;
 import javax.swing.BoxLayout;
 import javax.swing.DefaultListModel;
 import javax.swing.JLabel;
@@ -16,7 +19,9 @@ import javax.swing.JPanel;
 import javax.swing.JScrollPane;
 import javax.swing.JTabbedPane;
 import javax.swing.JTextArea;
+import javax.swing.SwingConstants;
 
+import edu.cnu.ced.event.EventFilters;
 import edu.cnu.ced.event.EventNavigationState;
 import edu.cnu.ced.event.EventNavigator;
 import edu.cnu.ced.event.EventSnapshot;
@@ -34,11 +39,13 @@ public final class CedControlPanel extends JPanel {
 	public static final int DEFAULT_WIDTH = 270;
 	private final CedDisplayArray displayArray;
 	private final JTextArea eventSummary = new JTextArea("No event source open");
+	private final JLabel filteringActiveLabel = filteringActiveLabel();
 	private final DefaultListModel<String> bankModel = new DefaultListModel<>();
 	private final List<String> bankPrefixes;
 	private final JPanel displayPanel;
 	private final JTabbedPane tabs;
 	private final BankViewerOpener bankViewerOpener;
+	private final EventFilters eventFilters;
 	private EventSnapshot snapshot = EventSnapshot.empty();
 
 	public CedControlPanel(EventNavigator navigator, EnumSet<CedDisplayOption> options,
@@ -54,6 +61,7 @@ public final class CedControlPanel extends JPanel {
 		super(new BorderLayout());
 		this.bankPrefixes = List.copyOf(bankPrefixes);
 		this.bankViewerOpener = BankViewerOpener.sharedFor(navigator);
+		this.eventFilters = EventFilters.sharedFor(navigator);
 		int panelWidth = Math.max(DEFAULT_WIDTH, width);
 		setPreferredSize(new Dimension(panelWidth, 420));
 		displayArray = new CedDisplayArray(options, 3, 4, 3, displayChanged);
@@ -76,6 +84,7 @@ public final class CedControlPanel extends JPanel {
 		eventSummary.setFont(Fonts.smallFont);
 		eventSummary.setLineWrap(true);
 		eventSummary.setWrapStyleWord(false);
+		eventPanel.add(filteringActiveLabel, BorderLayout.NORTH);
 		eventPanel.add(eventSummary, BorderLayout.CENTER);
 		eventPanel.setAlignmentX(LEFT_ALIGNMENT);
 		eventPanel.setPreferredSize(new Dimension(panelWidth - 12, 92));
@@ -131,7 +140,20 @@ public final class CedControlPanel extends JPanel {
 		displayArray.setSelected(CedDisplayOption.SINGLE_EVENT, true);
 	}
 
+	/** A prominent, normally-hidden banner shown whenever any event filter is active. */
+	private static JLabel filteringActiveLabel() {
+		JLabel label = new JLabel("Filtering Active", SwingConstants.CENTER);
+		label.setOpaque(true);
+		label.setBackground(Color.white);
+		label.setForeground(Color.red);
+		label.setFont(Fonts.smallFont.deriveFont(Font.BOLD));
+		label.setBorder(BorderFactory.createLineBorder(Color.black));
+		label.setVisible(false);
+		return label;
+	}
+
 	public void update(EventNavigationState state) {
+		filteringActiveLabel.setVisible(eventFilters.isAnyActive());
 		if (state.isOpen()) {
 			edu.cnu.ced.event.RunConfig config =
 					edu.cnu.ced.event.RunConfig.from(state.snapshot()).orElse(null);

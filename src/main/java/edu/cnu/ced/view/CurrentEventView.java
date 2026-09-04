@@ -1,8 +1,10 @@
 package edu.cnu.ced.view;
 
 import java.awt.BorderLayout;
+import java.awt.Color;
 import java.awt.Dimension;
 import java.awt.FlowLayout;
+import java.awt.Font;
 import java.awt.event.KeyAdapter;
 import java.awt.event.KeyEvent;
 import java.util.List;
@@ -18,12 +20,14 @@ import javax.swing.JPanel;
 import javax.swing.JScrollPane;
 import javax.swing.JSplitPane;
 import javax.swing.JTextField;
+import javax.swing.SwingConstants;
 import javax.swing.SwingUtilities;
 import javax.swing.event.ListSelectionEvent;
 
 import org.jlab.io.base.DataBank;
 
 import edu.cnu.ced.data.BankColumns;
+import edu.cnu.ced.event.EventFilters;
 import edu.cnu.ced.event.EventNavigationState;
 import edu.cnu.ced.event.EventNavigator;
 import edu.cnu.ced.event.EventSnapshot;
@@ -58,6 +62,8 @@ public final class CurrentEventView extends BaseView {
 	private final PresentBanksPanel presentBanksPanel =
 			new PresentBanksPanel(this::scrollToBank, this::openBankViewer);
 	private final BankViewerOpener bankViewerOpener;
+	private final EventFilters eventFilters;
+	private final JLabel filteringActiveLabel = filteringActiveLabel();
 	private final Consumer<EventNavigationState> stateListener = this::acceptState;
 	private final Runnable sourceListener = this::acceptNewSource;
 
@@ -70,9 +76,11 @@ public final class CurrentEventView extends BaseView {
 				PropertyUtils.USECONTAINER, false);
 		this.navigator = navigator;
 		this.bankViewerOpener = BankViewerOpener.sharedFor(navigator);
+		this.eventFilters = EventFilters.sharedFor(navigator);
 
 		JPanel header = new JPanel(new BorderLayout(8, 4));
 		header.setBorder(BorderFactory.createEmptyBorder(8, 8, 4, 8));
+		header.add(filteringActiveLabel, BorderLayout.NORTH);
 		header.add(sourceLabel, BorderLayout.CENTER);
 
 		JPanel navigation = new JPanel(new FlowLayout(FlowLayout.LEFT, 6, 0));
@@ -208,7 +216,20 @@ public final class CurrentEventView extends BaseView {
 		}
 	}
 
+	/** A prominent, normally-hidden banner shown whenever any event filter is active. */
+	private static JLabel filteringActiveLabel() {
+		JLabel label = new JLabel("Filtering Active", SwingConstants.CENTER);
+		label.setOpaque(true);
+		label.setBackground(Color.white);
+		label.setForeground(Color.red);
+		label.setFont(Fonts.smallFont.deriveFont(Font.BOLD));
+		label.setBorder(BorderFactory.createLineBorder(Color.black));
+		label.setVisible(false);
+		return label;
+	}
+
 	private void applyState(EventNavigationState state) {
+		filteringActiveLabel.setVisible(eventFilters.isAnyActive());
 		sourceLabel.setText(state.isOpen() ? state.source() : "No event source open");
 		sequenceLabel.setText("Sequence " + state.sequenceNumber() + " of " + state.eventCount());
 		RunConfig config = RunConfig.from(state.snapshot()).orElse(null);
