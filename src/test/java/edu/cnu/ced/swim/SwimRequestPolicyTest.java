@@ -4,8 +4,6 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 
 import org.junit.jupiter.api.Test;
 
-import edu.cnu.ced.data.RecEventData;
-
 class SwimRequestPolicyTest {
 
 	// region bits, matching org.jlab.clas.detector.DetectorParticleStatus
@@ -15,7 +13,7 @@ class SwimRequestPolicyTest {
 
 	@Test
 	void centralOnlyStatusUsesCentralDetectorPathLength() {
-		RecEventData.Particle central = particleWithStatus(CENTRAL * REGION);
+		SwimmableParticle central = particleWithStatus(CENTRAL * REGION);
 		assertEquals(SwimRequestPolicy.CENTRAL_MAX_PATH_CM, SwimRequestPolicy.maxPathLengthCm(central));
 	}
 
@@ -27,16 +25,16 @@ class SwimRequestPolicyTest {
 		// still get the long forward path length even though its status is
 		// negative; getting this backwards is exactly what silently
 		// truncated a real forward electron's swim in production.
-		RecEventData.Particle forwardTrigger = particleWithStatus(-(FORWARD * REGION));
+		SwimmableParticle forwardTrigger = particleWithStatus(-(FORWARD * REGION));
 		assertEquals(SwimRequestPolicy.FORWARD_MAX_PATH_CM, SwimRequestPolicy.maxPathLengthCm(forwardTrigger));
 
-		RecEventData.Particle centralTrigger = particleWithStatus(-(CENTRAL * REGION));
+		SwimmableParticle centralTrigger = particleWithStatus(-(CENTRAL * REGION));
 		assertEquals(SwimRequestPolicy.CENTRAL_MAX_PATH_CM, SwimRequestPolicy.maxPathLengthCm(centralTrigger));
 	}
 
 	@Test
 	void forwardStatusUsesForwardDetectorPathLength() {
-		RecEventData.Particle forward = particleWithStatus(FORWARD * REGION);
+		SwimmableParticle forward = particleWithStatus(FORWARD * REGION);
 		assertEquals(SwimRequestPolicy.FORWARD_MAX_PATH_CM, SwimRequestPolicy.maxPathLengthCm(forward));
 	}
 
@@ -45,13 +43,13 @@ class SwimRequestPolicyTest {
 		// A track carrying both region bits (e.g. CVT+Forward combined)
 		// still reaches all the way to the forward stack, so it needs the
 		// longer swim, not the shorter Central-only one.
-		RecEventData.Particle combined = particleWithStatus((FORWARD + CENTRAL) * REGION);
+		SwimmableParticle combined = particleWithStatus((FORWARD + CENTRAL) * REGION);
 		assertEquals(SwimRequestPolicy.FORWARD_MAX_PATH_CM, SwimRequestPolicy.maxPathLengthCm(combined));
 	}
 
 	@Test
 	void unassignedOrZeroStatusUsesForwardDetectorPathLength() {
-		RecEventData.Particle zeroStatus = particleWithStatus(0);
+		SwimmableParticle zeroStatus = particleWithStatus(0);
 		assertEquals(SwimRequestPolicy.FORWARD_MAX_PATH_CM, SwimRequestPolicy.maxPathLengthCm(zeroStatus));
 	}
 
@@ -60,7 +58,7 @@ class SwimRequestPolicyTest {
 		assertEquals(SwimRequestPolicy.FORWARD_MAX_PATH_CM, SwimRequestPolicy.maxPathLengthCm(null));
 	}
 
-	private static RecEventData.Particle particleWithStatus(int status) {
-		return new RecEventData.Particle(0, 2212, 1, 1f, 0f, 0f, 0f, 0f, 0f, 0f, 0f, 0f, status);
+	private static SwimmableParticle particleWithStatus(int status) {
+		return new SwimmableParticle(2212, 1, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, status);
 	}
 }

@@ -9,7 +9,6 @@ import org.junit.jupiter.api.Test;
 
 import cnuphys.magfield.ZeroProbe;
 
-import edu.cnu.ced.data.RecEventData;
 import edu.cnu.ced.geometry.Point3;
 
 class ParticleSwimmerTest {
@@ -26,12 +25,8 @@ class ParticleSwimmerTest {
 		double thetaRad = Math.toRadians(theta);
 		double phiRad = Math.toRadians(phi);
 		double sinTheta = Math.sin(thetaRad);
-		float px = (float) (p * sinTheta * Math.cos(phiRad));
-		float py = (float) (p * sinTheta * Math.sin(phiRad));
-		float pz = (float) (p * Math.cos(thetaRad));
 
-		RecEventData.Particle particle = new RecEventData.Particle(0, 2212, 1, px, py, pz,
-				1f, 2f, 3f, 0f, 0f, 0f, 0);
+		SwimmableParticle particle = new SwimmableParticle(2212, 1, 1.0, 2.0, 3.0, p, theta, phi, 0);
 
 		List<Point3> trajectory = ParticleSwimmer.swim(particle, new ZeroProbe(), pathLength);
 
@@ -49,8 +44,7 @@ class ParticleSwimmerTest {
 
 	@Test
 	void neutralParticleAlsoProducesAStraightLine() {
-		RecEventData.Particle particle = new RecEventData.Particle(0, 22, 0, 0f, 0f, 1f,
-				0f, 0f, 0f, 0f, 0f, 0f, 0);
+		SwimmableParticle particle = new SwimmableParticle(22, 0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0);
 
 		List<Point3> trajectory = ParticleSwimmer.swim(particle, new ZeroProbe(), 50.0);
 
@@ -63,16 +57,14 @@ class ParticleSwimmerTest {
 
 	@Test
 	void zeroMomentumParticleReturnsEmptyTrajectory() {
-		RecEventData.Particle particle = new RecEventData.Particle(0, 2212, 1, 0f, 0f, 0f,
-				0f, 0f, 0f, 0f, 0f, 0f, 0);
+		SwimmableParticle particle = new SwimmableParticle(2212, 1, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0);
 
 		assertTrue(ParticleSwimmer.swim(particle, new ZeroProbe()).isEmpty());
 	}
 
 	@Test
 	void nullParticleOrProbeReturnsEmptyTrajectory() {
-		RecEventData.Particle particle = new RecEventData.Particle(0, 2212, 1, 1f, 0f, 0f,
-				0f, 0f, 0f, 0f, 0f, 0f, 0);
+		SwimmableParticle particle = new SwimmableParticle(2212, 1, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0);
 
 		assertTrue(ParticleSwimmer.swim(null, new ZeroProbe()).isEmpty());
 		assertTrue(ParticleSwimmer.swim(particle, null).isEmpty());

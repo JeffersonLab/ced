@@ -46,9 +46,11 @@ import edu.cnu.ced.data.ECalAccumulation;
 import edu.cnu.ced.data.ECalEventData;
 import edu.cnu.ced.data.FTOFEventData;
 import edu.cnu.ced.data.FTOFEventData.AdcHit;
+import edu.cnu.ced.data.MonteCarloTracks;
 import edu.cnu.ced.data.PCalAccumulation;
 import edu.cnu.ced.data.PCalEventData;
 import edu.cnu.ced.data.RecEventData;
+import edu.cnu.ced.data.TrackRow;
 import edu.cnu.ced.event.EventNavigationState;
 import edu.cnu.ced.event.EventNavigator;
 import edu.cnu.ced.geometry.DCGeometry;
@@ -60,6 +62,7 @@ import edu.cnu.ced.geometry.PCALGeometry;
 import edu.cnu.ced.geometry.Point3;
 import edu.cnu.ced.style.CedDrawingStyle;
 import edu.cnu.ced.swim.SwimTrajectoryCache;
+import edu.cnu.ced.swim.SwimmableParticle;
 import edu.cnu.ced.view.CedView;
 import edu.cnu.mdi.container.IContainer;
 import edu.cnu.mdi.component.CommonBorder;
@@ -129,6 +132,7 @@ public final class SectorView extends CedView implements MagneticFieldChangeList
 	private final Map<CherenkovCell, Polygon> cherenkovCells = new HashMap<>();
 	private final Map<CherenkovMarker, Point> cherenkovMarkers = new HashMap<>();
 	private final List<ScreenParticle> screenParticles = new ArrayList<>();
+	private final List<ScreenTrack> screenMcTracks = new ArrayList<>();
 	private volatile DCEventData data = DCEventData.from(null);
 	private volatile FTOFEventData ftofData = FTOFEventData.from(null);
 	private volatile PCalEventData pcalData = PCalEventData.from(null);
@@ -136,6 +140,7 @@ public final class SectorView extends CedView implements MagneticFieldChangeList
 	private volatile CherenkovEventData htccData = CherenkovEventData.from(null, "HTCC");
 	private volatile CherenkovEventData ltccData = CherenkovEventData.from(null, "LTCC");
 	private volatile RecEventData recData = RecEventData.from(null);
+	private volatile List<TrackRow> mcTracks = MonteCarloTracks.from(null).tracks();
 	private volatile FieldProbe fieldProbe = FieldProbe.factory();
 	private volatile boolean showMagneticField;
 	private ColorScaleBar fieldScale;
@@ -172,9 +177,10 @@ public final class SectorView extends CedView implements MagneticFieldChangeList
 				CedDisplayOption.AI_HB_HITS, CedDisplayOption.AI_TB_HITS,
 				CedDisplayOption.CLUSTERS, CedDisplayOption.CROSSES, CedDisplayOption.HB_SEGMENTS,
 				CedDisplayOption.TB_SEGMENTS, CedDisplayOption.AI_HB_SEGMENTS,
-				CedDisplayOption.AI_TB_SEGMENTS, CedDisplayOption.PARTICLES),
+				CedDisplayOption.AI_TB_SEGMENTS, CedDisplayOption.RECON_TRACKS,
+				CedDisplayOption.MC_TRACKS),
 				List.of("DC::", "HitBasedTrkg::", "TimeBasedTrkg::", "FTOF::",
-						"ECAL::", "REC::Calorimeter", "REC::Particle", "HTCC::", "LTCC::"),
+						"ECAL::", "REC::Calorimeter", "REC::Particle", "HTCC::", "LTCC::", "MC::"),
 				ScientificColorMap.TURBO, "Relative occupancy (95th-percentile ceiling)",
 				340);
 		addControlTab("phi", createPhiPanel());
@@ -191,6 +197,7 @@ public final class SectorView extends CedView implements MagneticFieldChangeList
 		htccData = CherenkovEventData.from(state.snapshot(), "HTCC");
 		ltccData = CherenkovEventData.from(state.snapshot(), "LTCC");
 		recData = RecEventData.from(state.snapshot());
+		mcTracks = MonteCarloTracks.from(state.snapshot()).tracks();
 		swimCache.forEvent(state.snapshot());
 	}
 
@@ -210,6 +217,7 @@ public final class SectorView extends CedView implements MagneticFieldChangeList
 			cherenkovCells.clear();
 			cherenkovMarkers.clear();
 			screenParticles.clear();
+			screenMcTracks.clear();
 			if (showMagneticField) drawMagneticField(g, container);
 			drawBeamline(g, container);
 			drawTarget(g, container);
@@ -234,6 +242,7 @@ public final class SectorView extends CedView implements MagneticFieldChangeList
 				drawCalorimeterEvent(g, container);
 				drawCherenkovEvent(g, container);
 				drawParticles(g, container);
+				drawMcTracks(g, container);
 			}
 			drawLabels(g, container);
 			drawScale(g, container);
@@ -695,7 +704,7 @@ public final class SectorView extends CedView implements MagneticFieldChangeList
 	private static final double PARTICLE_STUB_LENGTH_CM = 40.0;
 
 	private void drawParticles(Graphics2D g, IContainer container) {
-		if (!isDisplayed(CedDisplayOption.PARTICLES)) return;
+		if (!isDisplayed(CedDisplayOption.RECON_TRACKS)) return;
 		for (RecEventData.Particle particle : recData.particles()) {
 			// Which sector-pair view should draw this particle at all.
 			// Prefer REC::Track's own DC sector assignment -- the actual
@@ -716,16 +725,41 @@ public final class SectorView extends CedView implements MagneticFieldChangeList
 			int sector = recData.trackSector(particle.row()).orElse(particle.sector());
 			if (!displayedSector(sector)) continue;
 
-			List<Point3> swum = swimCache.trajectory(particle, fieldProbe);
+			List<Point3> swum = swimCache.trajectory(SwimmableParticle.of(particle), fieldProbe);
 			List<Point> points = swum.size() >= 2
 					? projectTrajectory(container, sector, swum)
-					: stubTrajectory(container, sector, particle);
+					: stubTrajectory(container, sector, particle.vx(), particle.vy(), particle.vz(),
+							Math.toDegrees(particle.theta()), Math.toDegrees(particle.phi()));
 			if (points.size() < 2) continue;
 
 			Color color = CedDrawingStyle.particleColor(particle.pid(), particle.charge());
 			Stroke stroke = CedDrawingStyle.particleStroke(particle.pid(), particle.charge());
 			drawParticleTrajectory(g, points, color, stroke);
 			screenParticles.add(new ScreenParticle(particle, points));
+		}
+	}
+
+	private void drawMcTracks(Graphics2D g, IContainer container) {
+		if (!isDisplayed(CedDisplayOption.MC_TRACKS)) return;
+		for (TrackRow track : mcTracks) {
+			// Monte Carlo truth carries no REC::Track-based DC sector
+			// assignment (there are no reconstructed hits to assign one
+			// from), so the momentum-direction proxy is the only sector
+			// this row can report.
+			int sector = track.sector();
+			if (!displayedSector(sector)) continue;
+
+			List<Point3> swum = swimCache.trajectory(SwimmableParticle.of(track), fieldProbe);
+			List<Point> points = swum.size() >= 2
+					? projectTrajectory(container, sector, swum)
+					: stubTrajectory(container, sector, track.x0(), track.y0(), track.z0(),
+							track.thetaDeg(), track.phiDeg());
+			if (points.size() < 2) continue;
+
+			Color color = CedDrawingStyle.particleColor(track.pid(), track.charge());
+			Stroke stroke = CedDrawingStyle.particleStroke(track.pid(), track.charge());
+			drawParticleTrajectory(g, points, color, stroke);
+			screenMcTracks.add(new ScreenTrack(track, points));
 		}
 	}
 
@@ -737,15 +771,23 @@ public final class SectorView extends CedView implements MagneticFieldChangeList
 		return screen;
 	}
 
-	private List<Point> stubTrajectory(IContainer container, int sector, RecEventData.Particle particle) {
-		float p = particle.p();
-		if (!(p > 0f)) return List.of();
-		double scale = PARTICLE_STUB_LENGTH_CM / p;
-		Point vertex = projectedClasPoint(container, sector, particle.vx(), particle.vy(), particle.vz());
+	/**
+	 * A short straight-line direction stub from a vertex, used only when
+	 * swimming doesn't produce a usable trajectory. Direction is given as
+	 * theta/phi rather than Cartesian momentum, since the stub's length
+	 * ({@link #PARTICLE_STUB_LENGTH_CM}) is fixed on screen regardless of the
+	 * particle's actual momentum magnitude -- only its direction matters.
+	 */
+	private List<Point> stubTrajectory(IContainer container, int sector,
+			double vx, double vy, double vz, double thetaDeg, double phiDeg) {
+		double thetaRad = Math.toRadians(thetaDeg);
+		double phiRad = Math.toRadians(phiDeg);
+		double sinTheta = Math.sin(thetaRad);
+		Point vertex = projectedClasPoint(container, sector, vx, vy, vz);
 		Point tip = projectedClasPoint(container, sector,
-				particle.vx() + scale * particle.px(),
-				particle.vy() + scale * particle.py(),
-				particle.vz() + scale * particle.pz());
+				vx + PARTICLE_STUB_LENGTH_CM * sinTheta * Math.cos(phiRad),
+				vy + PARTICLE_STUB_LENGTH_CM * sinTheta * Math.sin(phiRad),
+				vz + PARTICLE_STUB_LENGTH_CM * Math.cos(thetaRad));
 		return List.of(vertex, tip);
 	}
 
@@ -1178,6 +1220,21 @@ public final class SectorView extends CedView implements MagneticFieldChangeList
 				break;
 			}
 		}
+		for (ScreenTrack drawn : screenMcTracks) {
+			if (nearAnySegment(drawn.points, screenPoint, 5.0)) {
+				TrackRow track = drawn.track;
+				// "orange red", distinct from reconstructed particles' "deep
+				// sky blue", so the two track sources are visually
+				// distinguishable in the feedback pane too.
+				feedback.add(String.format("$orange red$MC %s (pid %d, q=%+d) sector %d", track.name(),
+						track.pid(), track.charge(), track.sector()));
+				feedback.add(String.format("$orange red$p = %.3f GeV/c  theta = %.1f°  phi = %.1f°",
+						track.momentumMeV() / 1000.0, track.thetaDeg(), track.phiDeg()));
+				feedback.add(String.format("$orange red$vertex (%.2f, %.2f, %.2f) cm",
+						track.x0(), track.y0(), track.z0()));
+				break;
+			}
+		}
 		for (Map.Entry<FTOFEventData.Cluster, Point> entry : ftofClusterLocations.entrySet()) {
 			if (entry.getValue().distance(screenPoint) <= 8.0) {
 				FTOFEventData.Cluster cluster = entry.getKey();
@@ -1443,6 +1500,7 @@ public final class SectorView extends CedView implements MagneticFieldChangeList
 	private record ScreenSegment(Segment segment, Point start, Point end) { }
 	private record ScreenCross(Cross cross, Point location) { }
 	private record ScreenParticle(RecEventData.Particle particle, List<Point> points) { }
+	private record ScreenTrack(TrackRow track, List<Point> points) { }
 
 	@Override
 	public void magneticFieldChanged() {

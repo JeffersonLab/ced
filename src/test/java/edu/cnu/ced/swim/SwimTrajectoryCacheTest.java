@@ -12,7 +12,6 @@ import org.junit.jupiter.api.Test;
 
 import cnuphys.magfield.ZeroProbe;
 
-import edu.cnu.ced.data.RecEventData;
 import edu.cnu.ced.event.EventSnapshot;
 import edu.cnu.ced.geometry.Point3;
 
@@ -22,7 +21,7 @@ class SwimTrajectoryCacheTest {
 	void computesAndCachesATrajectory() {
 		SwimTrajectoryCache cache = new SwimTrajectoryCache();
 		cache.forEvent(snapshot());
-		RecEventData.Particle particle = particle();
+		SwimmableParticle particle = particle();
 
 		List<Point3> first = cache.trajectory(particle, new ZeroProbe());
 		assertTrue(first.size() >= 2);
@@ -67,8 +66,8 @@ class SwimTrajectoryCacheTest {
 		assertEquals(0, cache.size());
 	}
 
-	private static RecEventData.Particle particle() {
-		return new RecEventData.Particle(0, 2212, 1, 1f, 0f, 0f, 0f, 0f, 0f, 0f, 0f, 0f, 0);
+	private static SwimmableParticle particle() {
+		return new SwimmableParticle(2212, 1, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0);
 	}
 
 	private static EventSnapshot snapshot() {

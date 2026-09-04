@@ -53,4 +53,26 @@ class TrackRowTest {
 	private static TrackRow syntheticRow(cnuphys.lund.LundId particle) {
 		return TrackRow.fromMomentum(1, particle, 0, 0, 0, 0, 0, 1.0, 0, "test").orElseThrow();
 	}
+
+	@Test void sectorFollowsClas12SixtyDegreeConvention() {
+		// Same convention as RecEventData.Particle#sector(): sector 1 spans
+		// (-30, 30], sectors 2-6 follow counterclockwise in 60-degree steps.
+		assertEquals(1, rowAtPhiDegrees(0.0).sector());
+		assertEquals(2, rowAtPhiDegrees(60.0).sector());
+		assertEquals(3, rowAtPhiDegrees(120.0).sector());
+		assertEquals(4, rowAtPhiDegrees(180.0).sector());
+		assertEquals(5, rowAtPhiDegrees(240.0).sector());
+		assertEquals(6, rowAtPhiDegrees(300.0).sector());
+
+		assertEquals(1, rowAtPhiDegrees(29.9).sector());
+		assertEquals(1, rowAtPhiDegrees(-29.9).sector());
+		assertEquals(2, rowAtPhiDegrees(30.1).sector());
+		assertEquals(1, rowAtPhiDegrees(330.1).sector());
+	}
+
+	private static TrackRow rowAtPhiDegrees(double phiDeg) {
+		double phiRad = Math.toRadians(phiDeg);
+		return TrackRow.fromMomentum(1, LundSupport.getInstance().get(2212, 1), 0, 0, 0,
+				Math.cos(phiRad), Math.sin(phiRad), 0, 0, "test").orElseThrow();
+	}
 }

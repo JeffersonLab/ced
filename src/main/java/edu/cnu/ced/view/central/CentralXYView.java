@@ -42,6 +42,7 @@ import edu.cnu.ced.geometry.Point2;
 import edu.cnu.ced.geometry.Point3;
 import edu.cnu.ced.style.CedDrawingStyle;
 import edu.cnu.ced.swim.SwimTrajectoryCache;
+import edu.cnu.ced.swim.SwimmableParticle;
 import edu.cnu.ced.view.CedXYView;
 import edu.cnu.mdi.container.IContainer;
 import edu.cnu.mdi.graphics.toolbar.ToolBits;
@@ -84,7 +85,7 @@ public final class CentralXYView extends CedXYView implements MagneticFieldChang
 		this.bst=bst;this.bmt=bmt;this.cnd=cnd;this.ctof=ctof;this.accumulation=accumulation;this.swimCache=swimCache;
 		setAfterDraw(this::draw); initializeCedView(EnumSet.of(CedDisplayOption.SINGLE_EVENT,CedDisplayOption.ACCUMULATION,
 				CedDisplayOption.RAW_DATA,CedDisplayOption.RECON_HITS,CedDisplayOption.CLUSTERS,CedDisplayOption.CROSSES,
-				CedDisplayOption.CONNECT_CLUSTER_ENDPOINTS,CedDisplayOption.PARTICLES),
+				CedDisplayOption.CONNECT_CLUSTER_ENDPOINTS,CedDisplayOption.RECON_TRACKS),
 				List.of("BST","BMT","CND","CTOF","CVT"),ScientificColorMap.TURBO,"Relative ADC / accumulation");
 		MagneticFields.getInstance().addMagneticFieldChangeListener(this);
 	}
@@ -93,7 +94,7 @@ public final class CentralXYView extends CedXYView implements MagneticFieldChang
 	private void draw(Graphics2D graphics,IContainer container){Graphics2D g=(Graphics2D)graphics.create();try{
 		g.setRenderingHint(RenderingHints.KEY_ANTIALIASING,RenderingHints.VALUE_ANTIALIAS_ON);polygons.clear();markers.clear();screenParticles.clear();
 		drawBST(g,container);drawBMT(g,container);drawCTOF(g,container);drawCND(g,container);
-		if(!isDisplayed(CedDisplayOption.ACCUMULATION)){if(isDisplayed(CedDisplayOption.RECON_HITS))drawRecon(g,container);if(isDisplayed(CedDisplayOption.CLUSTERS))drawClusters(g,container);if(isDisplayed(CedDisplayOption.CROSSES))drawCrosses(g,container);if(isDisplayed(CedDisplayOption.PARTICLES))drawParticles(g,container);}
+		if(!isDisplayed(CedDisplayOption.ACCUMULATION)){if(isDisplayed(CedDisplayOption.RECON_HITS))drawRecon(g,container);if(isDisplayed(CedDisplayOption.CLUSTERS))drawClusters(g,container);if(isDisplayed(CedDisplayOption.CROSSES))drawCrosses(g,container);if(isDisplayed(CedDisplayOption.RECON_TRACKS))drawParticles(g,container);}
 		drawXYAxes(g,container);
 	}finally{g.dispose();}}
 
@@ -109,7 +110,7 @@ public final class CentralXYView extends CedXYView implements MagneticFieldChang
 	 * view's small (80cm-wide) window.
 	 */
 	private void drawParticles(Graphics2D g,IContainer c){for(RecEventData.Particle particle:recData.particles()){
-		List<Point3> swum=swimCache.trajectory(particle,fieldProbe);
+		List<Point3> swum=swimCache.trajectory(SwimmableParticle.of(particle),fieldProbe);
 		if(swum.size()<2)continue;
 		Color color=CedDrawingStyle.particleColor(particle.pid(),particle.charge());
 		Stroke stroke=CedDrawingStyle.particleStroke(particle.pid(),particle.charge());

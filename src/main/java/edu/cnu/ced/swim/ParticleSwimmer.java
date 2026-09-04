@@ -8,7 +8,6 @@ import cnuphys.CLAS12Swim.CLAS12Swimmer;
 import cnuphys.CLAS12Swim.CLAS12Trajectory;
 import cnuphys.magfield.FieldProbe;
 
-import edu.cnu.ced.data.RecEventData;
 import edu.cnu.ced.geometry.Point3;
 
 /**
@@ -33,7 +32,7 @@ public final class ParticleSwimmer {
 	 * region well before reaching this. Kept in sync with {@link
 	 * edu.cnu.ced.swim.SwimRequestPolicy#FORWARD_MAX_PATH_CM}, the value the
 	 * app actually uses; this one is the fallback for calling {@link
-	 * #swim(RecEventData.Particle, FieldProbe)} directly.
+	 * #swim(SwimmableParticle, FieldProbe)} directly.
 	 */
 	public static final double DEFAULT_MAX_PATH_LENGTH_CM = 1000.0;
 
@@ -62,7 +61,7 @@ public final class ParticleSwimmer {
 	 *         the swim didn't produce a usable trajectory (e.g. momentum
 	 *         below the swimmer's internal threshold, or integration failure)
 	 */
-	public static List<Point3> swim(RecEventData.Particle particle, FieldProbe probe) {
+	public static List<Point3> swim(SwimmableParticle particle, FieldProbe probe) {
 		return swim(particle, probe, DEFAULT_MAX_PATH_LENGTH_CM);
 	}
 
@@ -75,15 +74,15 @@ public final class ParticleSwimmer {
 	 * @return the swum trajectory as lab-frame points, oldest first; empty if
 	 *         the swim didn't produce a usable trajectory
 	 */
-	public static List<Point3> swim(RecEventData.Particle particle, FieldProbe probe, double maxPathLengthCm) {
+	public static List<Point3> swim(SwimmableParticle particle, FieldProbe probe, double maxPathLengthCm) {
 		if (particle == null || probe == null) return List.of();
-		float p = particle.p();
-		if (!(p > 0f)) return List.of();
+		double p = particle.p();
+		if (!(p > 0.0)) return List.of();
 
 		CLAS12Swimmer swimmer = new CLAS12Swimmer(probe);
 		CLAS12SwimResult result = swimmer.swim(particle.charge(),
 				particle.vx(), particle.vy(), particle.vz(), p,
-				Math.toDegrees(particle.theta()), Math.toDegrees(particle.phi()),
+				particle.thetaDeg(), particle.phiDeg(),
 				maxPathLengthCm, INITIAL_STEP_CM, TOLERANCE_CM);
 
 		if (!result.isSuccess()) return List.of();

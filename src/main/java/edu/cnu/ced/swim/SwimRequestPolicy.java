@@ -1,7 +1,5 @@
 package edu.cnu.ced.swim;
 
-import edu.cnu.ced.data.RecEventData;
-
 /**
  * Chooses the maximum path length to swim a reconstructed particle.
  * <p>
@@ -57,7 +55,7 @@ public final class SwimRequestPolicy {
 	 * @param particle the particle to swim, or {@code null}
 	 * @return the maximum path length to swim this particle, in cm
 	 */
-	public static double maxPathLengthCm(RecEventData.Particle particle) {
+	public static double maxPathLengthCm(SwimmableParticle particle) {
 		if (particle == null) return FORWARD_MAX_PATH_CM;
 		int region = Math.abs(particle.status()) / REGION_DIVISOR;
 		boolean forward = (region & FORWARD_BIT) != 0;

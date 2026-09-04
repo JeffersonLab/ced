@@ -6,7 +6,6 @@ import java.util.Map;
 
 import cnuphys.magfield.FieldProbe;
 
-import edu.cnu.ced.data.RecEventData;
 import edu.cnu.ced.event.EventSnapshot;
 import edu.cnu.ced.geometry.Point3;
 
@@ -32,7 +31,7 @@ import edu.cnu.ced.geometry.Point3;
  */
 public final class SwimTrajectoryCache {
 
-	private final Map<RecEventData.Particle, List<Point3>> trajectories = new HashMap<>();
+	private final Map<SwimmableParticle, List<Point3>> trajectories = new HashMap<>();
 	private EventSnapshot currentSnapshot;
 
 	/**
@@ -63,7 +62,7 @@ public final class SwimTrajectoryCache {
 	 * @return the trajectory as lab-frame points, oldest first; empty if
 	 *         swimming didn't produce a usable trajectory
 	 */
-	public synchronized List<Point3> trajectory(RecEventData.Particle particle, FieldProbe probe) {
+	public synchronized List<Point3> trajectory(SwimmableParticle particle, FieldProbe probe) {
 		if (particle == null) return List.of();
 		return trajectories.computeIfAbsent(particle,
 				p -> ParticleSwimmer.swim(p, probe, SwimRequestPolicy.maxPathLengthCm(p)));

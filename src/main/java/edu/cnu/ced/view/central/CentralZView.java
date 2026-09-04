@@ -44,6 +44,7 @@ import edu.cnu.ced.geometry.BSTGeometry;
 import edu.cnu.ced.geometry.Point3;
 import edu.cnu.ced.style.CedDrawingStyle;
 import edu.cnu.ced.swim.SwimTrajectoryCache;
+import edu.cnu.ced.swim.SwimmableParticle;
 import edu.cnu.ced.view.CedView;
 import edu.cnu.mdi.component.AspectRatioPanel;
 import edu.cnu.mdi.container.IContainer;
@@ -95,7 +96,7 @@ public final class CentralZView extends CedView implements MagneticFieldChangeLi
 		initializeCedView(EnumSet.of(CedDisplayOption.SINGLE_EVENT,
 				CedDisplayOption.ACCUMULATION, CedDisplayOption.RAW_DATA,
 				CedDisplayOption.RECON_HITS, CedDisplayOption.CROSSES,
-				CedDisplayOption.PARTICLES),
+				CedDisplayOption.RECON_TRACKS),
 				List.of("BST", "BMT", "CND", "CTOF", "CVT"),
 				ScientificColorMap.TURBO, "Relative ADC / accumulation");
 		addDisplayControl(createPhiControl());
@@ -154,7 +155,7 @@ public final class CentralZView extends CedView implements MagneticFieldChangeLi
 				if (isDisplayed(CedDisplayOption.RAW_DATA)) drawAdc(g, container);
 				if (isDisplayed(CedDisplayOption.RECON_HITS)) drawRecon(g, container);
 				if (isDisplayed(CedDisplayOption.CROSSES)) drawCrosses(g, container);
-				if (isDisplayed(CedDisplayOption.PARTICLES)) drawParticles(g, container);
+				if (isDisplayed(CedDisplayOption.RECON_TRACKS)) drawParticles(g, container);
 			}
 			drawAxes(g, container);
 		} finally {
@@ -173,7 +174,7 @@ public final class CentralZView extends CedView implements MagneticFieldChangeLi
 	 */
 	private void drawParticles(Graphics2D g, IContainer c) {
 		for (RecEventData.Particle particle : recData.particles()) {
-			List<Point3> swum = swimCache.trajectory(particle, fieldProbe);
+			List<Point3> swum = swimCache.trajectory(SwimmableParticle.of(particle), fieldProbe);
 			if (swum.size() < 2) continue;
 			Color color = CedDrawingStyle.particleColor(particle.pid(), particle.charge());
 			Stroke stroke = CedDrawingStyle.particleStroke(particle.pid(), particle.charge());

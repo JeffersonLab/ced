@@ -93,4 +93,26 @@ public record TrackRow(int trackId, LundId particle, double x0, double y0, doubl
 	public double kineticEnergyMeV() {
 		return totalEnergyMeV() - massMeV();
 	}
+
+	/**
+	 * The CLAS12 sector [1, 6] this track's momentum direction points into,
+	 * using the same 60-degree-wide convention as {@link
+	 * RecEventData.Particle#sector()} -- sector 1 centered on {@code phi = 0}
+	 * spanning {@code (-30, 30]} degrees, sectors 2-6 following
+	 * counterclockwise in 60-degree steps. Unlike a reconstructed particle,
+	 * a track row has no {@code REC::Track} DC-hit-based sector to defer to
+	 * (Monte Carlo truth in particular has no reconstructed hits at all), so
+	 * this momentum-direction proxy is the only sector this row can report.
+	 *
+	 * @return the sector number, 1 through 6
+	 */
+	public int sector() {
+		double degrees = ((phiDeg % 360.0) + 360.0) % 360.0;
+		if (degrees > 30.0 && degrees <= 90.0) return 2;
+		if (degrees > 90.0 && degrees <= 150.0) return 3;
+		if (degrees > 150.0 && degrees <= 210.0) return 4;
+		if (degrees > 210.0 && degrees <= 270.0) return 5;
+		if (degrees > 270.0 && degrees <= 330.0) return 6;
+		return 1;
+	}
 }
