@@ -6,6 +6,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.concurrent.TimeUnit;
 import java.util.prefs.Preferences;
+import javax.swing.Box;
 import javax.swing.JCheckBoxMenuItem;
 import javax.swing.JMenu;
 import javax.swing.JMenuItem;
@@ -20,6 +21,8 @@ import edu.cnu.ced.event.EventSource;
 import edu.cnu.ced.event.EventStore;
 import edu.cnu.ced.event.HipoEventSource;
 import edu.cnu.ced.event.RunConfig;
+import edu.cnu.ced.event.RunTrigger;
+import edu.cnu.ced.component.TriggerBitsPanel;
 import edu.cnu.ced.dialog.AccumulationDialog;
 import edu.cnu.ced.geometry.GeometryService;
 import edu.cnu.ced.magfield.MagneticFieldService;
@@ -100,6 +103,25 @@ public final class CedApplication extends BaseMDIApplication {
 		timeStep("addCedFileActions", this::addCedFileActions);
 		timeStep("addCedEventActions", this::addCedEventActions);
 		timeStep("addCedOptions", this::addCedOptions);
+		timeStep("addTriggerPanel", this::addTriggerPanel);
+	}
+
+	// The main menu bar's trigger-bit status row, matching legacy CED's own
+	// main-window trigger display (see TriggerBitsPanel). Parked on the far
+	// right of the menu bar via horizontal glue, same as legacy mounts its
+	// TriggerMenuPanel directly on the JMenuBar rather than a separate toolbar.
+	private void addTriggerPanel() {
+		TriggerBitsPanel triggerBitsPanel = new TriggerBitsPanel();
+		getJMenuBar().add(Box.createHorizontalGlue());
+		getJMenuBar().add(triggerBitsPanel);
+		eventNavigator.addListener(state -> {
+			Runnable apply = () -> triggerBitsPanel.setTrigger(RunTrigger.from(state.snapshot()).orElse(null));
+			if (SwingUtilities.isEventDispatchThread()) {
+				apply.run();
+			} else {
+				SwingUtilities.invokeLater(apply);
+			}
+		});
 	}
 
 	private void addCedOptions() {
