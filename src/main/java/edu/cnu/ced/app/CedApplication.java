@@ -15,6 +15,8 @@ import javax.swing.SwingUtilities;
 import javax.swing.SwingWorker;
 
 import edu.cnu.ced.CedVersion;
+import edu.cnu.ced.data.MonteCarloTracks;
+import edu.cnu.ced.data.ReconstructedTracks;
 import edu.cnu.ced.event.EventNavigator;
 import edu.cnu.ced.event.AccumulationService;
 import edu.cnu.ced.event.EventSource;
@@ -43,6 +45,7 @@ import edu.cnu.ced.view.dc.AllDCView;
 import edu.cnu.ced.view.dc.DCHexView;
 import edu.cnu.ced.view.sector.SectorView;
 import edu.cnu.ced.view.sector.SectorView.Pair;
+import edu.cnu.ced.view.tracks.TrackTableView;
 import edu.cnu.mdi.app.BaseMDIApplication;
 import edu.cnu.mdi.app.StartupInfo;
 import edu.cnu.mdi.app.StartupWindow;
@@ -286,6 +289,14 @@ public final class CedApplication extends BaseMDIApplication {
 						eventNavigator, accumulationService.dc(), accumulationService.pcal(), accumulationService.ecal(),
 						accumulationService.htcc(), accumulationService.ltcc(), swimCache),
 				0, 150, 165, VirtualView.UPPERLEFT)));
+		timeStep("Monte Carlo Tracks (lazy registration)", () -> ViewManager.getInstance().addConfiguration(
+				ViewConfiguration.lazy("Monte Carlo Tracks", () -> new TrackTableView(eventNavigator,
+						"Monte Carlo Tracks", snapshot -> MonteCarloTracks.from(snapshot).tracks()),
+						9, 0, 0, VirtualView.CENTER)));
+		timeStep("Reconstructed Tracks (lazy registration)", () -> ViewManager.getInstance().addConfiguration(
+				ViewConfiguration.lazy("Reconstructed Tracks", () -> new TrackTableView(eventNavigator,
+						"Reconstructed Tracks", snapshot -> ReconstructedTracks.from(snapshot).tracks()),
+						10, 0, 0, VirtualView.CENTER)));
 		Log.getInstance().config("addInitialViews total: " + elapsedMillis(startupStarted) + " ms");
 		Log.getInstance().config("CED MDI application shell initialized with "
 				+ VIRTUAL_DESKTOP_COLUMNS + " virtual desktop columns.");
