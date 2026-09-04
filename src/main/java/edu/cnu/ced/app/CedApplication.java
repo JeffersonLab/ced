@@ -289,14 +289,14 @@ public final class CedApplication extends BaseMDIApplication {
 						eventNavigator, accumulationService.dc(), accumulationService.pcal(), accumulationService.ecal(),
 						accumulationService.htcc(), accumulationService.ltcc(), swimCache),
 				0, 150, 165, VirtualView.UPPERLEFT)));
-		timeStep("Monte Carlo Tracks (lazy registration)", () -> ViewManager.getInstance().addConfiguration(
-				ViewConfiguration.lazy("Monte Carlo Tracks", () -> new TrackTableView(eventNavigator,
+		timeStep("Monte Carlo Tracks", () -> ViewManager.getInstance().addConfiguration(
+				ViewConfiguration.eager("Monte Carlo Tracks", () -> new TrackTableView(eventNavigator,
 						"Monte Carlo Tracks", snapshot -> MonteCarloTracks.from(snapshot).tracks()),
-						9, 0, 0, VirtualView.CENTER)));
-		timeStep("Reconstructed Tracks (lazy registration)", () -> ViewManager.getInstance().addConfiguration(
-				ViewConfiguration.lazy("Reconstructed Tracks", () -> new TrackTableView(eventNavigator,
+						9, 0, 0, VirtualView.CENTERLEFT)));
+		timeStep("Reconstructed Tracks", () -> ViewManager.getInstance().addConfiguration(
+				ViewConfiguration.eager("Reconstructed Tracks", () -> new TrackTableView(eventNavigator,
 						"Reconstructed Tracks", snapshot -> ReconstructedTracks.from(snapshot).tracks()),
-						10, 0, 0, VirtualView.CENTER)));
+						9, 0, 0, VirtualView.CENTERRIGHT)));
 		Log.getInstance().config("addInitialViews total: " + elapsedMillis(startupStarted) + " ms");
 		Log.getInstance().config("CED MDI application shell initialized with "
 				+ VIRTUAL_DESKTOP_COLUMNS + " virtual desktop columns.");

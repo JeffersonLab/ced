@@ -31,14 +31,20 @@ class MonteCarloTracksTest {
 		assertEquals("π⁺", tracks.tracks().get(1).name());
 	}
 
-	@Test void skipsAnUnregisteredPidRatherThanGuessingAFallback() {
-		// 999999 isn't a real PDG/Lund id
+	@Test void anUnregisteredPidStillShowsAsARowRatherThanDisappearing() {
+		// 999999 isn't a real PDG/Lund id -- every kinematic field is still
+		// known, so the row should show up (with an unresolved placeholder
+		// species carrying the real pid), not vanish the way legacy's
+		// swimming-oriented view would skip it.
 		DataBank particle = bank(999999, 0f, 0f, 0f, 0f, 0f, 0.3f);
 
 		MonteCarloTracks tracks = MonteCarloTracks.from(
 				EventSnapshot.of(event(Map.of(MonteCarloTracks.PARTICLE_BANK, particle))));
 
-		assertTrue(tracks.tracks().isEmpty());
+		assertEquals(1, tracks.tracks().size());
+		TrackRow row = tracks.tracks().get(0);
+		assertEquals(999999, row.pid());
+		assertEquals("?", row.name());
 	}
 
 	@Test void emptyOrMissingBanksYieldNoTracks() {

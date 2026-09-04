@@ -43,14 +43,21 @@ public record MonteCarloTracks(List<TrackRow> tracks) {
 			return;
 		}
 		for (int row = 0; row < bank.rows(); row++) {
-			// the one-arg get(pid) -- unlike CedDrawingStyle.lundId(pid, charge)
-			// -- returns null rather than falling back to an unknown-by-charge
-			// placeholder for an unregistered id; generator truth should always
-			// carry a real, registered PDG id, so a miss here means skip the
-			// row rather than invent a charge to fall back on, matching legacy.
-			LundId particle = LundSupport.getInstance().get(bank.getInt("pid", row));
+			int pid = bank.getInt("pid", row);
+			// LundSupport's one-arg get(pid) returns null, with no fallback,
+			// for a pid it doesn't recognize -- legacy CED skips that row
+			// entirely ("cannot swim without a known charge"), reasonable for
+			// a view built around swimming a track through the field, but this
+			// is a plain data table: every field it needs (vertex, momentum)
+			// is already known regardless of whether cnuphys.lund's curated
+			// species list happens to include this generator pid. Falling back
+			// to an unresolved placeholder that still carries the real pid
+			// (rather than skipping) keeps the row visible -- and keeping the
+			// actual pid, rather than 0 or a fixed sentinel, is what makes an
+			// unrecognized generator code diagnosable instead of just missing.
+			LundId particle = LundSupport.getInstance().get(pid);
 			if (particle == null) {
-				continue;
+				particle = new LundId("Unknown", "?", pid, 0, 0, 0);
 			}
 			TrackRow.fromMomentum(row, particle, bank.getFloat("vx", row), bank.getFloat("vy", row),
 					bank.getFloat("vz", row), bank.getFloat("px", row), bank.getFloat("py", row),
