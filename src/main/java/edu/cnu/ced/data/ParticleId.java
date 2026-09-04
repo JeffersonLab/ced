@@ -49,4 +49,9 @@ public final class ParticleId {
 	public static boolean isKnown(int pid) {
 		return NAMES.containsKey(pid);
 	}
+
+	/** @return every recognized PDG/Lund id mapped to its short display name */
+	public static Map<Integer, String> knownSpecies() {
+		return NAMES;
+	}
 }

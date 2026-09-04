@@ -21,6 +21,7 @@ public final class EventNavigator implements AutoCloseable {
 
 	private EventSource source;
 	private volatile EventNavigationState state = EventNavigationState.closed();
+	private volatile EventFilter filter = EventFilter.ALWAYS_PASS;
 
 	// RUN::config true-event-number -> one-based sequence number, built lazily
 	// (and only once per source) the first time goToTrueEventNumber is called --
@@ -35,6 +36,19 @@ public final class EventNavigator implements AutoCloseable {
 
 	public EventNavigationState state() {
 		return state;
+	}
+
+	/**
+	 * Install the filter that {@link #next()} and {@link #previous()} consult
+	 * to silently skip non-matching events -- {@code null} clears back to
+	 * unfiltered. Does not affect {@link #goToSequence}, {@link
+	 * #goToTrueEventNumber}, or {@link #scanNext}: an explicit jump goes
+	 * exactly where asked regardless of the filter, and scanNext must visit
+	 * every event unfiltered since {@link #goToTrueEventNumber}'s index build
+	 * depends on that.
+	 */
+	public void setFilter(EventFilter filter) {
+		this.filter = (filter == null) ? EventFilter.ALWAYS_PASS : filter;
 	}
 
 	public void addListener(Consumer<EventNavigationState> listener) {
@@ -68,12 +82,30 @@ public final class EventNavigator implements AutoCloseable {
 		}
 	}
 
+	/**
+	 * Advance to the next event that passes the installed filter (every event,
+	 * if none is installed), silently skipping ones that don't -- symmetric
+	 * with {@link #previous()}. Skipped events are never published: nothing
+	 * observing this navigator's state, nor the underlying {@link EventStore},
+	 * sees them.
+	 *
+	 * @return {@code true} if a matching event was found and published
+	 */
 	public boolean next() {
-		if (source == null || !source.hasNext()) {
+		if (source == null) {
 			return false;
 		}
-		publish(source.next());
-		return true;
+		while (source.hasNext()) {
+			DataEvent candidate = source.next();
+			if (candidate == null) {
+				throw new IllegalStateException("Event source returned no event");
+			}
+			if (filter.pass(EventSnapshot.of(candidate))) {
+				updateState(store.publish(candidate));
+				return true;
+			}
+		}
+		return false;
 	}
 
 	/**
@@ -108,12 +140,27 @@ public final class EventNavigator implements AutoCloseable {
 		return processed;
 	}
 
+	/**
+	 * Step back to the previous event that passes the installed filter,
+	 * silently skipping ones that don't -- symmetric with {@link #next()}.
+	 *
+	 * @return {@code true} if a matching event was found and published
+	 */
 	public boolean previous() {
-		if (source == null || source.index() <= 0) {
+		if (source == null) {
 			return false;
 		}
-		publish(source.previous());
-		return true;
+		while (source.index() > 0) {
+			DataEvent candidate = source.previous();
+			if (candidate == null) {
+				throw new IllegalStateException("Event source returned no event");
+			}
+			if (filter.pass(EventSnapshot.of(candidate))) {
+				updateState(store.publish(candidate));
+				return true;
+			}
+		}
+		return false;
 	}
 
 	/** Navigate using CED's one-based sequence numbering. */

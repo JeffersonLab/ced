@@ -6,7 +6,10 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.lang.reflect.Proxy;
 import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 
 import org.jlab.io.base.DataBank;
 import org.jlab.io.base.DataEvent;
@@ -148,6 +151,82 @@ class EventNavigatorTest {
 		assertTrue(first.closed);
 		assertEquals(List.of("source", "event-1", "event-2", "source", "event-1"),
 				notifications);
+	}
+
+	@Test
+	void nextSkipsNonMatchingEventsWithoutPublishingThem() {
+		EventNavigator navigator = new EventNavigator(new EventStore());
+		List<Integer> observed = new ArrayList<>();
+		navigator.addListener(state -> observed.add(state.sequenceNumber()));
+		// bank "TAG" present only on sequence 1, 3, 5 (0-based index 0, 2, 4)
+		navigator.open(new TaggedSource(5, 0, 2, 4));
+		navigator.setFilter(snapshot -> snapshot.hasBank("TAG"));
+
+		assertTrue(navigator.next());
+		assertEquals(3, navigator.state().sequenceNumber(), "skips seq 2, lands on the next tagged event");
+		assertTrue(navigator.next());
+		assertEquals(5, navigator.state().sequenceNumber(), "skips seq 4, lands on the last tagged event");
+		assertFalse(navigator.next(), "no more tagged events after the last one");
+		assertEquals(5, navigator.state().sequenceNumber(), "position unchanged after a failed next");
+
+		assertEquals(List.of(1, 3, 5), observed, "only tagged events were ever published to listeners");
+	}
+
+	@Test
+	void previousSkipsNonMatchingEventsSymmetricallyWithNext() {
+		EventNavigator navigator = new EventNavigator(new EventStore());
+		navigator.open(new TaggedSource(5, 0, 2, 4));
+		navigator.setFilter(snapshot -> snapshot.hasBank("TAG"));
+		navigator.goToSequence(5);
+
+		assertTrue(navigator.previous());
+		assertEquals(3, navigator.state().sequenceNumber(), "skips seq 4, lands on the previous tagged event");
+		assertTrue(navigator.previous());
+		assertEquals(1, navigator.state().sequenceNumber(), "skips seq 2, lands on the first tagged event");
+		assertFalse(navigator.previous(), "no earlier tagged events before the first one");
+		assertEquals(1, navigator.state().sequenceNumber(), "position unchanged after a failed previous");
+	}
+
+	@Test
+	void nullFilterClearsBackToUnfiltered() {
+		EventNavigator navigator = new EventNavigator(new EventStore());
+		navigator.open(new TaggedSource(3, 0));
+		navigator.setFilter(snapshot -> snapshot.hasBank("TAG"));
+		navigator.setFilter(null);
+
+		assertTrue(navigator.next());
+		assertEquals(2, navigator.state().sequenceNumber(), "unfiltered: advances one at a time again");
+	}
+
+	private static final class TaggedSource implements EventSource {
+		private final List<DataEvent> events;
+		private int index = -1;
+
+		TaggedSource(int count, int... taggedIndices) {
+			Set<Integer> tagged = new HashSet<>();
+			for (int i : taggedIndices) {
+				tagged.add(i);
+			}
+			events = new ArrayList<>();
+			for (int i = 0; i < count; i++) {
+				String[] banks = tagged.contains(i) ? new String[] { "TAG" } : new String[0];
+				events.add((DataEvent) Proxy.newProxyInstance(DataEvent.class.getClassLoader(),
+						new Class<?>[] { DataEvent.class }, (object, method, args) -> switch (method.getName()) {
+							case "getBankList" -> banks;
+							case "hasBank" -> Arrays.asList(banks).contains(args[0]);
+							default -> null;
+						}));
+			}
+		}
+
+		@Override public String description() { return "tagged.hipo"; }
+		@Override public int size() { return events.size(); }
+		@Override public int index() { return index; }
+		@Override public boolean hasNext() { return index + 1 < events.size(); }
+		@Override public DataEvent next() { return events.get(++index); }
+		@Override public DataEvent previous() { return events.get(--index); }
+		@Override public DataEvent goTo(int target) { index = target; return events.get(index); }
+		@Override public void close() { }
 	}
 
 	private static final class FakeSource implements EventSource {
