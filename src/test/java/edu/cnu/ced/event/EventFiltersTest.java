@@ -1,9 +1,12 @@
 package edu.cnu.ced.event;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.lang.reflect.Proxy;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.prefs.Preferences;
@@ -44,6 +47,21 @@ class EventFiltersTest {
 			filters.requiredBanksFilter().setActive(false);
 			filters.particleIdFilter().setActive(true);
 			assertTrue(filters.isAnyActive());
+		});
+	}
+
+	@Test void notifyChangedFiresEveryRegisteredListenerAndRemoveStopsIt() throws Exception {
+		withFilters(filters -> {
+			List<String> fired = new ArrayList<>();
+			Runnable listener = () -> fired.add("changed");
+			filters.addListener(listener);
+
+			filters.notifyChanged();
+			assertEquals(List.of("changed"), fired);
+
+			filters.removeListener(listener);
+			filters.notifyChanged();
+			assertEquals(List.of("changed"), fired, "removed listener doesn't fire again");
 		});
 	}
 

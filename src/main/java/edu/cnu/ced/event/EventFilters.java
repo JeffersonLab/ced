@@ -2,6 +2,7 @@ package edu.cnu.ced.event;
 
 import java.util.Map;
 import java.util.WeakHashMap;
+import java.util.concurrent.CopyOnWriteArrayList;
 
 /**
  * The three criteria an event must pass, combined with a logical AND over
@@ -21,6 +22,7 @@ public final class EventFilters implements EventFilter {
 	private final TriggerBitFilter triggerBitFilter;
 	private final RequiredBanksFilter requiredBanksFilter;
 	private final ParticleIdFilter particleIdFilter;
+	private final CopyOnWriteArrayList<Runnable> listeners = new CopyOnWriteArrayList<>();
 
 	public EventFilters() {
 		this(new TriggerBitFilter(), new RequiredBanksFilter(), new ParticleIdFilter());
@@ -59,5 +61,27 @@ public final class EventFilters implements EventFilter {
 	/** @return whether any of the three criteria is currently active -- drives the "Filtering Active" indicator */
 	public boolean isAnyActive() {
 		return triggerBitFilter.isActive() || requiredBanksFilter.isActive() || particleIdFilter.isActive();
+	}
+
+	/**
+	 * Subscribe to configuration changes (any criterion's active flag,
+	 * pattern, bank list, or species set). Deliberately separate from {@link
+	 * EventNavigator}'s own listeners: those exist to reprocess and repaint
+	 * the current event, which every open detector view does on every call --
+	 * expensive, and pointless work to run just because a checkbox in the
+	 * Filter dialog changed. A listener here should stay cheap (e.g. toggling
+	 * a "Filtering Active" label's visibility).
+	 */
+	public void addListener(Runnable listener) {
+		listeners.addIfAbsent(listener);
+	}
+
+	public void removeListener(Runnable listener) {
+		listeners.remove(listener);
+	}
+
+	/** Notify listeners that a criterion's configuration changed. */
+	public void notifyChanged() {
+		listeners.forEach(Runnable::run);
 	}
 }

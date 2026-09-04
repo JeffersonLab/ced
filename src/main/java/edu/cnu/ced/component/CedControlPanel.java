@@ -62,6 +62,11 @@ public final class CedControlPanel extends JPanel {
 		this.bankPrefixes = List.copyOf(bankPrefixes);
 		this.bankViewerOpener = BankViewerOpener.sharedFor(navigator);
 		this.eventFilters = EventFilters.sharedFor(navigator);
+		// cheap, direct label update -- deliberately not routed through the
+		// navigator's own listeners, which every open detector view uses to
+		// reprocess and repaint the current event; doing that on every Filter
+		// dialog checkbox click made the dialog painfully slow to use.
+		eventFilters.addListener(() -> filteringActiveLabel.setVisible(eventFilters.isAnyActive()));
 		int panelWidth = Math.max(DEFAULT_WIDTH, width);
 		setPreferredSize(new Dimension(panelWidth, 420));
 		displayArray = new CedDisplayArray(options, 3, 4, 3, displayChanged);

@@ -327,8 +327,8 @@ public final class CedApplication extends BaseMDIApplication {
 
 	private void showFilterDialog() {
 		if (filterDialog == null) {
-			filterDialog = new FilterDialog(this, EventFilters.sharedFor(eventNavigator),
-					eventNavigator::refresh);
+			EventFilters eventFilters = EventFilters.sharedFor(eventNavigator);
+			filterDialog = new FilterDialog(this, eventFilters, eventFilters::notifyChanged);
 		}
 		filterDialog.setVisible(true);
 		filterDialog.toFront();

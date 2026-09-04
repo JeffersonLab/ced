@@ -203,7 +203,7 @@ public final class FilterDialog extends JDialog {
 
 		JCheckBox active = new JCheckBox("Active", requiredBanksFilter.isActive());
 		JLabel hint = new JLabel("One bank name per line, e.g. CND::adc -- every listed bank must be present");
-		JPanel top = new JPanel(new BorderLayout());
+		JPanel top = new JPanel(new BorderLayout(10, 0));
 		top.add(active, BorderLayout.WEST);
 		top.add(hint, BorderLayout.CENTER);
 		section.add(top, BorderLayout.NORTH);
@@ -248,7 +248,7 @@ public final class FilterDialog extends JDialog {
 
 		JCheckBox active = new JCheckBox("Active", particleIdFilter.isActive());
 		JLabel hint = new JLabel("At least one reconstructed particle must be one of the checked species");
-		JPanel top = new JPanel(new BorderLayout());
+		JPanel top = new JPanel(new BorderLayout(10, 0));
 		top.add(active, BorderLayout.WEST);
 		top.add(hint, BorderLayout.CENTER);
 		section.add(top, BorderLayout.NORTH);

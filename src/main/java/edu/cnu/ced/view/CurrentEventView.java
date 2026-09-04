@@ -77,6 +77,9 @@ public final class CurrentEventView extends BaseView {
 		this.navigator = navigator;
 		this.bankViewerOpener = BankViewerOpener.sharedFor(navigator);
 		this.eventFilters = EventFilters.sharedFor(navigator);
+		// cheap, direct label update -- see CedControlPanel for why this isn't
+		// routed through the navigator's own (expensive, full-repaint) listeners.
+		eventFilters.addListener(() -> filteringActiveLabel.setVisible(eventFilters.isAnyActive()));
 
 		JPanel header = new JPanel(new BorderLayout(8, 4));
 		header.setBorder(BorderFactory.createEmptyBorder(8, 8, 4, 8));
