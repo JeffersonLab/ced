@@ -67,6 +67,11 @@ public final class CedDrawingStyle {
 	}
 
 	/**
+	 * Resolve a reconstructed particle's PDG/Lund id and charge to a {@link
+	 * LundId} (name, mass, charge) -- public so other track/particle tables
+	 * (e.g. the Monte Carlo Tracks and Reconstructed Tracks views) can share
+	 * this exact resolution, not just drawing style.
+	 * <p>
 	 * {@code LundSupport.get(id, charge)} only falls back to a charge-keyed
 	 * "unknown" id when {@code id} isn't found in its registry at all -- but
 	 * {@code pid == 0} (this codebase's own "reconstruction couldn't assign
@@ -77,7 +82,7 @@ public final class CedDrawingStyle {
 	 * {@code unknownPlus}/{@code unknownMinus}/{@code unknownNeutral}
 	 * constant by charge directly instead.
 	 */
-	private static LundId lundId(int pid, int charge) {
+	public static LundId lundId(int pid, int charge) {
 		if (pid == 0) {
 			if (charge > 0) return LundSupport.unknownPlus;
 			if (charge < 0) return LundSupport.unknownMinus;
