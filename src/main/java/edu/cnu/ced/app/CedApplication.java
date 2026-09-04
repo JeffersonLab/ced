@@ -107,11 +107,14 @@ public final class CedApplication extends BaseMDIApplication {
 	}
 
 	// The main menu bar's trigger-bit status row, matching legacy CED's own
-	// main-window trigger display (see TriggerBitsPanel). Parked on the far
-	// right of the menu bar via horizontal glue, same as legacy mounts its
-	// TriggerMenuPanel directly on the JMenuBar rather than a separate toolbar.
+	// main-window trigger display (see TriggerBitsPanel). A fixed strut keeps
+	// it visibly separated from the last pull-down menu even in a narrow
+	// window; the glue after it parks it toward the right, same as legacy
+	// mounts its TriggerMenuPanel directly on the JMenuBar (strut then glue
+	// then panel) rather than on a separate toolbar.
 	private void addTriggerPanel() {
 		TriggerBitsPanel triggerBitsPanel = new TriggerBitsPanel();
+		getJMenuBar().add(Box.createHorizontalStrut(20));
 		getJMenuBar().add(Box.createHorizontalGlue());
 		getJMenuBar().add(triggerBitsPanel);
 		eventNavigator.addListener(state -> {
