@@ -401,6 +401,20 @@ public final class CedApplication extends BaseMDIApplication {
 		// JSON Viewer is now lazy (see addInitialViews): its own ViewConfiguration
 		// placement (column 17, BOTTOMRIGHT) applies automatically once it's first
 		// opened from the Views menu, so there's nothing to position here.
+
+		// Each eager view's own placement (ViewConfiguration.placeViewOnVirtualDesktop)
+		// navigates the desktop to ITS column, deferred via invokeLater -- so
+		// whichever eager view was registered last in addInitialViews silently
+		// decides what column the app opens on. onVirtualDesktopReady (which calls
+		// this method) fires after the frame is shown and Swing has stabilized,
+		// reliably after every per-view invokeLater placement has already run, so
+		// this always wins the race and puts the sector views back on screen at
+		// startup regardless of what gets added to addInitialViews later, or in
+		// what order.
+		VirtualView virtualView = VirtualView.getInstance();
+		if (virtualView != null) {
+			virtualView.gotoColumn(0);
+		}
 	}
 
 	@Override
