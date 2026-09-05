@@ -56,6 +56,7 @@ import edu.cnu.ced.view.CurrentEventView;
 import edu.cnu.ced.view.currentevent.BankViewerDisplayMode;
 import edu.cnu.ced.view.fmt.FMTXYView;
 import edu.cnu.ced.view.ftcal.FTCalXYView;
+import edu.cnu.ced.view.urwt.URWTXYView;
 import edu.cnu.ced.view.ftof.FTOFView;
 import edu.cnu.ced.view.pcal.PCalView;
 import edu.cnu.ced.view.ecal.ECalView;
@@ -273,6 +274,10 @@ public final class CedApplication extends BaseMDIApplication {
 		timeStep("FMT XY (lazy registration)", () -> ViewManager.getInstance().addConfiguration(
 				ViewConfiguration.lazy("FMT XY", () -> new FMTXYView(geometryService.fmt(),
 						eventNavigator, accumulationService.fmt()),
+						8, 0, 0, VirtualView.CENTER)));
+		timeStep("URWT XY (lazy registration)", () -> ViewManager.getInstance().addConfiguration(
+				ViewConfiguration.lazy("URWT XY", () -> new URWTXYView(geometryService.urwt(),
+						eventNavigator, accumulationService.urwt()),
 						8, 0, 0, VirtualView.CENTER)));
 		timeStep("PCAL", () -> ViewManager.getInstance().addConfiguration(ViewConfiguration.eager(
 				"PCAL", () -> new PCalView(geometryService.pcal(), eventNavigator,
