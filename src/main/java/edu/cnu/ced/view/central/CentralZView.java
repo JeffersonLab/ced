@@ -36,7 +36,10 @@ import edu.cnu.ced.data.CentralEventData.AdcHit;
 import edu.cnu.ced.data.CentralEventData.Cross;
 import edu.cnu.ced.data.CentralEventData.Detector;
 import edu.cnu.ced.data.CentralEventData.ReconHit;
+import edu.cnu.ced.data.MonteCarloTracks;
 import edu.cnu.ced.data.RecEventData;
+import edu.cnu.ced.data.ReconstructedTracks;
+import edu.cnu.ced.data.TrackRow;
 import edu.cnu.ced.event.EventNavigationState;
 import edu.cnu.ced.event.EventNavigator;
 import edu.cnu.ced.geometry.BMTGeometry;
@@ -73,11 +76,15 @@ public final class CentralZView extends CedView implements MagneticFieldChangeLi
 	private final Map<Object, Point> markers = new HashMap<>();
 	private final Map<Integer, Rectangle[]> bmtLayers = new HashMap<>();
 	private final List<ScreenParticle> screenParticles = new ArrayList<>();
+	private final List<ScreenTrack> screenMcTracks = new ArrayList<>();
+	private final List<ScreenTrack> screenCvtTracks = new ArrayList<>();
 	private double phiDegrees;
 	private double cosPhi = 1;
 	private double sinPhi;
 	private volatile CentralEventData data = CentralEventData.from(null);
 	private volatile RecEventData recData = RecEventData.from(null);
+	private volatile List<TrackRow> mcTracks = List.of();
+	private volatile List<TrackRow> cvtTracks = List.of();
 	private volatile FieldProbe fieldProbe = FieldProbe.factory();
 
 	public CentralZView(BSTGeometry bst, BMTGeometry bmt, EventNavigator navigator,
@@ -96,7 +103,8 @@ public final class CentralZView extends CedView implements MagneticFieldChangeLi
 		initializeCedView(EnumSet.of(CedDisplayOption.SINGLE_EVENT,
 				CedDisplayOption.ACCUMULATION, CedDisplayOption.RAW_DATA,
 				CedDisplayOption.RECON_HITS, CedDisplayOption.CROSSES,
-				CedDisplayOption.RECON_TRACKS),
+				CedDisplayOption.RECON_TRACKS, CedDisplayOption.MC_TRACKS,
+				CedDisplayOption.CVT_TRACKS),
 				List.of("BST", "BMT", "CND", "CTOF", "CVT"),
 				ScientificColorMap.TURBO, "Relative ADC / accumulation");
 		addDisplayControl(createPhiControl());
@@ -136,6 +144,8 @@ public final class CentralZView extends CedView implements MagneticFieldChangeLi
 	protected void eventChanged(EventNavigationState state) {
 		data = CentralEventData.from(state.snapshot());
 		recData = RecEventData.from(state.snapshot());
+		mcTracks = MonteCarloTracks.from(state.snapshot()).tracks();
+		cvtTracks = ReconstructedTracks.cvtTracks(state.snapshot());
 		swimCache.forEvent(state.snapshot());
 	}
 
@@ -148,6 +158,8 @@ public final class CentralZView extends CedView implements MagneticFieldChangeLi
 			markers.clear();
 			bmtLayers.clear();
 			screenParticles.clear();
+			screenMcTracks.clear();
+			screenCvtTracks.clear();
 			drawBMT(g, container);
 			drawBST(g, container);
 			if (isDisplayed(CedDisplayOption.ACCUMULATION)) drawAccumulation(g, container);
@@ -156,6 +168,8 @@ public final class CentralZView extends CedView implements MagneticFieldChangeLi
 				if (isDisplayed(CedDisplayOption.RECON_HITS)) drawRecon(g, container);
 				if (isDisplayed(CedDisplayOption.CROSSES)) drawCrosses(g, container);
 				if (isDisplayed(CedDisplayOption.RECON_TRACKS)) drawParticles(g, container);
+				if (isDisplayed(CedDisplayOption.MC_TRACKS)) drawTrackRows(g, container, mcTracks, screenMcTracks);
+				if (isDisplayed(CedDisplayOption.CVT_TRACKS)) drawTrackRows(g, container, cvtTracks, screenCvtTracks);
 			}
 			drawAxes(g, container);
 		} finally {
@@ -188,6 +202,37 @@ public final class CentralZView extends CedView implements MagneticFieldChangeLi
 			}
 			Point vertex = points.get(0);
 			screenParticles.add(new ScreenParticle(particle, points));
+			g.setColor(color);
+			g.fillOval(vertex.x - 3, vertex.y - 3, 6, 6);
+			g.setColor(CedDrawingStyle.outline(color));
+			g.setStroke(new BasicStroke(1f));
+			g.drawOval(vertex.x - 3, vertex.y - 3, 6, 6);
+		}
+	}
+
+	/**
+	 * Draws a group of {@link TrackRow}s (Monte Carlo truth, or CVT track
+	 * candidates) the same way {@link #drawParticles} draws REC::Particle,
+	 * projected the same (z, azimuthally-rotated-transverse) way. No stub
+	 * fallback when swimming fails, matching drawParticles's own behavior
+	 * here (unlike SectorView, which does fall back to a direction stub).
+	 */
+	private void drawTrackRows(Graphics2D g, IContainer c, List<TrackRow> tracks, List<ScreenTrack> sink) {
+		for (TrackRow track : tracks) {
+			List<Point3> swum = swimCache.trajectory(SwimmableParticle.of(track), fieldProbe);
+			if (swum.size() < 2) continue;
+			Color color = CedDrawingStyle.particleColor(track.pid(), track.charge());
+			Stroke stroke = CedDrawingStyle.particleStroke(track.pid(), track.charge());
+			List<Point> points = new ArrayList<>(swum.size());
+			for (Point3 p : swum) points.add(screen(c, p.z(), projected(p.x(), p.y())));
+			g.setColor(color);
+			g.setStroke(stroke);
+			for (int i = 1; i < points.size(); i++) {
+				Point a = points.get(i - 1), b = points.get(i);
+				g.drawLine(a.x, a.y, b.x, b.y);
+			}
+			Point vertex = points.get(0);
+			sink.add(new ScreenTrack(track, points));
 			g.setColor(color);
 			g.fillOval(vertex.x - 3, vertex.y - 3, 6, 6);
 			g.setColor(CedDrawingStyle.outline(color));
@@ -399,6 +444,18 @@ public final class CentralZView extends CedView implements MagneticFieldChangeLi
 				break;
 			}
 		}
+		for (ScreenTrack drawn : screenMcTracks) {
+			if (nearAnySegment(drawn.points(), sp, 5.0)) {
+				addTrackFeedback(drawn.track(), "MC", "orange red", feedback);
+				break;
+			}
+		}
+		for (ScreenTrack drawn : screenCvtTracks) {
+			if (nearAnySegment(drawn.points(), sp, 5.0)) {
+				addTrackFeedback(drawn.track(), "CVT", "dark green", feedback);
+				break;
+			}
+		}
 	}
 
 	/** Hover feedback for anywhere along a drawn trajectory, not just its vertex marker. */
@@ -412,6 +469,14 @@ public final class CentralZView extends CedView implements MagneticFieldChangeLi
 		}
 	}
 
+	/** Hover feedback shared by the {@link ScreenTrack}-backed sources (MC, CVT); "color" matches each source's own drawn color. */
+	private static void addTrackFeedback(TrackRow t, String label, String color, List<String> f) {
+		f.add(String.format("$%s$%s %s (pid %d, q=%+d)", color, label, t.name(), t.pid(), t.charge()));
+		f.add(String.format("$%s$p = %.3f GeV/c  theta = %.1f°  phi = %.1f°", color,
+				t.momentumMeV() / 1000.0, t.thetaDeg(), t.phiDeg()));
+		f.add(String.format("$%s$vertex (%.2f, %.2f, %.2f) cm", color, t.x0(), t.y0(), t.z0()));
+	}
+
 	/** @return true if screenPoint lies within tolerance pixels of any segment of the polyline points. */
 	private static boolean nearAnySegment(List<Point> points, Point screenPoint, double tolerance) {
 		for (int i = 1; i < points.size(); i++) {
@@ -422,6 +487,7 @@ public final class CentralZView extends CedView implements MagneticFieldChangeLi
 	}
 
 	private record ScreenParticle(RecEventData.Particle particle, List<Point> points) { }
+	private record ScreenTrack(TrackRow track, List<Point> points) { }
 
 	private void drawAxes(Graphics2D g, IContainer c) {
 		Rectangle screen = new Rectangle(0, 0, c.getComponent().getWidth() - 1,

@@ -30,6 +30,8 @@ public record ReconstructedTracks(List<TrackRow> tracks) {
 
 	public static final String HB_TRACK_BANK = "HitBasedTrkg::HBTracks";
 	public static final String TB_TRACK_BANK = "TimeBasedTrkg::TBTracks";
+	public static final String CVT_REC_TRACK_BANK = "CVTRec::Tracks";
+	public static final String CVT_PASS1_TRACK_BANK = "CVT::Tracks";
 
 	public static ReconstructedTracks from(EventSnapshot snapshot) {
 		if (snapshot == null || !snapshot.hasEvent()) {
@@ -41,8 +43,8 @@ public record ReconstructedTracks(List<TrackRow> tracks) {
 		addRecParticles(snapshot, rows);
 		addDcTracks(snapshot, "HitBasedTrkg::AITracks", true, rows);
 		addDcTracks(snapshot, "TimeBasedTrkg::AITracks", false, rows);
-		addCvtTracks(snapshot, "CVTRec::Tracks", rows);
-		addCvtTracks(snapshot, "CVT::Tracks", rows);
+		addCvtTracks(snapshot, CVT_REC_TRACK_BANK, rows);
+		addCvtTracks(snapshot, CVT_PASS1_TRACK_BANK, rows);
 		return rows.isEmpty() ? EMPTY : new ReconstructedTracks(rows);
 	}
 
@@ -72,6 +74,23 @@ public record ReconstructedTracks(List<TrackRow> tracks) {
 		}
 		List<TrackRow> rows = new ArrayList<>();
 		addDcTracks(snapshot, TB_TRACK_BANK, false, rows);
+		return rows;
+	}
+
+	/**
+	 * Just the CVT track candidates -- both the online {@value
+	 * #CVT_REC_TRACK_BANK} and pass1 {@value #CVT_PASS1_TRACK_BANK} banks --
+	 * for a Central Detector view's own "CVT Tracks" display toggle, drawn in
+	 * {@code LundSupport}'s customary CVT dark-green (see {@code
+	 * CedDrawingStyle#particleColor}).
+	 */
+	public static List<TrackRow> cvtTracks(EventSnapshot snapshot) {
+		if (snapshot == null || !snapshot.hasEvent()) {
+			return List.of();
+		}
+		List<TrackRow> rows = new ArrayList<>();
+		addCvtTracks(snapshot, CVT_REC_TRACK_BANK, rows);
+		addCvtTracks(snapshot, CVT_PASS1_TRACK_BANK, rows);
 		return rows;
 	}
 

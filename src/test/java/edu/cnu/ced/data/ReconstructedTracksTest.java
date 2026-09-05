@@ -122,6 +122,28 @@ class ReconstructedTracksTest {
 		assertTrue(ReconstructedTracks.tbTracks(null).isEmpty());
 	}
 
+	@Test void cvtTracksReturnsBothCvtBanksButNoDcOrRecParticleTracks() {
+		// A Central Detector view's own "CVT Tracks" toggle wants both CVT
+		// sources together, but nothing else -- unlike hbTracks/tbTracks,
+		// which are each just one bank.
+		Map<String, DataBank> banks = new LinkedHashMap<>();
+		banks.put(ReconstructedTracks.HB_TRACK_BANK, dcTrackBank(1, (short) 0, (byte) 1, 0, 0, 0, 0, 0, 0.4f));
+		banks.put(ReconstructedTracks.CVT_REC_TRACK_BANK, cvtTrackBank(5, (byte) 1, 0.3f, 0f, 2.0f, 5.0f, 0.5f));
+		banks.put(ReconstructedTracks.CVT_PASS1_TRACK_BANK, cvtTrackBank(6, (byte) -1, 0.2f, 0f, 1.0f, 3.0f, 0.1f));
+
+		java.util.List<TrackRow> cvt = ReconstructedTracks.cvtTracks(EventSnapshot.of(event(banks)));
+
+		assertEquals(2, cvt.size());
+		assertEquals(
+				java.util.List.of(ReconstructedTracks.CVT_REC_TRACK_BANK, ReconstructedTracks.CVT_PASS1_TRACK_BANK),
+				cvt.stream().map(TrackRow::source).toList());
+	}
+
+	@Test void cvtTracksIsEmptyForAMissingOrNullSnapshot() {
+		assertTrue(ReconstructedTracks.cvtTracks(EventSnapshot.empty()).isEmpty());
+		assertTrue(ReconstructedTracks.cvtTracks(null).isEmpty());
+	}
+
 	private static DataBank dcTrackBank(int id, short status, byte q, float vx, float vy, float vz,
 			float px, float py, float pz) {
 		Map<String, Object> values = Map.ofEntries(
