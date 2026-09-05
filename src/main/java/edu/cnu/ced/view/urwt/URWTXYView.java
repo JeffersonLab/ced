@@ -4,24 +4,39 @@ import java.awt.BasicStroke;
 import java.awt.Color;
 import java.awt.Graphics2D;
 import java.awt.Point;
+import java.awt.Polygon;
 import java.awt.RenderingHints;
-import java.awt.geom.Line2D;
+import java.awt.Stroke;
 import java.awt.geom.Point2D;
 import java.awt.geom.Rectangle2D;
+import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.EnumSet;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+import cnuphys.magfield.FieldProbe;
+import cnuphys.magfield.MagneticFieldChangeListener;
+import cnuphys.magfield.MagneticFields;
+
 import edu.cnu.ced.component.CedDisplayOption;
+import edu.cnu.ced.data.MonteCarloTracks;
+import edu.cnu.ced.data.RecEventData;
+import edu.cnu.ced.data.ReconstructedTracks;
+import edu.cnu.ced.data.TrackRow;
 import edu.cnu.ced.data.URWTAccumulation;
 import edu.cnu.ced.data.URWTEventData;
 import edu.cnu.ced.data.URWTEventData.Cluster;
 import edu.cnu.ced.data.URWTEventData.Cross;
 import edu.cnu.ced.event.EventNavigationState;
 import edu.cnu.ced.event.EventNavigator;
+import edu.cnu.ced.geometry.Point3;
 import edu.cnu.ced.geometry.Segment3;
 import edu.cnu.ced.geometry.URWTGeometry;
+import edu.cnu.ced.style.CedDrawingStyle;
+import edu.cnu.ced.swim.SwimTrajectoryCache;
+import edu.cnu.ced.swim.SwimmableParticle;
 import edu.cnu.ced.view.CedXYView;
 import edu.cnu.mdi.container.IContainer;
 import edu.cnu.mdi.graphics.toolbar.ToolBits;
@@ -30,23 +45,25 @@ import edu.cnu.mdi.util.PropertyUtils;
 
 /**
  * μrWT (Micro Ring Wire Tracker) laboratory XY display backed directly by
- * CLAS banks -- four strip layers per sector viewed transverse to the beam.
+ * CLAS banks -- six sectors, each shown as its own physical panel outline
+ * (one per layer), plus reconstructed/MC/HB/TB track overlays swum through
+ * the field, matching legacy CED's own μrWT view (which draws Truth/REC
+ * ::Particle/HB/TB tracks on top of the six panels) and CentralXYView's
+ * established swim-and-draw pattern.
  * <p>
- * No raw-hit markers: {@code URWT::hits} addresses a strip by (sector,
- * layer, strip), but its layer numbering doesn't cleanly line up with
- * {@link URWTGeometry}'s own 4-layer model (see {@link URWTEventData}'s
- * class doc), so this draws only what has an unambiguous position --
- * geometry itself, clusters (which carry explicit endpoints), and crosses
- * (which carry an explicit position) -- plus occupancy accumulation, which
- * only needs the address, not a resolved one.
- * </p>
- * <p>
- * URWTGeometry's own points are already in cm, confirmed empirically the
- * same way as FMTGeometry's were, not assumed.
+ * Earlier versions of this view drew every individual strip as its own
+ * thin line, which for ~1400 strips per (sector, layer) rendered as a dense
+ * scribble rather than legacy's clean six-panel hexagon -- each "strip" in
+ * {@link URWTGeometry} is a very short segment across its own narrow width;
+ * it's the many strip <em>indices</em>, not a strip's own start/end, that
+ * sweep across the panel's full extent. The fix: take the convex hull of
+ * every strip's midpoint for a given (sector, layer), which for a genuinely
+ * convex wedge/trapezoid panel is exactly its true outline -- computed once
+ * per panel at construction time (geometry never changes), not per repaint.
  * </p>
  */
 @SuppressWarnings("serial")
-public final class URWTXYView extends CedXYView {
+public final class URWTXYView extends CedXYView implements MagneticFieldChangeListener {
 
 	private static final Color[] LAYER_COLORS = {
 			new Color(220, 20, 60), new Color(255, 140, 0), new Color(30, 144, 255), new Color(148, 0, 211)
@@ -56,15 +73,28 @@ public final class URWTXYView extends CedXYView {
 
 	private final URWTGeometry geometry;
 	private final URWTAccumulation accumulation;
+	private final SwimTrajectoryCache swimCache;
+	// Panel outlines (world-space convex hull of that (sector, layer)'s strip
+	// midpoints), computed once at construction -- see class doc.
+	private final Map<PanelAddress, List<Point3>> panelOutlines = new HashMap<>();
 	private final Map<Object, Point> markers = new HashMap<>();
-	// Screen-space endpoints for every drawn strip, cached from the draw pass so
-	// getFeedbackStrings (called on every mouse move) doesn't redo geometry
-	// lookups and world-to-local transforms per hover -- same reasoning as
-	// FMTXYView's identical cache.
-	private final Map<StripAddress, Point[]> stripScreenPoints = new HashMap<>();
+	private final List<ScreenTrack> screenReconTracks = new ArrayList<>();
+	private final List<ScreenTrack> screenMcTracks = new ArrayList<>();
+	private final List<ScreenTrack> screenHbTracks = new ArrayList<>();
+	private final List<ScreenTrack> screenTbTracks = new ArrayList<>();
+	private final List<ScreenTrack> screenAiHbTracks = new ArrayList<>();
+	private final List<ScreenTrack> screenAiTbTracks = new ArrayList<>();
 	private volatile URWTEventData eventData = URWTEventData.from(null);
+	private volatile RecEventData recData = RecEventData.from(null);
+	private volatile List<TrackRow> mcTracks = List.of();
+	private volatile List<TrackRow> hbTracks = List.of();
+	private volatile List<TrackRow> tbTracks = List.of();
+	private volatile List<TrackRow> aiHbTracks = List.of();
+	private volatile List<TrackRow> aiTbTracks = List.of();
+	private volatile FieldProbe fieldProbe = FieldProbe.factory();
 
-	public URWTXYView(URWTGeometry geometry, EventNavigator navigator, URWTAccumulation accumulation) {
+	public URWTXYView(URWTGeometry geometry, EventNavigator navigator, URWTAccumulation accumulation,
+			SwimTrajectoryCache swimCache) {
 		super(navigator, PropertyUtils.TITLE, "μrWT XY",
 				PropertyUtils.WIDTH, 700, PropertyUtils.HEIGHT, 700,
 				PropertyUtils.WORLDSYSTEM, new Rectangle2D.Double(-250, 250, 500, -500),
@@ -73,15 +103,68 @@ public final class URWTXYView extends CedXYView {
 				PropertyUtils.WHEELZOOM, true, PropertyUtils.VISIBLE, true);
 		this.geometry = geometry;
 		this.accumulation = accumulation;
+		this.swimCache = swimCache;
+		buildPanelOutlines();
 		setAfterDraw(this::draw);
 		initializeCedView(EnumSet.of(CedDisplayOption.SINGLE_EVENT, CedDisplayOption.ACCUMULATION,
+				CedDisplayOption.RECON_TRACKS, CedDisplayOption.MC_TRACKS,
+				CedDisplayOption.HB_TRACKS, CedDisplayOption.TB_TRACKS,
+				CedDisplayOption.AI_HB_TRACKS, CedDisplayOption.AI_TB_TRACKS,
 				CedDisplayOption.CLUSTERS, CedDisplayOption.CROSSES),
 				List.of("URWT::"), ScientificColorMap.TURBO, "Relative occupancy / accumulation");
+		MagneticFields.getInstance().addMagneticFieldChangeListener(this);
+	}
+
+	private void buildPanelOutlines() {
+		for (int sector = 1; sector <= URWTGeometry.SECTOR_COUNT; sector++) {
+			for (int layer = 1; layer <= URWTGeometry.LAYER_COUNT; layer++) {
+				List<Segment3> strips = geometry.detector(sector, layer).strips();
+				List<Point3> midpoints = new ArrayList<>(strips.size());
+				for (Segment3 strip : strips) {
+					midpoints.add(new Point3((strip.start().x() + strip.end().x()) / 2,
+							(strip.start().y() + strip.end().y()) / 2, 0));
+				}
+				panelOutlines.put(new PanelAddress(sector, layer), convexHull(midpoints));
+			}
+		}
+	}
+
+	/** Andrew's monotone chain -- exact for a genuinely convex panel, which a wedge/trapezoid strip layer is. */
+	static List<Point3> convexHull(List<Point3> points) {
+		List<Point3> sorted = new ArrayList<>(points);
+		sorted.sort(Comparator.<Point3>comparingDouble(Point3::x).thenComparingDouble(Point3::y));
+		int n = sorted.size();
+		if (n < 3) return sorted;
+		Point3[] hull = new Point3[2 * n];
+		int k = 0;
+		for (int i = 0; i < n; i++) {
+			while (k >= 2 && cross(hull[k - 2], hull[k - 1], sorted.get(i)) <= 0) k--;
+			hull[k++] = sorted.get(i);
+		}
+		int lower = k + 1;
+		for (int i = n - 2; i >= 0; i--) {
+			while (k >= lower && cross(hull[k - 2], hull[k - 1], sorted.get(i)) <= 0) k--;
+			hull[k++] = sorted.get(i);
+		}
+		List<Point3> result = new ArrayList<>(k - 1);
+		for (int i = 0; i < k - 1; i++) result.add(hull[i]);
+		return result;
+	}
+
+	private static double cross(Point3 o, Point3 a, Point3 b) {
+		return (a.x() - o.x()) * (b.y() - o.y()) - (a.y() - o.y()) * (b.x() - o.x());
 	}
 
 	@Override
 	protected void eventChanged(EventNavigationState state) {
 		eventData = URWTEventData.from(state.snapshot());
+		recData = RecEventData.from(state.snapshot());
+		mcTracks = MonteCarloTracks.from(state.snapshot()).tracks();
+		hbTracks = ReconstructedTracks.hbTracks(state.snapshot());
+		tbTracks = ReconstructedTracks.tbTracks(state.snapshot());
+		aiHbTracks = ReconstructedTracks.aiHbTracks(state.snapshot());
+		aiTbTracks = ReconstructedTracks.aiTbTracks(state.snapshot());
+		swimCache.forEvent(state.snapshot());
 	}
 
 	private void draw(Graphics2D graphics, IContainer container) {
@@ -89,13 +172,26 @@ public final class URWTXYView extends CedXYView {
 		try {
 			g.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
 			markers.clear();
-			stripScreenPoints.clear();
+			screenReconTracks.clear();
+			screenMcTracks.clear();
+			screenHbTracks.clear();
+			screenTbTracks.clear();
+			screenAiHbTracks.clear();
+			screenAiTbTracks.clear();
 			if (isDisplayed(CedDisplayOption.ACCUMULATION)) {
-				drawAccumulatedStrips(g, container);
+				drawAccumulatedPanels(g, container);
 			} else {
-				drawStrips(g, container);
+				drawPanels(g, container);
 				if (isDisplayed(CedDisplayOption.CLUSTERS)) drawClusters(g, container);
 				if (isDisplayed(CedDisplayOption.CROSSES)) drawCrosses(g, container);
+				if (isDisplayed(CedDisplayOption.RECON_TRACKS)) drawReconTracks(g, container);
+				drawTrackRows(g, container, CedDisplayOption.MC_TRACKS, mcTracks, screenMcTracks, null);
+				drawTrackRows(g, container, CedDisplayOption.HB_TRACKS, hbTracks, screenHbTracks, null);
+				drawTrackRows(g, container, CedDisplayOption.TB_TRACKS, tbTracks, screenTbTracks, null);
+				drawTrackRows(g, container, CedDisplayOption.AI_HB_TRACKS, aiHbTracks, screenAiHbTracks,
+						CedDrawingStyle.AI_HIT_BASED);
+				drawTrackRows(g, container, CedDisplayOption.AI_TB_TRACKS, aiTbTracks, screenAiTbTracks,
+						CedDrawingStyle.AI_TIME_BASED);
 			}
 			drawXYAxes(g, container);
 		} finally {
@@ -103,42 +199,44 @@ public final class URWTXYView extends CedXYView {
 		}
 	}
 
-	private void drawStrips(Graphics2D g, IContainer container) {
-		g.setStroke(new BasicStroke(1f));
+	private void drawPanels(Graphics2D g, IContainer container) {
+		g.setStroke(new BasicStroke(1.4f));
 		for (int sector = 1; sector <= URWTGeometry.SECTOR_COUNT; sector++) {
 			for (int layer = 1; layer <= URWTGeometry.LAYER_COUNT; layer++) {
 				g.setColor(LAYER_COLORS[layer - 1]);
-				List<Segment3> strips = geometry.detector(sector, layer).strips();
-				for (int strip = 1; strip <= strips.size(); strip++) {
-					drawStripLine(g, container, sector, layer, strip, strips.get(strip - 1));
-				}
+				g.drawPolygon(panelPolygon(container, sector, layer));
 			}
 		}
 	}
 
-	private void drawAccumulatedStrips(Graphics2D g, IContainer container) {
+	private void drawAccumulatedPanels(Graphics2D g, IContainer container) {
 		int max = accumulation.maximumCount();
-		g.setStroke(new BasicStroke(1f));
+		g.setStroke(new BasicStroke(1.4f));
 		for (int sector = 1; sector <= URWTGeometry.SECTOR_COUNT; sector++) {
 			for (int layer = 1; layer <= URWTGeometry.LAYER_COUNT; layer++) {
-				List<Segment3> strips = geometry.detector(sector, layer).strips();
-				for (int strip = 1; strip <= strips.size(); strip++) {
-					int count = accumulation.count(sector, layer, strip);
-					g.setColor(count == 0 || max == 0
-							? new Color(230, 230, 230)
-							: ScientificColorMap.TURBO.colorAt((double) count / max));
-					drawStripLine(g, container, sector, layer, strip, strips.get(strip - 1));
+				// Occupancy is per-strip, not per-panel; show the panel's peak
+				// strip occupancy as its outline color, a coarser but honest
+				// summary given the panel itself is drawn once, not per-strip.
+				int strips = geometry.detector(sector, layer).strips().size();
+				int count = 0;
+				for (int strip = 1; strip <= strips; strip++) {
+					count = Math.max(count, accumulation.count(sector, layer, strip));
 				}
+				g.setColor(count == 0 || max == 0
+						? new Color(230, 230, 230)
+						: ScientificColorMap.TURBO.colorAt((double) count / max));
+				g.drawPolygon(panelPolygon(container, sector, layer));
 			}
 		}
 	}
 
-	private void drawStripLine(Graphics2D g, IContainer container, int sector, int layer, int strip,
-			Segment3 line) {
-		Point a = screen(container, line.start().x(), line.start().y());
-		Point b = screen(container, line.end().x(), line.end().y());
-		stripScreenPoints.put(new StripAddress(sector, layer, strip), new Point[] { a, b });
-		g.drawLine(a.x, a.y, b.x, b.y);
+	private Polygon panelPolygon(IContainer container, int sector, int layer) {
+		Polygon polygon = new Polygon();
+		for (Point3 vertex : panelOutlines.get(new PanelAddress(sector, layer))) {
+			Point p = screen(container, vertex.x(), vertex.y());
+			polygon.addPoint(p.x, p.y);
+		}
+		return polygon;
 	}
 
 	private void drawClusters(Graphics2D g, IContainer container) {
@@ -166,33 +264,78 @@ public final class URWTXYView extends CedXYView {
 		}
 	}
 
+	/** REC::Particle, swum and drawn species-colored -- same pattern as CentralXYView's own drawParticles. */
+	private void drawReconTracks(Graphics2D g, IContainer container) {
+		for (RecEventData.Particle particle : recData.particles()) {
+			List<Point3> swum = swimCache.trajectory(SwimmableParticle.of(particle), fieldProbe);
+			if (swum.size() < 2) continue;
+			Color color = CedDrawingStyle.particleColor(particle.pid(), particle.charge());
+			Stroke stroke = CedDrawingStyle.particleStroke(particle.pid(), particle.charge());
+			List<Point> points = new ArrayList<>(swum.size());
+			for (Point3 p : swum) points.add(screen(container, p.x(), p.y()));
+			drawTrajectory(g, points, color, stroke);
+			screenReconTracks.add(new ScreenTrack(particle, points));
+		}
+	}
+
+	/**
+	 * MC/HB/TB/AI-HB/AI-TB tracks, swum and drawn in direct (unrotated) XY --
+	 * this view has no sector-rotated projection the way SectorView does, so
+	 * it's simpler than that view's own version of this method.
+	 *
+	 * @param colorOverride drawn color for every track in this group, or {@code null} to color each by its own species
+	 */
+	private void drawTrackRows(Graphics2D g, IContainer container, CedDisplayOption option,
+			List<TrackRow> tracks, List<ScreenTrack> sink, Color colorOverride) {
+		if (!isDisplayed(option)) return;
+		for (TrackRow track : tracks) {
+			List<Point3> swum = swimCache.trajectory(SwimmableParticle.of(track), fieldProbe);
+			if (swum.size() < 2) continue;
+			Color color = colorOverride != null ? colorOverride
+					: CedDrawingStyle.particleColor(track.pid(), track.charge());
+			Stroke stroke = CedDrawingStyle.particleStroke(track.pid(), track.charge());
+			List<Point> points = new ArrayList<>(swum.size());
+			for (Point3 p : swum) points.add(screen(container, p.x(), p.y()));
+			drawTrajectory(g, points, color, stroke);
+			sink.add(new ScreenTrack(track, points));
+		}
+	}
+
+	private static void drawTrajectory(Graphics2D g, List<Point> points, Color color, Stroke stroke) {
+		g.setColor(color);
+		g.setStroke(stroke);
+		for (int i = 1; i < points.size(); i++) {
+			Point a = points.get(i - 1), b = points.get(i);
+			g.drawLine(a.x, a.y, b.x, b.y);
+		}
+		Point vertex = points.get(0);
+		g.fillOval(vertex.x - 3, vertex.y - 3, 6, 6);
+		g.setColor(CedDrawingStyle.outline(color));
+		g.setStroke(new BasicStroke(1f));
+		g.drawOval(vertex.x - 3, vertex.y - 3, 6, 6);
+	}
+
 	private static Point screen(IContainer container, double x, double y) {
 		Point point = new Point();
 		container.worldToLocal(point, x, y);
 		return point;
 	}
 
-	private record StripAddress(int sector, int layer, int strip) { }
+	private record PanelAddress(int sector, int layer) { }
+	private record ScreenTrack(Object track, List<Point> points) { }
 
 	@Override
 	public void getFeedbackStrings(IContainer container, Point screenPoint, Point2D.Double worldPoint,
 			List<String> feedback) {
 		super.getFeedbackStrings(container, screenPoint, worldPoint, feedback);
 		addXYFeedback(worldPoint, "cm", feedback);
-		StripAddress closest = null;
-		double best = 6.0;
-		for (Map.Entry<StripAddress, Point[]> entry : stripScreenPoints.entrySet()) {
-			Point[] points = entry.getValue();
-			double distance = Line2D.ptSegDist(points[0].x, points[0].y, points[1].x, points[1].y,
-					screenPoint.x, screenPoint.y);
-			if (distance < best) {
-				best = distance;
-				closest = entry.getKey();
+		for (int sector = 1; sector <= URWTGeometry.SECTOR_COUNT; sector++) {
+			for (int layer = 1; layer <= URWTGeometry.LAYER_COUNT; layer++) {
+				if (panelPolygon(container, sector, layer).contains(screenPoint)) {
+					feedback.add(String.format("$wheat$μrWT sector %d layer %d", sector, layer));
+					break;
+				}
 			}
-		}
-		if (closest != null) {
-			feedback.add(String.format("$wheat$μrWT sector %d layer %d strip %d",
-					closest.sector(), closest.layer(), closest.strip()));
 		}
 		for (Map.Entry<Object, Point> entry : markers.entrySet()) {
 			if (entry.getValue().distance(screenPoint) <= 9) {
@@ -200,6 +343,37 @@ public final class URWTXYView extends CedXYView {
 				break;
 			}
 		}
+		addTrackFeedback(screenReconTracks, screenPoint, "REC", "deep sky blue", feedback);
+		addTrackFeedback(screenMcTracks, screenPoint, "MC", "orange red", feedback);
+		addTrackFeedback(screenHbTracks, screenPoint, "HB", "yellow", feedback);
+		addTrackFeedback(screenTbTracks, screenPoint, "TB", "dark orange", feedback);
+		addTrackFeedback(screenAiHbTracks, screenPoint, "AI HB", "spring green", feedback);
+		addTrackFeedback(screenAiTbTracks, screenPoint, "AI TB", "magenta", feedback);
+	}
+
+	private static void addTrackFeedback(List<ScreenTrack> tracks, Point screenPoint, String label, String color,
+			List<String> feedback) {
+		for (ScreenTrack drawn : tracks) {
+			if (!nearAnySegment(drawn.points(), screenPoint, 5.0)) continue;
+			if (drawn.track() instanceof RecEventData.Particle particle) {
+				feedback.add(String.format("$%s$%s %s (pid %d, q=%+d)", color, label, particle.displayName(),
+						particle.pid(), particle.charge()));
+			} else if (drawn.track() instanceof TrackRow track) {
+				feedback.add(String.format("$%s$%s %s (pid %d, q=%+d)", color, label, track.name(),
+						track.pid(), track.charge()));
+			}
+			break;
+		}
+	}
+
+	private static boolean nearAnySegment(List<Point> points, Point screenPoint, double tolerance) {
+		for (int i = 1; i < points.size(); i++) {
+			Point a = points.get(i - 1), b = points.get(i);
+			if (java.awt.geom.Line2D.ptSegDist(a.x, a.y, b.x, b.y, screenPoint.x, screenPoint.y) <= tolerance) {
+				return true;
+			}
+		}
+		return false;
 	}
 
 	private static void addMarkerFeedback(Object marker, List<String> feedback) {
@@ -211,5 +385,17 @@ public final class URWTXYView extends CedXYView {
 			feedback.add(String.format("$green$μrWT cross sector %d region %d xyz (%.3f, %.3f, %.3f) cm",
 					cross.sector(), cross.region(), cross.x(), cross.y(), cross.z()));
 		}
+	}
+
+	@Override
+	public void magneticFieldChanged() {
+		fieldProbe = FieldProbe.factory();
+		refresh();
+	}
+
+	@Override
+	public void dispose() {
+		MagneticFields.getInstance().removeMagneticFieldChangeListener(this);
+		super.dispose();
 	}
 }
