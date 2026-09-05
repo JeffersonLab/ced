@@ -2,6 +2,7 @@ package edu.cnu.ced.view.urwt;
 
 import java.awt.BasicStroke;
 import java.awt.Color;
+import java.awt.Font;
 import java.awt.Graphics2D;
 import java.awt.Point;
 import java.awt.Polygon;
@@ -77,6 +78,7 @@ public final class URWTXYView extends CedXYView implements MagneticFieldChangeLi
 	};
 	private static final Color CLUSTER_COLOR = new Color(205, 0, 205);
 	private static final Color CROSS_COLOR = new Color(20, 145, 35);
+	private static final Color SECTOR_LABEL = new Color(60, 60, 60, 140);
 
 	private final URWTGeometry geometry;
 	private final URWTAccumulation accumulation;
@@ -104,7 +106,15 @@ public final class URWTXYView extends CedXYView implements MagneticFieldChangeLi
 			SwimTrajectoryCache swimCache) {
 		super(navigator, PropertyUtils.TITLE, "μrWT XY",
 				PropertyUtils.WIDTH, 700, PropertyUtils.HEIGHT, 700,
-				PropertyUtils.WORLDSYSTEM, new Rectangle2D.Double(-250, 250, 500, -500),
+				// x0 positive with negative width (not the other way around) mirrors
+				// +x to the left of the screen -- the same convention every other
+				// XY view here already uses (CentralXYView, PCalView, ...), matching
+				// CLAS12's standard "looking downstream" display: sector 1 (phi=0,
+				// math +x) ends up on the left, and sectors 2-6 (increasing phi,
+				// counterclockwise in real space) sweep clockwise on screen, since a
+				// mirror reverses handedness. y stays the ordinary sign (negative
+				// origin, positive height) so +y is still up.
+				PropertyUtils.WORLDSYSTEM, new Rectangle2D.Double(250, -250, -500, 500),
 				PropertyUtils.BACKGROUND, Color.WHITE,
 				PropertyUtils.TOOLBARBITS, ToolBits.NAVIGATIONTOOLS,
 				PropertyUtils.WHEELZOOM, true, PropertyUtils.VISIBLE, true);
@@ -224,6 +234,40 @@ public final class URWTXYView extends CedXYView implements MagneticFieldChangeLi
 				g.drawPolygon(panelPolygon(container, sector, layer));
 			}
 		}
+		drawSectorLabels(g, container);
+	}
+
+	/** One light sector number per sector (not per layer), matching legacy's own faint sector labels -- CND/BST's own convention here too. */
+	private void drawSectorLabels(Graphics2D g, IContainer container) {
+		Font old = g.getFont();
+		g.setFont(old.deriveFont(Font.BOLD, Math.max(10f, old.getSize2D())));
+		g.setColor(SECTOR_LABEL);
+		for (int sector = 1; sector <= URWTGeometry.SECTOR_COUNT; sector++) {
+			Point3 outer = outermostVertex(sector);
+			if (outer == null) continue;
+			double r = Math.hypot(outer.x(), outer.y());
+			double scale = r > 0 ? (r + 12) / r : 1;
+			Point p = screen(container, outer.x() * scale, outer.y() * scale);
+			String label = Integer.toString(sector);
+			g.drawString(label, p.x - g.getFontMetrics().stringWidth(label) / 2, p.y + 4);
+		}
+		g.setFont(old);
+	}
+
+	/** The farthest-from-origin hull vertex across all four layers of one sector, used to place that sector's label just beyond its outer edge. */
+	private Point3 outermostVertex(int sector) {
+		Point3 best = null;
+		double bestRadius = -1;
+		for (int layer = 1; layer <= URWTGeometry.LAYER_COUNT; layer++) {
+			for (Point3 vertex : panelOutlines.get(new PanelAddress(sector, layer))) {
+				double r = Math.hypot(vertex.x(), vertex.y());
+				if (r > bestRadius) {
+					bestRadius = r;
+					best = vertex;
+				}
+			}
+		}
+		return best;
 	}
 
 	private void drawAccumulatedPanels(Graphics2D g, IContainer container) {
@@ -245,6 +289,7 @@ public final class URWTXYView extends CedXYView implements MagneticFieldChangeLi
 				g.drawPolygon(panelPolygon(container, sector, layer));
 			}
 		}
+		drawSectorLabels(g, container);
 	}
 
 	private Polygon panelPolygon(IContainer container, int sector, int layer) {

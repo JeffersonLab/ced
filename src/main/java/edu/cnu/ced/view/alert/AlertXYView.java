@@ -178,7 +178,7 @@ public final class AlertXYView extends CndCtofXYView {
 		List<Paddle> paddles = geometry.tofPaddles(sector, 0, 1);
 		if (paddles.isEmpty()) return;
 		Point3 centroid = centroid(paddles.get(0).vertices());
-		Point p = screen(container, centroid.x(), centroid.y());
+		Point p = screenMm(container, centroid.x(), centroid.y());
 		Font old = g.getFont();
 		g.setFont(old.deriveFont(Font.BOLD, Math.max(10f, old.getSize2D())));
 		g.setColor(TOF_LABEL);
@@ -192,10 +192,24 @@ public final class AlertXYView extends CndCtofXYView {
 		Polygon polygon = new Polygon();
 		List<Point3> vertices = paddle.vertices();
 		for (int i = 0; i < 4; i++) {
-			Point p = screen(container, vertices.get(i).x(), vertices.get(i).y());
+			Point p = screenMm(container, vertices.get(i).x(), vertices.get(i).y());
 			polygon.addPoint(p.x, p.y);
 		}
 		return polygon;
+	}
+
+	/**
+	 * {@link edu.cnu.ced.geometry.AlertGeometry}'s own points turned out to be
+	 * in mm, not cm like FMTGeometry/URWTGeometry -- confirmed against the
+	 * running app (the earlier "already cm" read was wrong: comparing this
+	 * detector's actual scale, which is compact and central, not against
+	 * BST/BMT's own already-mm convention). AlertEventData's bank-derived
+	 * positions (DcCluster/TofHit/TofCluster) already convert mm to cm
+	 * themselves and use {@link #screen} directly; only positions read
+	 * straight from AlertGeometry need this.
+	 */
+	private static Point screenMm(IContainer container, double xMm, double yMm) {
+		return screen(container, xMm / 10, yMm / 10);
 	}
 
 	private static Point3 centroid(List<Point3> vertices) {
@@ -239,8 +253,8 @@ public final class AlertXYView extends CndCtofXYView {
 
 	private void drawWireLine(Graphics2D g, IContainer container, int superlayer, int layer, int wire,
 			Segment3 line) {
-		Point a = screen(container, line.start().x(), line.start().y());
-		Point b = screen(container, line.end().x(), line.end().y());
+		Point a = screenMm(container, line.start().x(), line.start().y());
+		Point b = screenMm(container, line.end().x(), line.end().y());
 		wireScreenPoints.put(new WireAddress(superlayer, layer, wire), new Point[] { a, b });
 		g.drawLine(a.x, a.y, b.x, b.y);
 	}
@@ -253,8 +267,8 @@ public final class AlertXYView extends CndCtofXYView {
 			List<Segment3> wires = geometry.dcWires(hit.sector(), hit.superlayer(), hit.layer());
 			if (hit.wire() < 0 || hit.wire() >= wires.size()) continue;
 			Segment3 line = wires.get(hit.wire());
-			Point a = screen(container, line.start().x(), line.start().y());
-			Point b = screen(container, line.end().x(), line.end().y());
+			Point a = screenMm(container, line.start().x(), line.start().y());
+			Point b = screenMm(container, line.end().x(), line.end().y());
 			g.setColor(ScientificColorMap.TURBO.colorAt((double) hit.adc() / max));
 			g.drawLine(a.x, a.y, b.x, b.y);
 		}
@@ -266,7 +280,7 @@ public final class AlertXYView extends CndCtofXYView {
 			List<Segment3> wires = geometry.dcWires(0, hit.superlayer(), hit.layer());
 			if (hit.wire() < 0 || hit.wire() >= wires.size()) continue;
 			Segment3 line = wires.get(hit.wire());
-			Point p = screen(container, (line.start().x() + line.end().x()) / 2,
+			Point p = screenMm(container, (line.start().x() + line.end().x()) / 2,
 					(line.start().y() + line.end().y()) / 2);
 			markers.put(hit, p);
 			g.fillOval(p.x - MARKER, p.y - MARKER, 2 * MARKER, 2 * MARKER);
