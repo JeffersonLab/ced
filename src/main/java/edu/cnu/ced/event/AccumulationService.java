@@ -1,5 +1,7 @@
 package edu.cnu.ced.event;
 
+import edu.cnu.ced.data.FMTAccumulation;
+import edu.cnu.ced.data.FMTEventData;
 import edu.cnu.ced.data.FTCalAccumulation;
 import edu.cnu.ced.data.FTCalEventData;
 import edu.cnu.ced.data.ECalAccumulation;
@@ -28,6 +30,7 @@ public final class AccumulationService {
 	private final DCAccumulation dc = new DCAccumulation();
 	private final CherenkovAccumulation htcc = new CherenkovAccumulation(HTCCGeometry.RING_COUNT);
 	private final CherenkovAccumulation ltcc = new CherenkovAccumulation(LTCCGeometry.RING_COUNT);
+	private final FMTAccumulation fmt = new FMTAccumulation();
 
 	public void begin(boolean clearExisting) {
 		if (clearExisting) clear();
@@ -43,6 +46,7 @@ public final class AccumulationService {
 		dc.clear();
 		htcc.clear();
 		ltcc.clear();
+		fmt.clear();
 	}
 
 	public void accumulate(EventSnapshot snapshot) {
@@ -54,6 +58,7 @@ public final class AccumulationService {
 		dc.add(DCEventData.from(snapshot));
 		htcc.add(CherenkovEventData.from(snapshot, "HTCC"));
 		ltcc.add(CherenkovEventData.from(snapshot, "LTCC"));
+		fmt.add(FMTEventData.from(snapshot));
 	}
 
 	public FTCalAccumulation ftcal() { return ftcal; }
@@ -64,4 +69,5 @@ public final class AccumulationService {
 	public DCAccumulation dc() { return dc; }
 	public CherenkovAccumulation htcc() { return htcc; }
 	public CherenkovAccumulation ltcc() { return ltcc; }
+	public FMTAccumulation fmt() { return fmt; }
 }
