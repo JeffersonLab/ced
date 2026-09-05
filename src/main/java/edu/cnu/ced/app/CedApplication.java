@@ -282,7 +282,8 @@ public final class CedApplication extends BaseMDIApplication {
 						8, 0, 0, VirtualView.CENTER)));
 		timeStep("ALERT XY (lazy registration)", () -> ViewManager.getInstance().addConfiguration(
 				ViewConfiguration.lazy("ALERT XY", () -> new AlertXYView(geometryService.alert(),
-						eventNavigator, accumulationService.alert(), swimCache),
+						geometryService.cnd(), geometryService.ctof(), eventNavigator,
+						accumulationService.alert(), accumulationService.central(), swimCache),
 						8, 0, 0, VirtualView.CENTER)));
 		timeStep("PCAL", () -> ViewManager.getInstance().addConfiguration(ViewConfiguration.eager(
 				"PCAL", () -> new PCalView(geometryService.pcal(), eventNavigator,

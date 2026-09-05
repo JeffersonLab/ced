@@ -7,19 +7,13 @@ import java.awt.Graphics2D;
 import java.awt.Point;
 import java.awt.Polygon;
 import java.awt.RenderingHints;
-import java.awt.Stroke;
 import java.awt.geom.Line2D;
 import java.awt.geom.Point2D;
 import java.awt.geom.Rectangle2D;
-import java.util.ArrayList;
 import java.util.EnumSet;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-
-import cnuphys.magfield.FieldProbe;
-import cnuphys.magfield.MagneticFieldChangeListener;
-import cnuphys.magfield.MagneticFields;
 
 import edu.cnu.ced.component.CedDisplayOption;
 import edu.cnu.ced.data.AlertAccumulation;
@@ -29,19 +23,17 @@ import edu.cnu.ced.data.AlertEventData.DcCluster;
 import edu.cnu.ced.data.AlertEventData.DcHit;
 import edu.cnu.ced.data.AlertEventData.TofCluster;
 import edu.cnu.ced.data.AlertEventData.TofHit;
-import edu.cnu.ced.data.MonteCarloTracks;
-import edu.cnu.ced.data.RecEventData;
-import edu.cnu.ced.data.TrackRow;
+import edu.cnu.ced.data.CentralAccumulation;
 import edu.cnu.ced.event.EventNavigationState;
 import edu.cnu.ced.event.EventNavigator;
 import edu.cnu.ced.geometry.AlertGeometry;
 import edu.cnu.ced.geometry.AlertGeometry.Paddle;
+import edu.cnu.ced.geometry.CNDGeometry;
+import edu.cnu.ced.geometry.CTOFGeometry;
 import edu.cnu.ced.geometry.Point3;
 import edu.cnu.ced.geometry.Segment3;
-import edu.cnu.ced.style.CedDrawingStyle;
 import edu.cnu.ced.swim.SwimTrajectoryCache;
-import edu.cnu.ced.swim.SwimmableParticle;
-import edu.cnu.ced.view.CedXYView;
+import edu.cnu.ced.view.central.CndCtofXYView;
 import edu.cnu.mdi.container.IContainer;
 import edu.cnu.mdi.graphics.toolbar.ToolBits;
 import edu.cnu.mdi.ui.colors.ScientificColorMap;
@@ -49,9 +41,14 @@ import edu.cnu.mdi.util.PropertyUtils;
 
 /**
  * ALERT (AHDC drift chamber + ATOF time-of-flight) laboratory XY display
- * backed directly by CLAS banks -- essentially CentralXYView's own pattern
- * (wire/strip geometry background, hit/cluster overlays, swum recon/MC
- * tracks) with BST/BMT/CND/CTOF replaced by AHDC/ATOF.
+ * backed directly by CLAS banks -- {@link CndCtofXYView} (CND + CTOF, shared
+ * with {@link edu.cnu.ced.view.central.CentralXYView}) plus AHDC + ATOF, the
+ * same default world system as Central XY, and the same
+ * RECON_TRACKS/MC_TRACKS swim-and-draw pattern (but not CVT_TRACKS, which
+ * stays Central-Detector-specific -- ALERT has no CVT detector; legacy's own
+ * ALERT view keeping literal "CVTRec Trajectory" labels is an artifact of
+ * copy-pasting CentralXYView's control panel wholesale, not something to
+ * reproduce).
  * <p>
  * AHDC has one real sector (its wires are drawn colored by superlayer, 0-4).
  * ATOF has 15 real sectors; each (sector, superlayer, layer) triple's paddle
@@ -67,7 +64,7 @@ import edu.cnu.mdi.util.PropertyUtils;
  * </p>
  */
 @SuppressWarnings("serial")
-public final class AlertXYView extends CedXYView implements MagneticFieldChangeListener {
+public final class AlertXYView extends CndCtofXYView {
 
 	private static final Color[] SUPERLAYER_COLORS = {
 			new Color(220, 20, 60), new Color(255, 140, 0), new Color(184, 134, 11),
@@ -82,55 +79,49 @@ public final class AlertXYView extends CedXYView implements MagneticFieldChangeL
 
 	private final AlertGeometry geometry;
 	private final AlertAccumulation accumulation;
-	private final SwimTrajectoryCache swimCache;
-	private final Map<Object, Point> markers = new HashMap<>();
 	// Screen-space endpoints for every drawn AHDC wire, cached from the draw
 	// pass so getFeedbackStrings doesn't redo geometry lookups and
 	// world-to-local transforms on every mouse move -- same reasoning as
 	// FMTXYView/URWTXYView's identical caches.
 	private final Map<WireAddress, Point[]> wireScreenPoints = new HashMap<>();
 	private final Map<TofAddress, Polygon> tofPolygons = new HashMap<>();
-	private final List<ScreenTrack> screenReconTracks = new ArrayList<>();
-	private final List<ScreenTrack> screenMcTracks = new ArrayList<>();
 	private volatile AlertEventData eventData = AlertEventData.from(null);
-	private volatile RecEventData recData = RecEventData.from(null);
-	private volatile List<TrackRow> mcTracks = List.of();
-	private volatile FieldProbe fieldProbe = FieldProbe.factory();
 
-	public AlertXYView(AlertGeometry geometry, EventNavigator navigator, AlertAccumulation accumulation,
-			SwimTrajectoryCache swimCache) {
-		super(navigator, PropertyUtils.TITLE, "ALERT XY",
-				PropertyUtils.WIDTH, 700, PropertyUtils.HEIGHT, 700,
-				PropertyUtils.WORLDSYSTEM, new Rectangle2D.Double(-110, 110, 220, -220),
+	public AlertXYView(AlertGeometry geometry, CNDGeometry cnd, CTOFGeometry ctof, EventNavigator navigator,
+			AlertAccumulation accumulation, CentralAccumulation centralAccumulation, SwimTrajectoryCache swimCache) {
+		super(cnd, ctof, navigator, centralAccumulation, swimCache,
+				PropertyUtils.TITLE, "ALERT XY",
+				PropertyUtils.WIDTH, 860, PropertyUtils.HEIGHT, 760,
+				PropertyUtils.WORLDSYSTEM, new Rectangle2D.Double(40, -40, -80, 80),
 				PropertyUtils.BACKGROUND, Color.WHITE,
 				PropertyUtils.TOOLBARBITS, ToolBits.NAVIGATIONTOOLS,
 				PropertyUtils.WHEELZOOM, true, PropertyUtils.VISIBLE, true);
 		this.geometry = geometry;
 		this.accumulation = accumulation;
-		this.swimCache = swimCache;
 		setAfterDraw(this::draw);
 		initializeCedView(EnumSet.of(CedDisplayOption.SINGLE_EVENT, CedDisplayOption.ACCUMULATION,
 				CedDisplayOption.RAW_DATA, CedDisplayOption.RECON_HITS, CedDisplayOption.CLUSTERS,
+				CedDisplayOption.CROSSES, CedDisplayOption.CONNECT_CLUSTER_ENDPOINTS,
 				CedDisplayOption.RECON_TRACKS, CedDisplayOption.MC_TRACKS),
-				List.of("AHDC::", "ATOF::"), ScientificColorMap.TURBO, "Relative ADC / accumulation");
-		MagneticFields.getInstance().addMagneticFieldChangeListener(this);
+				List.of("AHDC::", "ATOF::", "CND", "CTOF"), ScientificColorMap.TURBO,
+				"Relative ADC / accumulation");
 	}
 
 	@Override
 	protected void eventChanged(EventNavigationState state) {
+		super.eventChanged(state);
 		eventData = AlertEventData.from(state.snapshot());
-		recData = RecEventData.from(state.snapshot());
-		mcTracks = MonteCarloTracks.from(state.snapshot()).tracks();
-		swimCache.forEvent(state.snapshot());
 	}
 
 	private void draw(Graphics2D graphics, IContainer container) {
 		Graphics2D g = (Graphics2D) graphics.create();
 		try {
 			g.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
-			markers.clear();
+			clearSharedDrawState();
 			wireScreenPoints.clear();
 			tofPolygons.clear();
+			drawCTOF(g, container);
+			drawCND(g, container);
 			drawTofPanels(g, container);
 			if (isDisplayed(CedDisplayOption.ACCUMULATION)) {
 				drawAccumulatedWires(g, container);
@@ -142,10 +133,12 @@ public final class AlertXYView extends CedXYView implements MagneticFieldChangeL
 					drawTofHits(g, container);
 				}
 				if (isDisplayed(CedDisplayOption.CLUSTERS)) {
+					drawClusters(g, container);
 					drawDcClusters(g, container);
 					drawTofClusters(g, container);
 				}
-				if (isDisplayed(CedDisplayOption.RECON_TRACKS)) drawReconTracks(g, container);
+				if (isDisplayed(CedDisplayOption.CROSSES)) drawCrosses(g, container);
+				if (isDisplayed(CedDisplayOption.RECON_TRACKS)) drawParticles(g, container);
 				if (isDisplayed(CedDisplayOption.MC_TRACKS)) drawMcTracks(g, container);
 			}
 			drawXYAxes(g, container);
@@ -157,8 +150,8 @@ public final class AlertXYView extends CedXYView implements MagneticFieldChangeL
 	/**
 	 * ATOF's 15 sectors x 2 superlayers x 4 layers, each an adjacent tiled
 	 * polygon (matching CND/PCAL's own many-small-polygon convention) rather
-	 * than the earlier per-layer-group centroid dot -- one number label per
-	 * sector, at that sector's middle bar layer.
+	 * than a centroid dot -- one number label per sector, at that sector's
+	 * middle bar layer.
 	 */
 	private void drawTofPanels(Graphics2D g, IContainer container) {
 		for (int sector = 0; sector < 15; sector++) {
@@ -310,148 +303,69 @@ public final class AlertXYView extends CedXYView implements MagneticFieldChangeL
 		}
 	}
 
-	/** REC::Particle, swum and drawn species-colored -- same pattern as CentralXYView's own drawParticles. */
-	private void drawReconTracks(Graphics2D g, IContainer container) {
-		for (RecEventData.Particle particle : recData.particles()) {
-			List<Point3> swum = swimCache.trajectory(SwimmableParticle.of(particle), fieldProbe);
-			if (swum.size() < 2) continue;
-			Color color = CedDrawingStyle.particleColor(particle.pid(), particle.charge());
-			Stroke stroke = CedDrawingStyle.particleStroke(particle.pid(), particle.charge());
-			List<Point> points = new ArrayList<>(swum.size());
-			for (Point3 p : swum) points.add(screen(container, p.x(), p.y()));
-			drawTrajectory(g, points, color, stroke);
-			screenReconTracks.add(new ScreenTrack(particle, points));
-		}
-	}
-
-	/** MC::Particle truth tracks, swum and drawn species-colored -- same pattern as CentralXYView's own MC Tracks. */
-	private void drawMcTracks(Graphics2D g, IContainer container) {
-		for (TrackRow track : mcTracks) {
-			List<Point3> swum = swimCache.trajectory(SwimmableParticle.of(track), fieldProbe);
-			if (swum.size() < 2) continue;
-			Color color = CedDrawingStyle.particleColor(track.pid(), track.charge());
-			Stroke stroke = CedDrawingStyle.particleStroke(track.pid(), track.charge());
-			List<Point> points = new ArrayList<>(swum.size());
-			for (Point3 p : swum) points.add(screen(container, p.x(), p.y()));
-			drawTrajectory(g, points, color, stroke);
-			screenMcTracks.add(new ScreenTrack(track, points));
-		}
-	}
-
-	private static void drawTrajectory(Graphics2D g, List<Point> points, Color color, Stroke stroke) {
-		g.setColor(color);
-		g.setStroke(stroke);
-		for (int i = 1; i < points.size(); i++) {
-			Point a = points.get(i - 1), b = points.get(i);
-			g.drawLine(a.x, a.y, b.x, b.y);
-		}
-		Point vertex = points.get(0);
-		g.fillOval(vertex.x - 3, vertex.y - 3, 6, 6);
-		g.setColor(CedDrawingStyle.outline(color));
-		g.setStroke(new BasicStroke(1f));
-		g.drawOval(vertex.x - 3, vertex.y - 3, 6, 6);
-	}
-
-	private static Point screen(IContainer container, double x, double y) {
-		Point point = new Point();
-		container.worldToLocal(point, x, y);
-		return point;
-	}
-
 	private record WireAddress(int superlayer, int layer, int wire) { }
 	private record TofAddress(int sector, int superlayer, int layer) { }
-	private record ScreenTrack(Object track, List<Point> points) { }
 
 	@Override
 	public void getFeedbackStrings(IContainer container, Point screenPoint, Point2D.Double worldPoint,
 			List<String> feedback) {
 		super.getFeedbackStrings(container, screenPoint, worldPoint, feedback);
 		addXYFeedback(worldPoint, "cm", feedback);
-		for (Map.Entry<TofAddress, Polygon> entry : tofPolygons.entrySet()) {
-			if (entry.getValue().contains(screenPoint)) {
-				TofAddress address = entry.getKey();
-				feedback.add(String.format("$wheat$ATOF sector %d superlayer %d layer %d",
-						address.sector() + 1, address.superlayer(), address.layer()));
-				break;
+		boolean found = addBarrelPolygonFeedback(screenPoint, feedback);
+		if (!found) {
+			for (Map.Entry<TofAddress, Polygon> entry : tofPolygons.entrySet()) {
+				if (entry.getValue().contains(screenPoint)) {
+					TofAddress address = entry.getKey();
+					feedback.add(String.format("$wheat$ATOF sector %d superlayer %d layer %d",
+							address.sector() + 1, address.superlayer(), address.layer()));
+					found = true;
+					break;
+				}
 			}
 		}
-		WireAddress closest = null;
-		double best = 6.0;
-		for (Map.Entry<WireAddress, Point[]> entry : wireScreenPoints.entrySet()) {
-			Point[] points = entry.getValue();
-			double distance = Line2D.ptSegDist(points[0].x, points[0].y, points[1].x, points[1].y,
-					screenPoint.x, screenPoint.y);
-			if (distance < best) {
-				best = distance;
-				closest = entry.getKey();
+		if (!found) {
+			WireAddress closest = null;
+			double best = 6.0;
+			for (Map.Entry<WireAddress, Point[]> entry : wireScreenPoints.entrySet()) {
+				Point[] points = entry.getValue();
+				double distance = Line2D.ptSegDist(points[0].x, points[0].y, points[1].x, points[1].y,
+						screenPoint.x, screenPoint.y);
+				if (distance < best) {
+					best = distance;
+					closest = entry.getKey();
+				}
+			}
+			if (closest != null) {
+				feedback.add(String.format("$wheat$AHDC superlayer %d layer %d wire %d",
+						closest.superlayer(), closest.layer(), closest.wire()));
 			}
 		}
-		if (closest != null) {
-			feedback.add(String.format("$wheat$AHDC superlayer %d layer %d wire %d",
-					closest.superlayer(), closest.layer(), closest.wire()));
-		}
+		addMarkersAndTrackFeedback(screenPoint, feedback);
 		for (Map.Entry<Object, Point> entry : markers.entrySet()) {
-			if (entry.getValue().distance(screenPoint) <= 9) {
-				addMarkerFeedback(entry.getKey(), feedback);
-				break;
-			}
-		}
-		addTrackFeedback(screenReconTracks, screenPoint, "REC", "deep sky blue", feedback);
-		addTrackFeedback(screenMcTracks, screenPoint, "MC", "orange red", feedback);
-	}
-
-	private static void addTrackFeedback(List<ScreenTrack> tracks, Point screenPoint, String label, String color,
-			List<String> feedback) {
-		for (ScreenTrack drawn : tracks) {
-			if (!nearAnySegment(drawn.points(), screenPoint, 5.0)) continue;
-			if (drawn.track() instanceof RecEventData.Particle particle) {
-				feedback.add(String.format("$%s$%s %s (pid %d, q=%+d)", color, label, particle.displayName(),
-						particle.pid(), particle.charge()));
-			} else if (drawn.track() instanceof TrackRow track) {
-				feedback.add(String.format("$%s$%s %s (pid %d, q=%+d)", color, label, track.name(),
-						track.pid(), track.charge()));
-			}
-			break;
+			if (entry.getValue().distance(screenPoint) <= 9 && addMarkerFeedback(entry.getKey(), feedback)) break;
 		}
 	}
 
-	private static boolean nearAnySegment(List<Point> points, Point screenPoint, double tolerance) {
-		for (int i = 1; i < points.size(); i++) {
-			Point a = points.get(i - 1), b = points.get(i);
-			if (Line2D.ptSegDist(a.x, a.y, b.x, b.y, screenPoint.x, screenPoint.y) <= tolerance) {
-				return true;
-			}
-		}
-		return false;
-	}
-
-	private static void addMarkerFeedback(Object marker, List<String> feedback) {
+	private static boolean addMarkerFeedback(Object marker, List<String> feedback) {
 		if (marker instanceof DcHit hit) {
 			feedback.add(String.format("$deep sky blue$AHDC hit superlayer %d layer %d wire %d",
 					hit.superlayer(), hit.layer(), hit.wire()));
 			feedback.add(String.format("$deep sky blue$time %.3f ns  doca %.3f cm", hit.time(), hit.doca()));
+			return true;
 		} else if (marker instanceof TofHit hit) {
 			feedback.add(String.format("$deep sky blue$ATOF hit sector %d layer %d component %d",
 					hit.sector(), hit.layer(), hit.component()));
 			feedback.add(String.format("$deep sky blue$energy %.3f MeV  time %.3f ns", hit.energy(), hit.time()));
+			return true;
 		} else if (marker instanceof DcCluster cluster) {
 			feedback.add(String.format("$magenta$AHDC cluster xyz (%.3f, %.3f, %.3f) cm",
 					cluster.x(), cluster.y(), cluster.z()));
+			return true;
 		} else if (marker instanceof TofCluster cluster) {
 			feedback.add(String.format("$magenta$ATOF cluster xyz (%.3f, %.3f, %.3f) cm  energy %.3f MeV",
 					cluster.x(), cluster.y(), cluster.z(), cluster.energy()));
+			return true;
 		}
-	}
-
-	@Override
-	public void magneticFieldChanged() {
-		fieldProbe = FieldProbe.factory();
-		refresh();
-	}
-
-	@Override
-	public void dispose() {
-		MagneticFields.getInstance().removeMagneticFieldChangeListener(this);
-		super.dispose();
+		return false;
 	}
 }

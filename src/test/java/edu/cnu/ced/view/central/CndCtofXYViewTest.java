@@ -7,9 +7,9 @@ import org.junit.jupiter.api.Test;
 
 import edu.cnu.ced.data.CentralEventData.Detector;
 import edu.cnu.ced.data.CentralEventData.TdcHit;
-import edu.cnu.ced.view.central.CentralXYView.Element;
+import edu.cnu.ced.view.central.CndCtofXYView.Element;
 
-class CentralXYViewTest {
+class CndCtofXYViewTest {
 
 	@Test
 	void matchesTdcOffsetsTheAdcDerivedOrderByTwo() {
@@ -20,11 +20,11 @@ class CentralXYViewTest {
 		// values, just the same physical left/right sides.
 		Element leftPaddle = new Element(Detector.CND, 10, 3, 1, 0);
 		TdcHit leftTdc = new TdcHit(10, 3, 1, 2, 1234);
-		assertTrue(CentralXYView.matchesTdc(leftPaddle, leftTdc));
+		assertTrue(CndCtofXYView.matchesTdc(leftPaddle, leftTdc));
 
 		Element rightPaddle = new Element(Detector.CND, 10, 3, 1, 1);
 		TdcHit rightTdc = new TdcHit(10, 3, 1, 3, 1250);
-		assertTrue(CentralXYView.matchesTdc(rightPaddle, rightTdc));
+		assertTrue(CndCtofXYView.matchesTdc(rightPaddle, rightTdc));
 	}
 
 	@Test
@@ -33,14 +33,14 @@ class CentralXYViewTest {
 		// h.order() (no offset) would make THIS assertion fail instead.
 		Element leftPaddle = new Element(Detector.CND, 10, 3, 1, 0);
 		TdcHit wrongOrderConvention = new TdcHit(10, 3, 1, 0, 1234);
-		assertFalse(CentralXYView.matchesTdc(leftPaddle, wrongOrderConvention));
+		assertFalse(CndCtofXYView.matchesTdc(leftPaddle, wrongOrderConvention));
 	}
 
 	@Test
 	void matchesTdcStillRequiresSectorLayerAndComponentToAgree() {
 		Element paddle = new Element(Detector.CND, 10, 3, 1, 0);
-		assertFalse(CentralXYView.matchesTdc(paddle, new TdcHit(11, 3, 1, 2, 1234)));
-		assertFalse(CentralXYView.matchesTdc(paddle, new TdcHit(10, 4, 1, 2, 1234)));
-		assertFalse(CentralXYView.matchesTdc(paddle, new TdcHit(10, 3, 2, 2, 1234)));
+		assertFalse(CndCtofXYView.matchesTdc(paddle, new TdcHit(11, 3, 1, 2, 1234)));
+		assertFalse(CndCtofXYView.matchesTdc(paddle, new TdcHit(10, 4, 1, 2, 1234)));
+		assertFalse(CndCtofXYView.matchesTdc(paddle, new TdcHit(10, 3, 2, 2, 1234)));
 	}
 }
