@@ -1,10 +1,13 @@
 package edu.cnu.ced.app;
 
 import java.awt.Component;
+import java.awt.Cursor;
 import java.awt.FlowLayout;
 import java.awt.Toolkit;
 import java.awt.event.KeyAdapter;
 import java.awt.event.KeyEvent;
+import java.awt.event.MouseAdapter;
+import java.awt.event.MouseMotionAdapter;
 import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
@@ -14,6 +17,7 @@ import java.util.prefs.Preferences;
 import javax.swing.Box;
 import javax.swing.JCheckBox;
 import javax.swing.JCheckBoxMenuItem;
+import javax.swing.JComponent;
 import javax.swing.JLabel;
 import javax.swing.JMenu;
 import javax.swing.JMenuItem;
@@ -95,6 +99,11 @@ public final class CedApplication extends BaseMDIApplication {
 	private static CedApplication instance;
 	private static CedLaunchOptions launchOptions = CedLaunchOptions.parse(null);
 	private static CedBootstrapResult bootstrap;
+	// Set by main() once bootstrap succeeds, left open rather than closed
+	// there; installStartupMarker's readiness callback closes it (and clears
+	// this back to null) once the main frame's first paint has actually
+	// settled. See main()'s own comment for why.
+	private static StartupWindow startupWindow;
 	private static final FileType HIPO_FILES = FileType.of("HIPO event files (*.hipo)", "hipo");
 	private static final MenuId OPTIONS_MENU_ID = new MenuId("ced.options");
 	private static final MenuId EVENTS_MENU_ID = new MenuId("ced.events");
@@ -226,6 +235,7 @@ public final class CedApplication extends BaseMDIApplication {
 		// subclass field initializers run. Construct application services here.
 		long startupStarted = System.nanoTime();
 		installStartupMarker();
+		installStartupInputBlock();
 		eventStore = new EventStore();
 		eventNavigator = new EventNavigator(eventStore);
 		eventNavigator.setFilter(EventFilters.sharedFor(eventNavigator));
@@ -610,13 +620,18 @@ public final class CedApplication extends BaseMDIApplication {
 	}
 
 	/**
-	 * Diagnostic only: logs when this frame's windowOpened fires (the point
-	 * Swing itself considers the main window shown), then posts a further
-	 * invokeLater from inside that handler to catch any work Swing queued
-	 * alongside opening it (typically the first real paint) that would
-	 * otherwise run invisibly between "window shown" and "actually settled".
-	 * Isolates whether a slow startup is still CED/EDT work at that point, or
-	 * something outside the JVM's control (OS/window-manager) once this fires.
+	 * Logs when this frame's windowOpened fires (the point Swing itself
+	 * considers the main window shown), then posts a further invokeLater
+	 * from inside that handler to catch any work Swing queued alongside
+	 * opening it (typically the first real paint) that would otherwise run
+	 * invisibly between "window shown" and "actually settled". Isolates
+	 * whether a slow startup is still CED/EDT work at that point, or
+	 * something outside the JVM's control (OS/window-manager) once this
+	 * fires -- originally diagnostic-only, but that second point is also
+	 * this application's real readiness signal: the EDT is provably idle,
+	 * so this is also where {@link #markStartupReady()} lifts the input
+	 * block installed by {@link #installStartupInputBlock()} and closes the
+	 * startup splash, if {@link #startupWindow} is still open.
 	 */
 	private void installStartupMarker() {
 		addWindowListener(new java.awt.event.WindowAdapter() {
@@ -624,12 +639,48 @@ public final class CedApplication extends BaseMDIApplication {
 			public void windowOpened(java.awt.event.WindowEvent event) {
 				Log.getInstance().config("Startup timing - windowOpened, JVM uptime: "
 						+ jvmUptimeMillis() + " ms");
-				SwingUtilities.invokeLater(() -> Log.getInstance().config(
-						"Startup timing - EDT drained after windowOpened, JVM uptime: "
-								+ jvmUptimeMillis() + " ms"));
+				SwingUtilities.invokeLater(() -> {
+					Log.getInstance().config(
+							"Startup timing - EDT drained after windowOpened, JVM uptime: "
+									+ jvmUptimeMillis() + " ms");
+					markStartupReady();
+				});
 				removeWindowListener(this);
 			}
 		});
+	}
+
+	/**
+	 * Blocks mouse input on this frame from the moment it's shown until
+	 * {@link #markStartupReady()} lifts it. Without this, a click landing on
+	 * the frame right after {@code setVisible(true)} -- while Swing is still
+	 * laying out and painting several fully-eager detector views for the
+	 * first time -- is exactly what produces the "spinning color wheel":
+	 * clicking into a window whose EDT is still busy with its own first
+	 * paint. A glass pane with no listeners of its own would just forward
+	 * events to whatever's underneath; adding empty ones is what makes it
+	 * actually swallow them.
+	 */
+	private void installStartupInputBlock() {
+		JComponent glassPane = (JComponent) getGlassPane();
+		glassPane.setCursor(Cursor.getPredefinedCursor(Cursor.WAIT_CURSOR));
+		glassPane.addMouseListener(new MouseAdapter() { });
+		glassPane.addMouseMotionListener(new MouseMotionAdapter() { });
+		glassPane.setVisible(true);
+	}
+
+	/**
+	 * This application's actual readiness signal (see {@link
+	 * #installStartupMarker()}): the main frame's first layout/paint has
+	 * settled and the EDT is idle. Lifts {@link #installStartupInputBlock()}'s
+	 * block and closes the startup splash, if one is still open.
+	 */
+	private void markStartupReady() {
+		getGlassPane().setVisible(false);
+		if (startupWindow != null) {
+			startupWindow.close();
+			startupWindow = null;
+		}
 	}
 
 	/** Launches the MDI application on the Swing event-dispatch thread. */
@@ -659,6 +710,7 @@ public final class CedApplication extends BaseMDIApplication {
 		}
 		launchOptions = CedLaunchOptions.parse(args);
 		StartupWindow[] holder = new StartupWindow[1];
+		boolean bootstrapSucceeded = false;
 		try {
 			SwingUtilities.invokeAndWait(() -> {
 				holder[0] = new StartupWindow(StartupInfo.builder("CED")
@@ -669,15 +721,30 @@ public final class CedApplication extends BaseMDIApplication {
 				holder[0].show();
 			});
 			bootstrap = CedBootstrap.initialize(launchOptions, holder[0]);
-			SwingUtilities.invokeAndWait(holder[0]::close);
+			bootstrapSucceeded = true;
 		} catch (Exception exception) {
 			Log.getInstance().exception(exception);
-			if (holder[0] != null) {
-				try {
-					SwingUtilities.invokeAndWait(holder[0]::close);
-				} catch (Exception closeException) {
-					Log.getInstance().exception(closeException);
-				}
+		}
+		if (bootstrapSucceeded) {
+			// Deliberately NOT closed here. Closing as soon as construction
+			// finishes just trades one blank gap for another: bootstrap
+			// (magnetic fields, geometry) is only ~1s of the real gap between
+			// this point and the window actually becoming interactive -- the
+			// rest is BaseMDIApplication.launch()'s setVisible(true) laying
+			// out and first-painting several fully-eager detector views,
+			// which is exactly the work that produces the "spinning color
+			// wheel" if the user clicks into the frame while it's still
+			// running. Handing the still-open splash to CedApplication (via
+			// this static field) lets it stay up -- and keep covering that
+			// same not-yet-ready frame, since StartupWindow is always-on-top
+			// -- until installStartupMarker's own readiness signal fires and
+			// closes it, however long that actually takes on this machine.
+			startupWindow = holder[0];
+		} else if (holder[0] != null) {
+			try {
+				SwingUtilities.invokeAndWait(holder[0]::close);
+			} catch (Exception closeException) {
+				Log.getInstance().exception(closeException);
 			}
 		}
 		Log.getInstance().config("Startup timing - bootstrap done, launching MDI shell, JVM uptime: "
