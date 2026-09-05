@@ -86,7 +86,10 @@ public final class CedControlPanel extends JPanel {
 		eventSummary.setEditable(false);
 		eventSummary.setFocusable(false);
 		eventSummary.setOpaque(false);
-		eventSummary.setFont(Fonts.smallFont);
+		// One point larger than Fonts.smallFont (used elsewhere, e.g. the
+		// filtering-active banner below) -- just for this summary text,
+		// per the user's report that it read a bit small.
+		eventSummary.setFont(Fonts.smallFont.deriveFont(Fonts.smallFont.getSize2D() + 1f));
 		eventSummary.setLineWrap(true);
 		eventSummary.setWrapStyleWord(false);
 		eventPanel.add(filteringActiveLabel, BorderLayout.NORTH);

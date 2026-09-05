@@ -22,7 +22,7 @@ public enum CedDisplayOption {
 	TB_SEGMENTS("TB Segments", true, null),
 	AI_HB_SEGMENTS("AI HB Segments", false, null),
 	AI_TB_SEGMENTS("AI TB Segments", false, null),
-	CONNECT_CLUSTER_ENDPOINTS("Connect endpoints", false, null),
+	CONNECT_CLUSTER_ENDPOINTS("Connect ends", false, null),
 	PANEL_1A("Panel 1A", true, "ftof-panel"),
 	PANEL_1B("Panel 1B", false, "ftof-panel"),
 	PANEL_2("Panel 2", false, "ftof-panel"),
