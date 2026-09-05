@@ -53,13 +53,20 @@ import edu.cnu.mdi.util.PropertyUtils;
  * <p>
  * Earlier versions of this view drew every individual strip as its own
  * thin line, which for ~1400 strips per (sector, layer) rendered as a dense
- * scribble rather than legacy's clean six-panel hexagon -- each "strip" in
- * {@link URWTGeometry} is a very short segment across its own narrow width;
- * it's the many strip <em>indices</em>, not a strip's own start/end, that
- * sweep across the panel's full extent. The fix: take the convex hull of
- * every strip's midpoint for a given (sector, layer), which for a genuinely
- * convex wedge/trapezoid panel is exactly its true outline -- computed once
- * per panel at construction time (geometry never changes), not per repaint.
+ * scribble rather than legacy's clean six-panel hexagon. The fix: take the
+ * convex hull of every strip's own two endpoints for a given (sector,
+ * layer), which for a genuinely convex panel is exactly its true outline --
+ * computed once per panel at construction time (geometry never changes),
+ * not per repaint. An earlier attempt hulled only each strip's
+ * <em>midpoint</em>, on the assumption that (as for BST/FMT/etc.) a strip's
+ * start/end differ only by its own narrow width -- wrong here: many of
+ * these strips are genuinely long (one endpoint near an inner convergence
+ * point, the other at the panel's true outer edge), confirmed empirically
+ * against the real geometry, not assumed. Collapsing each one to its
+ * midpoint threw that real extent away and left a hull of only a handful
+ * of nearly-collinear points -- a thin, degenerate dart rather than the
+ * true wedge, and six of those darts crossing each other is exactly what
+ * produces a six-pointed star.
  * </p>
  */
 @SuppressWarnings("serial")
@@ -119,12 +126,22 @@ public final class URWTXYView extends CedXYView implements MagneticFieldChangeLi
 		for (int sector = 1; sector <= URWTGeometry.SECTOR_COUNT; sector++) {
 			for (int layer = 1; layer <= URWTGeometry.LAYER_COUNT; layer++) {
 				List<Segment3> strips = geometry.detector(sector, layer).strips();
-				List<Point3> midpoints = new ArrayList<>(strips.size());
+				// Both endpoints of every strip, not just their midpoint: many
+				// strips here are genuinely long (one endpoint near an inner
+				// convergence point, the other out at the panel's true outer
+				// edge), not the near-zero-width segments a strip's start/end
+				// are for other detectors (BST/FMT/etc.). Hulling only
+				// midpoints throws that real extent away and collapses the
+				// hull into a thin, degenerate dart -- confirmed empirically:
+				// six of those darts, each stretching across the panel from
+				// one side to the other, is exactly what produces a
+				// six-pointed star when drawn.
+				List<Point3> corners = new ArrayList<>(2 * strips.size());
 				for (Segment3 strip : strips) {
-					midpoints.add(new Point3((strip.start().x() + strip.end().x()) / 2,
-							(strip.start().y() + strip.end().y()) / 2, 0));
+					corners.add(new Point3(strip.start().x(), strip.start().y(), 0));
+					corners.add(new Point3(strip.end().x(), strip.end().y(), 0));
 				}
-				panelOutlines.put(new PanelAddress(sector, layer), convexHull(midpoints));
+				panelOutlines.put(new PanelAddress(sector, layer), convexHull(corners));
 			}
 		}
 	}
