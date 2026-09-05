@@ -24,15 +24,23 @@ import edu.cnu.ced.event.RunConfig;
  * </p>
  * <p>
  * Legacy calls {@code MagneticFields.changeFieldsAndMenus(torus, solenoid)}
- * for this, but that method unconditionally touches {@code MagneticFields}'
- * own Swing scale-factor menu panels (e.g. {@code _scaleTorusPanel.fixText()}
- * with no null check) -- safe for legacy, which builds that menu, but an
- * NPE here, since this application never does. Setting the scale directly
- * on {@link MagneticFields#getTorus()}/{@link MagneticFields#getSolenoid()}
- * gets the same effect (including notifying registered
- * {@code MagneticFieldChangeListener}s, via {@code MagneticField
- * .setScaleFactor}'s own call to {@code MagneticFields.changedScale}, which
- * *does* null-check its menu panels) without going anywhere near the menu.
+ * for this, but that method also silently reassigns the <em>active field
+ * type</em> from the scale factors' magnitudes alone (zero solenoid scale
+ * switches to Torus-only, zero torus scale to Solenoid-only, both nonzero to
+ * Composite) -- fine for legacy's own global Torus/Solenoid/Composite/No
+ * Field radio menu, which that method also updates in lockstep, but wrong
+ * here: this application exposes that same choice as its own "Field" menu
+ * (see {@code CedApplication#addCedFieldMenu}), and a run change silently
+ * overriding whatever the user explicitly selected there -- e.g. a
+ * Composite-viewing user landing on a run with a momentarily-zero solenoid
+ * scale getting silently dropped to Torus-only -- would be a worse surprise
+ * than just leaving the field type alone and only updating the scale
+ * factors. Setting the scale directly on {@link MagneticFields#getTorus()}/
+ * {@link MagneticFields#getSolenoid()} does exactly that (and still
+ * notifies registered {@code MagneticFieldChangeListener}s, and keeps the
+ * Field menu's own scale-factor text fields in sync, via {@code
+ * MagneticField.setScaleFactor}'s own call to {@code
+ * MagneticFields.changedScale}) without touching the active field type.
  * </p>
  */
 public final class RunFieldScaleApplier {

@@ -1,5 +1,10 @@
 package edu.cnu.ced.app;
 
+import java.awt.Component;
+import java.awt.FlowLayout;
+import java.awt.Toolkit;
+import java.awt.event.KeyAdapter;
+import java.awt.event.KeyEvent;
 import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
@@ -7,12 +12,22 @@ import java.nio.file.Path;
 import java.util.concurrent.TimeUnit;
 import java.util.prefs.Preferences;
 import javax.swing.Box;
+import javax.swing.JCheckBox;
 import javax.swing.JCheckBoxMenuItem;
+import javax.swing.JLabel;
 import javax.swing.JMenu;
 import javax.swing.JMenuItem;
 import javax.swing.JOptionPane;
+import javax.swing.JPanel;
+import javax.swing.JSeparator;
+import javax.swing.JTextField;
+import javax.swing.KeyStroke;
+import javax.swing.MenuSelectionManager;
 import javax.swing.SwingUtilities;
 import javax.swing.SwingWorker;
+import javax.swing.Timer;
+
+import cnuphys.magfield.MagneticFields;
 
 import edu.cnu.ced.CedVersion;
 import edu.cnu.ced.data.MonteCarloTracks;
@@ -83,6 +98,7 @@ public final class CedApplication extends BaseMDIApplication {
 	private static final FileType HIPO_FILES = FileType.of("HIPO event files (*.hipo)", "hipo");
 	private static final MenuId OPTIONS_MENU_ID = new MenuId("ced.options");
 	private static final MenuId EVENTS_MENU_ID = new MenuId("ced.events");
+	private static final MenuId FIELD_MENU_ID = new MenuId("ced.field");
 
 	private EventNavigator eventNavigator;
 	private EventStore eventStore;
@@ -108,6 +124,7 @@ public final class CedApplication extends BaseMDIApplication {
 				+ "addInitialViews), JVM uptime: " + jvmUptimeMillis() + " ms");
 		timeStep("addCedFileActions", this::addCedFileActions);
 		timeStep("addCedEventActions", this::addCedEventActions);
+		timeStep("addCedFieldMenu", this::addCedFieldMenu);
 		timeStep("addCedOptions", this::addCedOptions);
 		timeStep("addTriggerPanel", this::addTriggerPanel);
 	}
@@ -321,10 +338,174 @@ public final class CedApplication extends BaseMDIApplication {
 		JMenuItem accumulate = new JMenuItem("Accumulate Events…");
 		accumulate.addActionListener(event -> accumulateEvents());
 		events.add(accumulate);
+		events.addSeparator();
+
+		int shortcutMask = Toolkit.getDefaultToolkit().getMenuShortcutKeyMaskEx();
+		JMenuItem nextItem = new JMenuItem("Next Event");
+		nextItem.setAccelerator(KeyStroke.getKeyStroke(KeyEvent.VK_N, shortcutMask));
+		nextItem.addActionListener(event -> eventNavigator.next());
+		events.add(nextItem);
+
+		JMenuItem previousItem = new JMenuItem("Previous Event");
+		previousItem.setAccelerator(KeyStroke.getKeyStroke(KeyEvent.VK_P, shortcutMask));
+		previousItem.addActionListener(event -> eventNavigator.previous());
+		events.add(previousItem);
+
+		JTextField seqGotoField = new JTextField("1", 8);
+		events.add(gotoEventPanel("Go to Sequential Event:", seqGotoField, eventNavigator::goToSequence));
+
+		JTextField trueGotoField = new JTextField("1", 8);
+		events.add(gotoEventPanel("Go to True Event:", trueGotoField, eventNavigator::goToTrueEventNumber));
+
+		float[] autoPeriodSeconds = { 2.0f };
+		JCheckBox autoNextCheckBox = new JCheckBox("Auto Next-Event Every");
+		JTextField autoPeriodField = new JTextField(Float.toString(autoPeriodSeconds[0]), 4);
+		Timer autoNextTimer = new Timer((int) (1000 * autoPeriodSeconds[0]), event -> eventNavigator.next());
+		autoNextCheckBox.addActionListener(event -> {
+			if (autoNextCheckBox.isSelected()) {
+				autoNextTimer.setDelay((int) (1000 * autoPeriodSeconds[0]));
+				autoNextTimer.restart();
+			} else {
+				autoNextTimer.stop();
+			}
+		});
+		autoPeriodField.addKeyListener(new KeyAdapter() {
+			@Override
+			public void keyReleased(KeyEvent event) {
+				if (event.getKeyCode() != KeyEvent.VK_ENTER) {
+					return;
+				}
+				MenuSelectionManager.defaultManager().clearSelectedPath();
+				autoPeriodSeconds[0] = normalizedEventPeriod(autoPeriodField.getText(), autoPeriodSeconds[0]);
+				autoPeriodField.setText(Float.toString(autoPeriodSeconds[0]));
+				if (autoNextTimer.isRunning()) {
+					autoNextTimer.setDelay((int) (1000 * autoPeriodSeconds[0]));
+				}
+			}
+		});
+		JPanel autoPanel = transparentFlowPanel();
+		autoPanel.add(autoNextCheckBox);
+		autoPanel.add(autoPeriodField);
+		autoPanel.add(new JLabel("sec"));
+		events.add(autoPanel);
+		events.addSeparator();
+
+		JLabel eventCountLabel = new JLabel("Event Count: —");
+		events.add(eventCountLabel);
 		JMenuItem filter = new JMenuItem("Filter…");
 		filter.addActionListener(event -> showFilterDialog());
 		events.add(filter);
+
+		eventNavigator.addListener(state -> {
+			Runnable apply = () -> {
+				nextItem.setEnabled(state.canGoNext());
+				previousItem.setEnabled(state.canGoPrevious());
+				seqGotoField.setEnabled(state.isOpen());
+				trueGotoField.setEnabled(state.isOpen());
+				autoNextCheckBox.setEnabled(state.canGoNext());
+				autoPeriodField.setEnabled(state.canGoNext());
+				if (!state.canGoNext()) {
+					autoNextCheckBox.setSelected(false);
+					autoNextTimer.stop();
+				}
+				eventCountLabel.setText(state.isOpen() ? "Event Count: " + state.eventCount() : "Event Count: —");
+			};
+			if (SwingUtilities.isEventDispatchThread()) {
+				apply.run();
+			} else {
+				SwingUtilities.invokeLater(apply);
+			}
+		});
 		MenuManager.getInstance().addContribution(new MenuContribution(EVENTS_MENU_ID, events, 150));
+	}
+
+	/** One "label: [field]" row for the Events menu, Enter-triggered, mirroring the seq/true goto fields legacy CED shows inline in its own Events menu. */
+	private static JPanel gotoEventPanel(String label, JTextField field, java.util.function.IntPredicate navigation) {
+		JPanel panel = transparentFlowPanel();
+		panel.add(new JLabel(label));
+		panel.add(field);
+		field.setEnabled(false);
+		field.addKeyListener(new KeyAdapter() {
+			@Override
+			public void keyReleased(KeyEvent event) {
+				if (event.getKeyCode() != KeyEvent.VK_ENTER) {
+					return;
+				}
+				MenuSelectionManager.defaultManager().clearSelectedPath();
+				try {
+					if (!navigation.test(Integer.parseInt(field.getText().trim()))) {
+						field.setText("");
+					}
+				} catch (NumberFormatException notANumber) {
+					field.setText("");
+				}
+			}
+		});
+		return panel;
+	}
+
+	private static JPanel transparentFlowPanel() {
+		JPanel panel = new JPanel(new FlowLayout(FlowLayout.LEFT, 4, 0));
+		panel.setOpaque(false);
+		return panel;
+	}
+
+	/** Clamp a user-entered auto-next-event period to a sane range, falling back on a parse failure -- matches legacy CED's own bounds. */
+	static float normalizedEventPeriod(String text, float fallback) {
+		try {
+			float period = Float.parseFloat(text);
+			return Float.isFinite(period) ? Math.max(0.001f, Math.min(60f, period)) : fallback;
+		} catch (NumberFormatException notANumber) {
+			return fallback;
+		}
+	}
+
+	/**
+	 * Builds CED's "Field" menu directly from coatjava's own {@code
+	 * MagneticFields.getMagneticFieldMenu()} -- field-type selection (Torus/
+	 * Solenoid/Composite/No Field), scale/shift panels, and "Load a Different
+	 * Torus/Solenoid..." are all already wired there (including keeping the
+	 * scale/shift text fields themselves in sync when {@link
+	 * edu.cnu.ced.magfield.RunFieldScaleApplier} changes a scale factor on a
+	 * run change) -- reimplementing that by hand would just be duplicating
+	 * coatjava's own menu with extra steps. The one thing removed is the
+	 * Interpolate/Nearest Neighbor sampling choice: the user doesn't want
+	 * that exposed here.
+	 */
+	private void addCedFieldMenu() {
+		JMenu field = MagneticFields.getInstance().getMagneticFieldMenu();
+		removeInterpolationOptions(field);
+		MenuManager.getInstance().addContribution(new MenuContribution(FIELD_MENU_ID, field, 160));
+	}
+
+	static void removeInterpolationOptions(JMenu menu) {
+		int interpolateIndex = indexOfMenuItem(menu, "Interpolate");
+		int nearestNeighborIndex = indexOfMenuItem(menu, "Nearest Neighbor");
+		if (interpolateIndex < 0 || nearestNeighborIndex != interpolateIndex + 1) {
+			// coatjava's own menu layout isn't what this expects -- leave it
+			// alone rather than risk removing the wrong components.
+			return;
+		}
+		menu.remove(nearestNeighborIndex);
+		menu.remove(interpolateIndex);
+		// The separator coatjava placed just before "Interpolate" (between
+		// the field-type radios and the interpolation group) would now sit
+		// directly before the Scale/Shift panels anyway, so drop it too
+		// rather than end up with a doubled-up gap.
+		int precedingIndex = interpolateIndex - 1;
+		if (precedingIndex >= 0 && menu.getMenuComponent(precedingIndex) instanceof JSeparator) {
+			menu.remove(precedingIndex);
+		}
+	}
+
+	static int indexOfMenuItem(JMenu menu, String text) {
+		for (int index = 0; index < menu.getMenuComponentCount(); index++) {
+			Component component = menu.getMenuComponent(index);
+			if (component instanceof JMenuItem item && text.equals(item.getText())) {
+				return index;
+			}
+		}
+		return -1;
 	}
 
 	private void accumulateEvents() {
