@@ -88,6 +88,40 @@ class ReconstructedTracksTest {
 		assertTrue(ReconstructedTracks.from(null).tracks().isEmpty());
 	}
 
+	@Test void hbTracksReturnsOnlyTheHitBasedTrackCandidates() {
+		// A per-view "HB Tracks" toggle wants just this one source, not the
+		// full from() aggregation -- and must ignore a TB track present in
+		// the same event.
+		Map<String, DataBank> banks = new LinkedHashMap<>();
+		banks.put(ReconstructedTracks.HB_TRACK_BANK, dcTrackBank(1, (short) 0, (byte) 1, 0, 0, 0, 0, 0, 0.4f));
+		banks.put(ReconstructedTracks.TB_TRACK_BANK, dcTrackBank(2, (short) 0, (byte) -1, 0, 0, 0, 0, 0, 0.4f));
+
+		java.util.List<TrackRow> hb = ReconstructedTracks.hbTracks(EventSnapshot.of(event(banks)));
+
+		assertEquals(1, hb.size());
+		assertEquals(ReconstructedTracks.HB_TRACK_BANK, hb.get(0).source());
+		assertEquals(LundSupport.getHitbased(1).getId(), hb.get(0).pid());
+	}
+
+	@Test void tbTracksReturnsOnlyTheTimeBasedTrackCandidates() {
+		Map<String, DataBank> banks = new LinkedHashMap<>();
+		banks.put(ReconstructedTracks.HB_TRACK_BANK, dcTrackBank(1, (short) 0, (byte) 1, 0, 0, 0, 0, 0, 0.4f));
+		banks.put(ReconstructedTracks.TB_TRACK_BANK, dcTrackBank(2, (short) 0, (byte) -1, 0, 0, 0, 0, 0, 0.4f));
+
+		java.util.List<TrackRow> tb = ReconstructedTracks.tbTracks(EventSnapshot.of(event(banks)));
+
+		assertEquals(1, tb.size());
+		assertEquals(ReconstructedTracks.TB_TRACK_BANK, tb.get(0).source());
+		assertEquals(LundSupport.getTrackbased(-1).getId(), tb.get(0).pid());
+	}
+
+	@Test void hbTracksAndTbTracksAreEmptyForAMissingOrNullSnapshot() {
+		assertTrue(ReconstructedTracks.hbTracks(EventSnapshot.empty()).isEmpty());
+		assertTrue(ReconstructedTracks.hbTracks(null).isEmpty());
+		assertTrue(ReconstructedTracks.tbTracks(EventSnapshot.empty()).isEmpty());
+		assertTrue(ReconstructedTracks.tbTracks(null).isEmpty());
+	}
+
 	private static DataBank dcTrackBank(int id, short status, byte q, float vx, float vy, float vz,
 			float px, float py, float pz) {
 		Map<String, Object> values = Map.ofEntries(

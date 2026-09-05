@@ -9,6 +9,8 @@ public enum CedDisplayOption {
 	RECON_CAL("Recon Cal", true, null),
 	RECON_TRACKS("Recon Tracks", true, null),
 	MC_TRACKS("MC Tracks", true, null),
+	HB_TRACKS("HB Tracks", true, null),
+	TB_TRACKS("TB Tracks", true, null),
 	CLUSTERS("Clusters", true, null),
 	CROSSES("Crosses", true, null),
 	HB_HITS("HB Hits", true, null),

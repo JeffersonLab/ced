@@ -50,6 +50,7 @@ import edu.cnu.ced.data.MonteCarloTracks;
 import edu.cnu.ced.data.PCalAccumulation;
 import edu.cnu.ced.data.PCalEventData;
 import edu.cnu.ced.data.RecEventData;
+import edu.cnu.ced.data.ReconstructedTracks;
 import edu.cnu.ced.data.TrackRow;
 import edu.cnu.ced.event.EventNavigationState;
 import edu.cnu.ced.event.EventNavigator;
@@ -133,6 +134,8 @@ public final class SectorView extends CedView implements MagneticFieldChangeList
 	private final Map<CherenkovMarker, Point> cherenkovMarkers = new HashMap<>();
 	private final List<ScreenParticle> screenParticles = new ArrayList<>();
 	private final List<ScreenTrack> screenMcTracks = new ArrayList<>();
+	private final List<ScreenTrack> screenHbTracks = new ArrayList<>();
+	private final List<ScreenTrack> screenTbTracks = new ArrayList<>();
 	private volatile DCEventData data = DCEventData.from(null);
 	private volatile FTOFEventData ftofData = FTOFEventData.from(null);
 	private volatile PCalEventData pcalData = PCalEventData.from(null);
@@ -141,6 +144,8 @@ public final class SectorView extends CedView implements MagneticFieldChangeList
 	private volatile CherenkovEventData ltccData = CherenkovEventData.from(null, "LTCC");
 	private volatile RecEventData recData = RecEventData.from(null);
 	private volatile List<TrackRow> mcTracks = MonteCarloTracks.from(null).tracks();
+	private volatile List<TrackRow> hbTracks = List.of();
+	private volatile List<TrackRow> tbTracks = List.of();
 	private volatile FieldProbe fieldProbe = FieldProbe.factory();
 	private volatile boolean showMagneticField;
 	private ColorScaleBar fieldScale;
@@ -178,7 +183,7 @@ public final class SectorView extends CedView implements MagneticFieldChangeList
 				CedDisplayOption.CLUSTERS, CedDisplayOption.CROSSES, CedDisplayOption.HB_SEGMENTS,
 				CedDisplayOption.TB_SEGMENTS, CedDisplayOption.AI_HB_SEGMENTS,
 				CedDisplayOption.AI_TB_SEGMENTS, CedDisplayOption.RECON_TRACKS,
-				CedDisplayOption.MC_TRACKS),
+				CedDisplayOption.MC_TRACKS, CedDisplayOption.HB_TRACKS, CedDisplayOption.TB_TRACKS),
 				List.of("DC::", "HitBasedTrkg::", "TimeBasedTrkg::", "FTOF::",
 						"ECAL::", "REC::Calorimeter", "REC::Particle", "HTCC::", "LTCC::", "MC::"),
 				ScientificColorMap.TURBO, "Relative occupancy (95th-percentile ceiling)",
@@ -198,6 +203,8 @@ public final class SectorView extends CedView implements MagneticFieldChangeList
 		ltccData = CherenkovEventData.from(state.snapshot(), "LTCC");
 		recData = RecEventData.from(state.snapshot());
 		mcTracks = MonteCarloTracks.from(state.snapshot()).tracks();
+		hbTracks = ReconstructedTracks.hbTracks(state.snapshot());
+		tbTracks = ReconstructedTracks.tbTracks(state.snapshot());
 		swimCache.forEvent(state.snapshot());
 	}
 
@@ -218,6 +225,8 @@ public final class SectorView extends CedView implements MagneticFieldChangeList
 			cherenkovMarkers.clear();
 			screenParticles.clear();
 			screenMcTracks.clear();
+			screenHbTracks.clear();
+			screenTbTracks.clear();
 			if (showMagneticField) drawMagneticField(g, container);
 			drawBeamline(g, container);
 			drawTarget(g, container);
@@ -242,7 +251,9 @@ public final class SectorView extends CedView implements MagneticFieldChangeList
 				drawCalorimeterEvent(g, container);
 				drawCherenkovEvent(g, container);
 				drawParticles(g, container);
-				drawMcTracks(g, container);
+				drawTrackRows(g, container, CedDisplayOption.MC_TRACKS, mcTracks, screenMcTracks);
+				drawTrackRows(g, container, CedDisplayOption.HB_TRACKS, hbTracks, screenHbTracks);
+				drawTrackRows(g, container, CedDisplayOption.TB_TRACKS, tbTracks, screenTbTracks);
 			}
 			drawLabels(g, container);
 			drawScale(g, container);
@@ -739,13 +750,30 @@ public final class SectorView extends CedView implements MagneticFieldChangeList
 		}
 	}
 
-	private void drawMcTracks(Graphics2D g, IContainer container) {
-		if (!isDisplayed(CedDisplayOption.MC_TRACKS)) return;
-		for (TrackRow track : mcTracks) {
-			// Monte Carlo truth carries no REC::Track-based DC sector
-			// assignment (there are no reconstructed hits to assign one
-			// from), so the momentum-direction proxy is the only sector
-			// this row can report.
+	/**
+	 * Draws one group of {@link TrackRow}s (Monte Carlo truth, or a DC
+	 * hit-based/time-based track-candidate stage) as swum trajectories,
+	 * gated by its own {@link CedDisplayOption} toggle.
+	 * <p>
+	 * Color/stroke come from {@link CedDrawingStyle#particleColor} keyed on
+	 * each row's own {@code pid()}: for the DC track-candidate stages that
+	 * pid is one of {@code LundSupport}'s synthetic hit/track-based
+	 * placeholders, which that registry already styles in the customary
+	 * hit-based yellow / time-based dark-orange -- the same colors legacy
+	 * CED itself draws them in -- so this method doesn't need to know which
+	 * stage it's drawing.
+	 * </p>
+	 */
+	private void drawTrackRows(Graphics2D g, IContainer container, CedDisplayOption option,
+			List<TrackRow> tracks, List<ScreenTrack> screenTracks) {
+		if (!isDisplayed(option)) return;
+		for (TrackRow track : tracks) {
+			// None of these sources carry a REC::Track-based DC sector
+			// assignment (Monte Carlo truth has no reconstructed hits to
+			// assign one from; a DC track candidate IS the hit fit, with no
+			// separate authoritative answer to defer to), so the
+			// momentum-direction proxy is the only sector any of them can
+			// report.
 			int sector = track.sector();
 			if (!displayedSector(sector)) continue;
 
@@ -759,7 +787,7 @@ public final class SectorView extends CedView implements MagneticFieldChangeList
 			Color color = CedDrawingStyle.particleColor(track.pid(), track.charge());
 			Stroke stroke = CedDrawingStyle.particleStroke(track.pid(), track.charge());
 			drawParticleTrajectory(g, points, color, stroke);
-			screenMcTracks.add(new ScreenTrack(track, points));
+			screenTracks.add(new ScreenTrack(track, points));
 		}
 	}
 
@@ -1150,6 +1178,26 @@ public final class SectorView extends CedView implements MagneticFieldChangeList
 		return false;
 	}
 
+	/**
+	 * Appends feedback-pane lines describing {@code drawn} if {@code
+	 * screenPoint} is near its drawn trajectory, shared by every {@link
+	 * ScreenTrack}-backed source (Monte Carlo, HB, TB).
+	 *
+	 * @return {@code true} if {@code drawn} was near enough to describe
+	 */
+	private static boolean addTrackFeedback(ScreenTrack drawn, Point screenPoint, String label, String color,
+			List<String> feedback) {
+		if (!nearAnySegment(drawn.points, screenPoint, 5.0)) return false;
+		TrackRow track = drawn.track;
+		feedback.add(String.format("$%s$%s %s (pid %d, q=%+d) sector %d", color, label, track.name(),
+				track.pid(), track.charge(), track.sector()));
+		feedback.add(String.format("$%s$p = %.3f GeV/c  theta = %.1f°  phi = %.1f°", color,
+				track.momentumMeV() / 1000.0, track.thetaDeg(), track.phiDeg()));
+		feedback.add(String.format("$%s$vertex (%.2f, %.2f, %.2f) cm", color,
+				track.x0(), track.y0(), track.z0()));
+		return true;
+	}
+
 	private boolean show(ReconKind kind) {
 		return switch (kind) {
 			case HB -> isDisplayed(CedDisplayOption.HB_HITS);
@@ -1220,20 +1268,18 @@ public final class SectorView extends CedView implements MagneticFieldChangeList
 				break;
 			}
 		}
+		// "orange red" for MC, distinct from reconstructed particles' "deep
+		// sky blue"; "yellow"/"dark orange" for HB/TB match those tracks'
+		// own drawn colors (LundSupport's customary hit-based/time-based
+		// palette -- see CedDrawingStyle#particleColor).
 		for (ScreenTrack drawn : screenMcTracks) {
-			if (nearAnySegment(drawn.points, screenPoint, 5.0)) {
-				TrackRow track = drawn.track;
-				// "orange red", distinct from reconstructed particles' "deep
-				// sky blue", so the two track sources are visually
-				// distinguishable in the feedback pane too.
-				feedback.add(String.format("$orange red$MC %s (pid %d, q=%+d) sector %d", track.name(),
-						track.pid(), track.charge(), track.sector()));
-				feedback.add(String.format("$orange red$p = %.3f GeV/c  theta = %.1f°  phi = %.1f°",
-						track.momentumMeV() / 1000.0, track.thetaDeg(), track.phiDeg()));
-				feedback.add(String.format("$orange red$vertex (%.2f, %.2f, %.2f) cm",
-						track.x0(), track.y0(), track.z0()));
-				break;
-			}
+			if (addTrackFeedback(drawn, screenPoint, "MC", "orange red", feedback)) break;
+		}
+		for (ScreenTrack drawn : screenHbTracks) {
+			if (addTrackFeedback(drawn, screenPoint, "HB", "yellow", feedback)) break;
+		}
+		for (ScreenTrack drawn : screenTbTracks) {
+			if (addTrackFeedback(drawn, screenPoint, "TB", "dark orange", feedback)) break;
 		}
 		for (Map.Entry<FTOFEventData.Cluster, Point> entry : ftofClusterLocations.entrySet()) {
 			if (entry.getValue().distance(screenPoint) <= 8.0) {

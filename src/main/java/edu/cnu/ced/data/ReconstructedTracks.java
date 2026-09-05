@@ -28,19 +28,51 @@ public record ReconstructedTracks(List<TrackRow> tracks) {
 		tracks = List.copyOf(tracks);
 	}
 
+	public static final String HB_TRACK_BANK = "HitBasedTrkg::HBTracks";
+	public static final String TB_TRACK_BANK = "TimeBasedTrkg::TBTracks";
+
 	public static ReconstructedTracks from(EventSnapshot snapshot) {
 		if (snapshot == null || !snapshot.hasEvent()) {
 			return EMPTY;
 		}
 		List<TrackRow> rows = new ArrayList<>();
-		addDcTracks(snapshot, "HitBasedTrkg::HBTracks", true, rows);
-		addDcTracks(snapshot, "TimeBasedTrkg::TBTracks", false, rows);
+		addDcTracks(snapshot, HB_TRACK_BANK, true, rows);
+		addDcTracks(snapshot, TB_TRACK_BANK, false, rows);
 		addRecParticles(snapshot, rows);
 		addDcTracks(snapshot, "HitBasedTrkg::AITracks", true, rows);
 		addDcTracks(snapshot, "TimeBasedTrkg::AITracks", false, rows);
 		addCvtTracks(snapshot, "CVTRec::Tracks", rows);
 		addCvtTracks(snapshot, "CVT::Tracks", rows);
 		return rows.isEmpty() ? EMPTY : new ReconstructedTracks(rows);
+	}
+
+	/**
+	 * Just the DC hit-based track candidates ({@value #HB_TRACK_BANK}), for a
+	 * detector view that wants to draw them on their own rather than as part
+	 * of the full {@link #from} aggregation -- e.g. a per-view "HB Tracks"
+	 * display toggle, drawn in {@code LundSupport}'s customary hit-based
+	 * yellow (see {@code CedDrawingStyle#particleColor}).
+	 */
+	public static List<TrackRow> hbTracks(EventSnapshot snapshot) {
+		if (snapshot == null || !snapshot.hasEvent()) {
+			return List.of();
+		}
+		List<TrackRow> rows = new ArrayList<>();
+		addDcTracks(snapshot, HB_TRACK_BANK, true, rows);
+		return rows;
+	}
+
+	/**
+	 * Just the DC time-based track candidates ({@value #TB_TRACK_BANK}), the
+	 * time-based counterpart to {@link #hbTracks} -- customary dark-orange.
+	 */
+	public static List<TrackRow> tbTracks(EventSnapshot snapshot) {
+		if (snapshot == null || !snapshot.hasEvent()) {
+			return List.of();
+		}
+		List<TrackRow> rows = new ArrayList<>();
+		addDcTracks(snapshot, TB_TRACK_BANK, false, rows);
+		return rows;
 	}
 
 	private static void addDcTracks(EventSnapshot snapshot, String bankName, boolean hitBased,
