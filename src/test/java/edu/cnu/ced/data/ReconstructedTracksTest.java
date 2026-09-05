@@ -122,6 +122,41 @@ class ReconstructedTracksTest {
 		assertTrue(ReconstructedTracks.tbTracks(null).isEmpty());
 	}
 
+	@Test void aiHbTracksReturnsOnlyTheAiHitBasedTrackCandidates() {
+		// AI HB tracks share the same synthetic hit-based species as plain HB
+		// tracks (same pid) -- distinguished only by which bank/extractor
+		// they came from, not by anything on the row itself.
+		Map<String, DataBank> banks = new LinkedHashMap<>();
+		banks.put(ReconstructedTracks.HB_TRACK_BANK, dcTrackBank(1, (short) 0, (byte) 1, 0, 0, 0, 0, 0, 0.4f));
+		banks.put(ReconstructedTracks.AI_HB_TRACK_BANK, dcTrackBank(2, (short) 0, (byte) 1, 0, 0, 0, 0, 0, 0.4f));
+		banks.put(ReconstructedTracks.AI_TB_TRACK_BANK, dcTrackBank(3, (short) 0, (byte) -1, 0, 0, 0, 0, 0, 0.4f));
+
+		java.util.List<TrackRow> aiHb = ReconstructedTracks.aiHbTracks(EventSnapshot.of(event(banks)));
+
+		assertEquals(1, aiHb.size());
+		assertEquals(ReconstructedTracks.AI_HB_TRACK_BANK, aiHb.get(0).source());
+		assertEquals(LundSupport.getHitbased(1).getId(), aiHb.get(0).pid());
+	}
+
+	@Test void aiTbTracksReturnsOnlyTheAiTimeBasedTrackCandidates() {
+		Map<String, DataBank> banks = new LinkedHashMap<>();
+		banks.put(ReconstructedTracks.AI_HB_TRACK_BANK, dcTrackBank(2, (short) 0, (byte) 1, 0, 0, 0, 0, 0, 0.4f));
+		banks.put(ReconstructedTracks.AI_TB_TRACK_BANK, dcTrackBank(3, (short) 0, (byte) -1, 0, 0, 0, 0, 0, 0.4f));
+
+		java.util.List<TrackRow> aiTb = ReconstructedTracks.aiTbTracks(EventSnapshot.of(event(banks)));
+
+		assertEquals(1, aiTb.size());
+		assertEquals(ReconstructedTracks.AI_TB_TRACK_BANK, aiTb.get(0).source());
+		assertEquals(LundSupport.getTrackbased(-1).getId(), aiTb.get(0).pid());
+	}
+
+	@Test void aiHbTracksAndAiTbTracksAreEmptyForAMissingOrNullSnapshot() {
+		assertTrue(ReconstructedTracks.aiHbTracks(EventSnapshot.empty()).isEmpty());
+		assertTrue(ReconstructedTracks.aiHbTracks(null).isEmpty());
+		assertTrue(ReconstructedTracks.aiTbTracks(EventSnapshot.empty()).isEmpty());
+		assertTrue(ReconstructedTracks.aiTbTracks(null).isEmpty());
+	}
+
 	@Test void cvtTracksReturnsBothCvtBanksButNoDcOrRecParticleTracks() {
 		// A Central Detector view's own "CVT Tracks" toggle wants both CVT
 		// sources together, but nothing else -- unlike hbTracks/tbTracks,

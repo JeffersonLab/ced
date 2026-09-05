@@ -136,6 +136,8 @@ public final class SectorView extends CedView implements MagneticFieldChangeList
 	private final List<ScreenTrack> screenMcTracks = new ArrayList<>();
 	private final List<ScreenTrack> screenHbTracks = new ArrayList<>();
 	private final List<ScreenTrack> screenTbTracks = new ArrayList<>();
+	private final List<ScreenTrack> screenAiHbTracks = new ArrayList<>();
+	private final List<ScreenTrack> screenAiTbTracks = new ArrayList<>();
 	private volatile DCEventData data = DCEventData.from(null);
 	private volatile FTOFEventData ftofData = FTOFEventData.from(null);
 	private volatile PCalEventData pcalData = PCalEventData.from(null);
@@ -146,6 +148,8 @@ public final class SectorView extends CedView implements MagneticFieldChangeList
 	private volatile List<TrackRow> mcTracks = MonteCarloTracks.from(null).tracks();
 	private volatile List<TrackRow> hbTracks = List.of();
 	private volatile List<TrackRow> tbTracks = List.of();
+	private volatile List<TrackRow> aiHbTracks = List.of();
+	private volatile List<TrackRow> aiTbTracks = List.of();
 	private volatile FieldProbe fieldProbe = FieldProbe.factory();
 	private volatile boolean showMagneticField;
 	private ColorScaleBar fieldScale;
@@ -183,7 +187,8 @@ public final class SectorView extends CedView implements MagneticFieldChangeList
 				CedDisplayOption.CLUSTERS, CedDisplayOption.CROSSES, CedDisplayOption.HB_SEGMENTS,
 				CedDisplayOption.TB_SEGMENTS, CedDisplayOption.AI_HB_SEGMENTS,
 				CedDisplayOption.AI_TB_SEGMENTS, CedDisplayOption.RECON_TRACKS,
-				CedDisplayOption.MC_TRACKS, CedDisplayOption.HB_TRACKS, CedDisplayOption.TB_TRACKS),
+				CedDisplayOption.MC_TRACKS, CedDisplayOption.HB_TRACKS, CedDisplayOption.TB_TRACKS,
+				CedDisplayOption.AI_HB_TRACKS, CedDisplayOption.AI_TB_TRACKS),
 				List.of("DC::", "HitBasedTrkg::", "TimeBasedTrkg::", "FTOF::",
 						"ECAL::", "REC::Calorimeter", "REC::Particle", "HTCC::", "LTCC::", "MC::"),
 				ScientificColorMap.TURBO, "Relative occupancy (95th-percentile ceiling)",
@@ -205,6 +210,8 @@ public final class SectorView extends CedView implements MagneticFieldChangeList
 		mcTracks = MonteCarloTracks.from(state.snapshot()).tracks();
 		hbTracks = ReconstructedTracks.hbTracks(state.snapshot());
 		tbTracks = ReconstructedTracks.tbTracks(state.snapshot());
+		aiHbTracks = ReconstructedTracks.aiHbTracks(state.snapshot());
+		aiTbTracks = ReconstructedTracks.aiTbTracks(state.snapshot());
 		swimCache.forEvent(state.snapshot());
 	}
 
@@ -227,6 +234,8 @@ public final class SectorView extends CedView implements MagneticFieldChangeList
 			screenMcTracks.clear();
 			screenHbTracks.clear();
 			screenTbTracks.clear();
+			screenAiHbTracks.clear();
+			screenAiTbTracks.clear();
 			if (showMagneticField) drawMagneticField(g, container);
 			drawBeamline(g, container);
 			drawTarget(g, container);
@@ -254,6 +263,10 @@ public final class SectorView extends CedView implements MagneticFieldChangeList
 				drawTrackRows(g, container, CedDisplayOption.MC_TRACKS, mcTracks, screenMcTracks);
 				drawTrackRows(g, container, CedDisplayOption.HB_TRACKS, hbTracks, screenHbTracks);
 				drawTrackRows(g, container, CedDisplayOption.TB_TRACKS, tbTracks, screenTbTracks);
+				drawTrackRows(g, container, CedDisplayOption.AI_HB_TRACKS, aiHbTracks, screenAiHbTracks,
+						CedDrawingStyle.AI_HIT_BASED);
+				drawTrackRows(g, container, CedDisplayOption.AI_TB_TRACKS, aiTbTracks, screenAiTbTracks,
+						CedDrawingStyle.AI_TIME_BASED);
 			}
 			drawLabels(g, container);
 			drawScale(g, container);
@@ -755,17 +768,27 @@ public final class SectorView extends CedView implements MagneticFieldChangeList
 	 * hit-based/time-based track-candidate stage) as swum trajectories,
 	 * gated by its own {@link CedDisplayOption} toggle.
 	 * <p>
-	 * Color/stroke come from {@link CedDrawingStyle#particleColor} keyed on
-	 * each row's own {@code pid()}: for the DC track-candidate stages that
+	 * Color defaults to {@link CedDrawingStyle#particleColor} keyed on each
+	 * row's own {@code pid()}: for most of these track-candidate stages that
 	 * pid is one of {@code LundSupport}'s synthetic hit/track-based
 	 * placeholders, which that registry already styles in the customary
 	 * hit-based yellow / time-based dark-orange -- the same colors legacy
-	 * CED itself draws them in -- so this method doesn't need to know which
-	 * stage it's drawing.
+	 * CED itself draws them in. The AI HB/TB stages share those exact same
+	 * synthetic pids with their non-AI counterparts (the fit is still over
+	 * the same DC hits), so pid alone can't tell them apart -- legacy itself
+	 * colors AI tracks by literal bank name rather than species for the
+	 * same reason, so a caller that needs a different color (see the AI
+	 * overload below) passes one explicitly instead.
 	 * </p>
 	 */
 	private void drawTrackRows(Graphics2D g, IContainer container, CedDisplayOption option,
 			List<TrackRow> tracks, List<ScreenTrack> screenTracks) {
+		drawTrackRows(g, container, option, tracks, screenTracks, null);
+	}
+
+	/** @param colorOverride drawn color for every track in this group, or {@code null} to color each by its own species (see above) */
+	private void drawTrackRows(Graphics2D g, IContainer container, CedDisplayOption option,
+			List<TrackRow> tracks, List<ScreenTrack> screenTracks, Color colorOverride) {
 		if (!isDisplayed(option)) return;
 		for (TrackRow track : tracks) {
 			// None of these sources carry a REC::Track-based DC sector
@@ -784,7 +807,8 @@ public final class SectorView extends CedView implements MagneticFieldChangeList
 							track.thetaDeg(), track.phiDeg());
 			if (points.size() < 2) continue;
 
-			Color color = CedDrawingStyle.particleColor(track.pid(), track.charge());
+			Color color = colorOverride != null ? colorOverride
+					: CedDrawingStyle.particleColor(track.pid(), track.charge());
 			Stroke stroke = CedDrawingStyle.particleStroke(track.pid(), track.charge());
 			drawParticleTrajectory(g, points, color, stroke);
 			screenTracks.add(new ScreenTrack(track, points));
@@ -1280,6 +1304,12 @@ public final class SectorView extends CedView implements MagneticFieldChangeList
 		}
 		for (ScreenTrack drawn : screenTbTracks) {
 			if (addTrackFeedback(drawn, screenPoint, "TB", "dark orange", feedback)) break;
+		}
+		for (ScreenTrack drawn : screenAiHbTracks) {
+			if (addTrackFeedback(drawn, screenPoint, "AI HB", "spring green", feedback)) break;
+		}
+		for (ScreenTrack drawn : screenAiTbTracks) {
+			if (addTrackFeedback(drawn, screenPoint, "AI TB", "magenta", feedback)) break;
 		}
 		for (Map.Entry<FTOFEventData.Cluster, Point> entry : ftofClusterLocations.entrySet()) {
 			if (entry.getValue().distance(screenPoint) <= 8.0) {

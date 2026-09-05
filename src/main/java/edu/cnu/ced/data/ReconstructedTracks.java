@@ -30,6 +30,8 @@ public record ReconstructedTracks(List<TrackRow> tracks) {
 
 	public static final String HB_TRACK_BANK = "HitBasedTrkg::HBTracks";
 	public static final String TB_TRACK_BANK = "TimeBasedTrkg::TBTracks";
+	public static final String AI_HB_TRACK_BANK = "HitBasedTrkg::AITracks";
+	public static final String AI_TB_TRACK_BANK = "TimeBasedTrkg::AITracks";
 	public static final String CVT_REC_TRACK_BANK = "CVTRec::Tracks";
 	public static final String CVT_PASS1_TRACK_BANK = "CVT::Tracks";
 
@@ -41,8 +43,8 @@ public record ReconstructedTracks(List<TrackRow> tracks) {
 		addDcTracks(snapshot, HB_TRACK_BANK, true, rows);
 		addDcTracks(snapshot, TB_TRACK_BANK, false, rows);
 		addRecParticles(snapshot, rows);
-		addDcTracks(snapshot, "HitBasedTrkg::AITracks", true, rows);
-		addDcTracks(snapshot, "TimeBasedTrkg::AITracks", false, rows);
+		addDcTracks(snapshot, AI_HB_TRACK_BANK, true, rows);
+		addDcTracks(snapshot, AI_TB_TRACK_BANK, false, rows);
 		addCvtTracks(snapshot, CVT_REC_TRACK_BANK, rows);
 		addCvtTracks(snapshot, CVT_PASS1_TRACK_BANK, rows);
 		return rows.isEmpty() ? EMPTY : new ReconstructedTracks(rows);
@@ -74,6 +76,44 @@ public record ReconstructedTracks(List<TrackRow> tracks) {
 		}
 		List<TrackRow> rows = new ArrayList<>();
 		addDcTracks(snapshot, TB_TRACK_BANK, false, rows);
+		return rows;
+	}
+
+	/**
+	 * Just the AI hit-based track candidates ({@value #AI_HB_TRACK_BANK}).
+	 * <p>
+	 * These carry the same synthetic hit-based species (and so, by pid
+	 * alone, the same {@code CedDrawingStyle#particleColor} yellow) as
+	 * {@link #hbTracks}'s ordinary DC hit-based candidates -- {@code
+	 * addDcTracks} doesn't distinguish "AI" from "ordinary", only hit-based
+	 * from time-based, since the AI stage is still fitting the same DC hits.
+	 * A view that wants these visually distinguishable from plain HB Tracks
+	 * (as legacy CED's own sector view does, coloring AI HB tracks spring
+	 * green rather than yellow) needs its own explicit color override,
+	 * keyed on which extractor it called rather than on the row's pid.
+	 * </p>
+	 */
+	public static List<TrackRow> aiHbTracks(EventSnapshot snapshot) {
+		if (snapshot == null || !snapshot.hasEvent()) {
+			return List.of();
+		}
+		List<TrackRow> rows = new ArrayList<>();
+		addDcTracks(snapshot, AI_HB_TRACK_BANK, true, rows);
+		return rows;
+	}
+
+	/**
+	 * Just the AI time-based track candidates ({@value #AI_TB_TRACK_BANK}),
+	 * the time-based counterpart to {@link #aiHbTracks} -- legacy CED colors
+	 * these magenta, distinct from both plain TB Tracks' dark-orange and AI
+	 * HB Tracks' spring green.
+	 */
+	public static List<TrackRow> aiTbTracks(EventSnapshot snapshot) {
+		if (snapshot == null || !snapshot.hasEvent()) {
+			return List.of();
+		}
+		List<TrackRow> rows = new ArrayList<>();
+		addDcTracks(snapshot, AI_TB_TRACK_BANK, false, rows);
 		return rows;
 	}
 

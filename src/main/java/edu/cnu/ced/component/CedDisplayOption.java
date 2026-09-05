@@ -11,6 +11,8 @@ public enum CedDisplayOption {
 	MC_TRACKS("MC Tracks", true, null),
 	HB_TRACKS("HB Tracks", true, null),
 	TB_TRACKS("TB Tracks", true, null),
+	AI_HB_TRACKS("AI HB Tracks", false, null),
+	AI_TB_TRACKS("AI TB Tracks", false, null),
 	CVT_TRACKS("CVT Tracks", true, null),
 	CLUSTERS("Clusters", true, null),
 	CROSSES("Crosses", true, null),
