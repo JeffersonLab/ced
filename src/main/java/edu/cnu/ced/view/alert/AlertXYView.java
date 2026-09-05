@@ -70,12 +70,33 @@ public final class AlertXYView extends CndCtofXYView {
 			new Color(220, 20, 60), new Color(255, 140, 0), new Color(184, 134, 11),
 			new Color(34, 139, 34), new Color(30, 144, 255)
 	};
-	private static final Color TOF_FILL = new Color(225, 225, 235);
-	private static final Color TOF_OUTLINE = new Color(120, 120, 140);
+	// Superlayer 0 (the "bar" ring, one real paddle per sector/layer) is
+	// always this one neutral, near-white fill, regardless of sector --
+	// legacy's own fixed "superlayer0Color". Superlayer 1 (the 10 "wedge"
+	// sub-components, artificially spread into concentric rings -- see
+	// drawTofCells) alternates 3 background hues across the 15 sectors
+	// (sector % 3) purely to help the eye group sectors, each hue in turn
+	// alternating between two shades radially (paddle % 2) for the
+	// "zebra stripe" look -- none of this carries physical meaning, it is
+	// legacy's own deliberately non-geometric way to show more of the
+	// {sector, superlayer, layer, paddle} address than a faithful 3D
+	// projection could (real geometry has all 10 paddles of one
+	// superlayer-1 layer sharing an identical x, y -- they differ only in
+	// z, invisible to an XY view; see AlertGeometry's own scratch-verified
+	// paddle dump).
+	private static final Color TOF_SL0_FILL = new Color(240, 248, 255);
+	private static final Color TOF_SL0_OUTLINE = new Color(190, 200, 215);
+	private static final Color[][] TOF_SL1_FILL = {
+			{ new Color(250, 235, 215), new Color(222, 184, 135, 150) }, // antique white / burlywood
+			{ new Color(224, 255, 255), new Color(173, 216, 230, 150) }, // light cyan / light blue
+			{ new Color(127, 255, 212), new Color(144, 238, 144, 150) }, // aquamarine / light green
+	};
 	private static final Color TOF_LABEL = new Color(40, 75, 145, 170);
+	private static final Color TOF_HIT_FILL = new Color(220, 20, 20, 190);
 	private static final Color RECON_COLOR = new Color(225, 35, 25);
 	private static final Color CLUSTER_COLOR = new Color(205, 0, 205);
 	private static final int MARKER = 4;
+	private static final int TOF_ARC_STEPS = 6;
 
 	private final AlertGeometry geometry;
 	private final AlertAccumulation accumulation;
@@ -84,7 +105,7 @@ public final class AlertXYView extends CndCtofXYView {
 	// world-to-local transforms on every mouse move -- same reasoning as
 	// FMTXYView/URWTXYView's identical caches.
 	private final Map<WireAddress, Point[]> wireScreenPoints = new HashMap<>();
-	private final Map<TofAddress, Polygon> tofPolygons = new HashMap<>();
+	private final Map<TofCell, Polygon> tofCells = new HashMap<>();
 	private volatile AlertEventData eventData = AlertEventData.from(null);
 
 	public AlertXYView(AlertGeometry geometry, CNDGeometry cnd, CTOFGeometry ctof, EventNavigator navigator,
@@ -119,10 +140,10 @@ public final class AlertXYView extends CndCtofXYView {
 			g.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
 			clearSharedDrawState();
 			wireScreenPoints.clear();
-			tofPolygons.clear();
+			tofCells.clear();
 			drawCTOF(g, container);
 			drawCND(g, container);
-			drawTofPanels(g, container);
+			drawTofCells(g, container);
 			if (isDisplayed(CedDisplayOption.ACCUMULATION)) {
 				drawAccumulatedWires(g, container);
 			} else {
@@ -148,26 +169,50 @@ public final class AlertXYView extends CndCtofXYView {
 	}
 
 	/**
-	 * ATOF's 15 sectors x 2 superlayers x 4 layers, each an adjacent tiled
-	 * polygon (matching CND/PCAL's own many-small-polygon convention) rather
-	 * than a centroid dot -- one number label per sector, at that sector's
-	 * middle bar layer.
+	 * ATOF's schematic "cell grid" -- deliberately <em>not</em> a faithful
+	 * projection of the real paddle volumes. Every {sector, superlayer,
+	 * layer, paddle} combination gets its own rectangular (in r-phi space)
+	 * cell: the innermost ring per sector is superlayer 0 (one real "bar"
+	 * paddle per layer, always the same neutral fill), surrounded by 10
+	 * concentric zebra-striped rings for superlayer 1's "wedge"
+	 * sub-components (paddle 0 innermost, paddle 9 outermost), each
+	 * sector's own 4 layers occupying adjacent angular slices going
+	 * clockwise (matching real geometry's own phi ordering -- see
+	 * radialPhiBounds). This mirrors legacy CED's own choice to sacrifice
+	 * geometric fidelity here in exchange for showing the full address
+	 * space: superlayer 1's 10 real sub-components differ only in z (not
+	 * r or phi -- confirmed against AlertGeometry itself), so a true XY
+	 * projection would draw all 10 on top of each other.
 	 */
-	private void drawTofPanels(Graphics2D g, IContainer container) {
+	private void drawTofCells(Graphics2D g, IContainer container) {
 		for (int sector = 0; sector < 15; sector++) {
-			for (int superlayer = 0; superlayer < 2; superlayer++) {
-				for (int layer = 0; layer < 4; layer++) {
-					List<Paddle> paddles = geometry.tofPaddles(sector, superlayer, layer);
-					if (paddles.isEmpty()) continue;
-					// A "wedge" (superlayer 1) layer's own sub-components differ
-					// only in z, irrelevant for this transverse view -- only the
-					// first is needed.
-					Polygon polygon = tofPolygon(container, paddles.get(0));
-					tofPolygons.put(new TofAddress(sector, superlayer, layer), polygon);
-					g.setColor(TOF_FILL);
+			for (int layer = 0; layer < 4; layer++) {
+				List<Paddle> sl0 = geometry.tofPaddles(sector, 0, layer);
+				if (!sl0.isEmpty()) {
+					RadialPhiBounds bounds = radialPhiBounds(sl0.get(0));
+					Polygon polygon = annulusWedgePolygon(container, bounds.innerR(), bounds.outerR(),
+							bounds.phiStart(), bounds.phiEnd());
+					tofCells.put(new TofCell(sector, 0, layer, 0), polygon);
+					g.setColor(TOF_SL0_FILL);
 					g.fillPolygon(polygon);
-					g.setColor(TOF_OUTLINE);
+					g.setColor(TOF_SL0_OUTLINE);
 					g.drawPolygon(polygon);
+				}
+				List<Paddle> sl1 = geometry.tofPaddles(sector, 1, layer);
+				if (!sl1.isEmpty()) {
+					RadialPhiBounds bounds = radialPhiBounds(sl1.get(0));
+					double deltaR = (bounds.outerR() - bounds.innerR()) / 10.0;
+					for (int paddle = 0; paddle < 10; paddle++) {
+						double innerR = bounds.innerR() + paddle * deltaR;
+						Polygon polygon = annulusWedgePolygon(container, innerR, innerR + deltaR,
+								bounds.phiStart(), bounds.phiEnd());
+						tofCells.put(new TofCell(sector, 1, layer, paddle), polygon);
+						Color fill = TOF_SL1_FILL[sector % 3][paddle % 2];
+						g.setColor(fill);
+						g.fillPolygon(polygon);
+						g.setColor(fill.darker());
+						g.drawPolygon(polygon);
+					}
 				}
 			}
 			drawTofSectorLabel(g, container, sector);
@@ -187,15 +232,41 @@ public final class AlertXYView extends CndCtofXYView {
 		g.setFont(old);
 	}
 
-	/** The paddle's front face (vertices 0-3): confirmed identical in (x, y) to the back face (4-7), so this is exact for an XY projection. */
-	private Polygon tofPolygon(IContainer container, Paddle paddle) {
-		Polygon polygon = new Polygon();
+	/**
+	 * A cell's real radial/angular extent, read directly off its underlying
+	 * paddle's own 4 front-face vertices -- confirmed empirically (dumped
+	 * against the running geometry) that vertex 0 sits at (innerR, phiStart)
+	 * and vertex 2 at (outerR, phiEnd), i.e. every paddle is already a
+	 * rectangle in r-phi space.
+	 */
+	private static RadialPhiBounds radialPhiBounds(Paddle paddle) {
 		List<Point3> vertices = paddle.vertices();
-		for (int i = 0; i < 4; i++) {
-			Point p = screenMm(container, vertices.get(i).x(), vertices.get(i).y());
-			polygon.addPoint(p.x, p.y);
+		Point3 innerNear = vertices.get(0), outerFar = vertices.get(2);
+		double innerR = Math.hypot(innerNear.x(), innerNear.y());
+		double outerR = Math.hypot(outerFar.x(), outerFar.y());
+		double phiStart = Math.toDegrees(Math.atan2(innerNear.y(), innerNear.x()));
+		double phiEnd = Math.toDegrees(Math.atan2(outerFar.y(), outerFar.x()));
+		return new RadialPhiBounds(innerR, outerR, phiStart, phiEnd);
+	}
+
+	/** An annulus-wedge cell (schematic, not a true paddle outline), approximated with a short polyline per arc. */
+	private static Polygon annulusWedgePolygon(IContainer container, double innerRMm, double outerRMm,
+			double phiStartDeg, double phiEndDeg) {
+		Polygon polygon = new Polygon();
+		for (int step = 0; step <= TOF_ARC_STEPS; step++) {
+			double phi = Math.toRadians(phiStartDeg + (phiEndDeg - phiStartDeg) * step / TOF_ARC_STEPS);
+			addArcPoint(container, polygon, innerRMm, phi);
+		}
+		for (int step = TOF_ARC_STEPS; step >= 0; step--) {
+			double phi = Math.toRadians(phiStartDeg + (phiEndDeg - phiStartDeg) * step / TOF_ARC_STEPS);
+			addArcPoint(container, polygon, outerRMm, phi);
 		}
 		return polygon;
+	}
+
+	private static void addArcPoint(IContainer container, Polygon polygon, double radiusMm, double phiRad) {
+		Point p = screenMm(container, radiusMm * Math.cos(phiRad), radiusMm * Math.sin(phiRad));
+		polygon.addPoint(p.x, p.y);
 	}
 
 	/**
@@ -287,13 +358,34 @@ public final class AlertXYView extends CndCtofXYView {
 		}
 	}
 
+	/**
+	 * Highlights the schematic cell(s) a raw ATOF hit belongs to, rather than
+	 * plotting its bank-given (x, y) as a dot -- real superlayer-1 (wedge)
+	 * components all share the same (x, y) and would otherwise collide into
+	 * a single indistinguishable point (see drawTofCells). The
+	 * component -> (superlayer, paddle) decode is legacy CED's own
+	 * (AlertTOFGeometryNumbering.fromHipoNumbering): component 10 is the
+	 * lone superlayer-0 bar; components 0-9 are superlayer 1's own paddle
+	 * index.
+	 */
 	private void drawTofHits(Graphics2D g, IContainer container) {
-		g.setColor(RECON_COLOR.darker());
+		g.setColor(TOF_HIT_FILL);
 		for (TofHit hit : eventData.tofHits()) {
-			Point p = screen(container, hit.x(), hit.y());
-			markers.put(hit, p);
-			g.fillRect(p.x - MARKER, p.y - MARKER, 2 * MARKER, 2 * MARKER);
+			int superlayer = hit.component() == 10 ? 0 : 1;
+			int paddle = hit.component() % 10;
+			Polygon cell = tofCells.get(new TofCell(hit.sector(), superlayer, hit.layer(), paddle));
+			if (cell == null) continue;
+			g.fillPolygon(cell);
+			g.setColor(TOF_HIT_FILL.darker());
+			g.drawPolygon(cell);
+			g.setColor(TOF_HIT_FILL);
+			markers.put(hit, cellCenter(cell));
 		}
+	}
+
+	private static Point cellCenter(Polygon cell) {
+		java.awt.Rectangle bounds = cell.getBounds();
+		return new Point(bounds.x + bounds.width / 2, bounds.y + bounds.height / 2);
 	}
 
 	private void drawDcClusters(Graphics2D g, IContainer container) {
@@ -318,7 +410,8 @@ public final class AlertXYView extends CndCtofXYView {
 	}
 
 	private record WireAddress(int superlayer, int layer, int wire) { }
-	private record TofAddress(int sector, int superlayer, int layer) { }
+	private record TofCell(int sector, int superlayer, int layer, int paddle) { }
+	private record RadialPhiBounds(double innerR, double outerR, double phiStart, double phiEnd) { }
 
 	@Override
 	public void getFeedbackStrings(IContainer container, Point screenPoint, Point2D.Double worldPoint,
@@ -327,11 +420,14 @@ public final class AlertXYView extends CndCtofXYView {
 		addXYFeedback(worldPoint, "cm", feedback);
 		boolean found = addBarrelPolygonFeedback(screenPoint, feedback);
 		if (!found) {
-			for (Map.Entry<TofAddress, Polygon> entry : tofPolygons.entrySet()) {
+			for (Map.Entry<TofCell, Polygon> entry : tofCells.entrySet()) {
 				if (entry.getValue().contains(screenPoint)) {
-					TofAddress address = entry.getKey();
-					feedback.add(String.format("$wheat$ATOF sector %d superlayer %d layer %d",
-							address.sector() + 1, address.superlayer(), address.layer()));
+					TofCell cell = entry.getKey();
+					feedback.add(cell.superlayer() == 0
+							? String.format("$wheat$ATOF sector %d layer %d (superlayer 0)",
+									cell.sector() + 1, cell.layer())
+							: String.format("$wheat$ATOF sector %d layer %d superlayer 1 paddle %d",
+									cell.sector() + 1, cell.layer(), cell.paddle()));
 					found = true;
 					break;
 				}

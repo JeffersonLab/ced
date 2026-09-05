@@ -78,7 +78,7 @@ public final class URWTXYView extends CedXYView implements MagneticFieldChangeLi
 	};
 	private static final Color CLUSTER_COLOR = new Color(205, 0, 205);
 	private static final Color CROSS_COLOR = new Color(20, 145, 35);
-	private static final Color SECTOR_LABEL = new Color(60, 60, 60, 140);
+	private static final Color SECTOR_LABEL = new Color(60, 60, 60, 90);
 
 	private final URWTGeometry geometry;
 	private final URWTAccumulation accumulation;
@@ -237,37 +237,37 @@ public final class URWTXYView extends CedXYView implements MagneticFieldChangeLi
 		drawSectorLabels(g, container);
 	}
 
-	/** One light sector number per sector (not per layer), matching legacy's own faint sector labels -- CND/BST's own convention here too. */
+	/**
+	 * One big, semi-transparent sector number centered in the middle of each
+	 * sector's own wedge -- matching legacy's own large, faint, centered
+	 * labels (not the earlier small outer-edge tick this replaced).
+	 */
 	private void drawSectorLabels(Graphics2D g, IContainer container) {
 		Font old = g.getFont();
-		g.setFont(old.deriveFont(Font.BOLD, Math.max(10f, old.getSize2D())));
+		g.setFont(old.deriveFont(Font.BOLD, Math.max(26f, old.getSize2D() * 2.4f)));
 		g.setColor(SECTOR_LABEL);
 		for (int sector = 1; sector <= URWTGeometry.SECTOR_COUNT; sector++) {
-			Point3 outer = outermostVertex(sector);
-			if (outer == null) continue;
-			double r = Math.hypot(outer.x(), outer.y());
-			double scale = r > 0 ? (r + 12) / r : 1;
-			Point p = screen(container, outer.x() * scale, outer.y() * scale);
+			Point3 center = sectorCentroid(sector);
+			if (center == null) continue;
+			Point p = screen(container, center.x(), center.y());
 			String label = Integer.toString(sector);
-			g.drawString(label, p.x - g.getFontMetrics().stringWidth(label) / 2, p.y + 4);
+			g.drawString(label, p.x - g.getFontMetrics().stringWidth(label) / 2, p.y + 9);
 		}
 		g.setFont(old);
 	}
 
-	/** The farthest-from-origin hull vertex across all four layers of one sector, used to place that sector's label just beyond its outer edge. */
-	private Point3 outermostVertex(int sector) {
-		Point3 best = null;
-		double bestRadius = -1;
+	/** The centroid of every hull vertex across all four layers of one sector -- lands near the middle of that sector's wedge, both radially and angularly. */
+	private Point3 sectorCentroid(int sector) {
+		double sumX = 0, sumY = 0;
+		int count = 0;
 		for (int layer = 1; layer <= URWTGeometry.LAYER_COUNT; layer++) {
 			for (Point3 vertex : panelOutlines.get(new PanelAddress(sector, layer))) {
-				double r = Math.hypot(vertex.x(), vertex.y());
-				if (r > bestRadius) {
-					bestRadius = r;
-					best = vertex;
-				}
+				sumX += vertex.x();
+				sumY += vertex.y();
+				count++;
 			}
 		}
-		return best;
+		return count == 0 ? null : new Point3(sumX / count, sumY / count, 0);
 	}
 
 	private void drawAccumulatedPanels(Graphics2D g, IContainer container) {
