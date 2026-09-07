@@ -40,8 +40,26 @@ public final class SwimRequestPolicy {
 	 */
 	public static final double FORWARD_MAX_PATH_CM = 1000.0;
 
-	/** Maximum path length for Central Detector tracks, cm. */
-	public static final double CENTRAL_MAX_PATH_CM = 150.0;
+	/**
+	 * Maximum path length for Central Detector tracks, cm.
+	 * <p>
+	 * Equal to {@link #FORWARD_MAX_PATH_CM}, not a separate, shorter value as
+	 * before: a lower cap here (previously 150) assumed a Central-classified
+	 * particle's own trajectory is never worth showing past a short
+	 * distance, but that isn't reliable -- {@code REC::Particle.status}'s
+	 * region bits reflect where the particle was <em>reconstructed</em>, not
+	 * a hard bound on where its swum path might still be visually relevant.
+	 * Confirmed against a real event: a Central-classified track (a curling
+	 * proton) visibly stopped mid-chamber in {@code DCXYView}, well short of
+	 * the drift chambers' own ~413 cm outer radius, while Forward-classified
+	 * tracks in the same event reached the edge -- since
+	 * {@link edu.cnu.ced.swim.SwimTrajectoryCache} caches one trajectory per
+	 * particle shared across every view, a cap tuned for the Central
+	 * Detector's own small views (Central XY, ALERT XY) silently
+	 * short-changed any larger view sharing the same cache.
+	 * </p>
+	 */
+	public static final double CENTRAL_MAX_PATH_CM = FORWARD_MAX_PATH_CM;
 
 	// Mirrors org.jlab.clas.detector.DetectorParticleStatus's REGION/FORWARD/CENTRAL
 	// constants (coatjava's common-tools/clas-reco module).

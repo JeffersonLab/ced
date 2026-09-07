@@ -116,9 +116,10 @@ public final class DCXYView extends CedXYView implements MagneticFieldChangeList
 				// width mirrors +x to the left of the screen, matching
 				// CLAS12's "looking downstream" display. DC's outer
 				// superlayer reaches ~413 cm (confirmed empirically against
-				// DCGeometry.absoluteMaxWireX()); 450 cm gives a little
-				// margin.
-				PropertyUtils.WORLDSYSTEM, new Rectangle2D.Double(450, -450, -900, 900),
+				// DCGeometry.absoluteMaxWireX()); 490 cm leaves comfortable
+				// room for the sector labels drawn just beyond it (see
+				// outerLabelPosition), matching legacy's own generous margin.
+				PropertyUtils.WORLDSYSTEM, new Rectangle2D.Double(490, -490, -980, 980),
 				PropertyUtils.BACKGROUND, Color.WHITE,
 				PropertyUtils.TOOLBARBITS, ToolBits.NAVIGATIONTOOLS,
 				PropertyUtils.WHEELZOOM, true, PropertyUtils.VISIBLE, true);
@@ -253,27 +254,46 @@ public final class DCXYView extends CedXYView implements MagneticFieldChangeList
 	}
 
 	/**
-	 * One big, semi-transparent sector number centered in the middle of each
-	 * sector's own wedge -- matching legacy's own large, faint, centered
-	 * labels, and the same style/technique already established for
-	 * URWTXYView's own sector labels (centroid of every hull vertex across
-	 * all superlayers in that sector, not just the outermost one).
+	 * One big, semi-transparent sector number just beyond the outermost
+	 * superlayer -- matching legacy's own placement (outside the chamber,
+	 * not centered within it, unlike URWTXYView's own sector labels).
+	 * Reuses the all-superlayer centroid purely for its angle (a reliable
+	 * stand-in for "this sector's own bisecting angle" without having to
+	 * derive that analytically), then pushes out to the sector's own
+	 * outermost (superlayer 6) vertex radius plus a fixed margin.
 	 */
 	private void drawSectorLabels(Graphics2D g, IContainer container) {
 		Font old = g.getFont();
 		g.setFont(old.deriveFont(Font.BOLD, Math.max(26f, old.getSize2D() * 2.4f)));
 		g.setColor(SECTOR_LABEL);
 		for (int sector = 1; sector <= DCGeometry.SECTOR_COUNT; sector++) {
-			Point3 center = sectorCentroid(sector);
-			if (center == null) continue;
-			Point p = screen(container, center.x(), center.y());
-			String label = Integer.toString(sector);
-			g.drawString(label, p.x - g.getFontMetrics().stringWidth(label) / 2, p.y + 9);
+			Point3 label = outerLabelPosition(sector);
+			if (label == null) continue;
+			Point p = screen(container, label.x(), label.y());
+			String text = Integer.toString(sector);
+			g.drawString(text, p.x - g.getFontMetrics().stringWidth(text) / 2, p.y + 9);
 		}
 		g.setFont(old);
 	}
 
-	/** The centroid of every hull vertex across all six superlayers of one sector -- lands near the middle of that sector's wedge, both radially and angularly. */
+	private Point3 outerLabelPosition(int sector) {
+		Point3 centroid = sectorCentroid(sector);
+		if (centroid == null) return null;
+		double angle = Math.atan2(centroid.y(), centroid.x());
+		double radius = outermostRadius(sector) + 25;
+		return new Point3(radius * Math.cos(angle), radius * Math.sin(angle), 0);
+	}
+
+	/** The farthest-from-origin vertex of a sector's own outermost (superlayer 6) outline. */
+	private double outermostRadius(int sector) {
+		double max = 0;
+		for (Point3 vertex : panelOutlines.get(new PanelAddress(sector, DCGeometry.SUPERLAYER_COUNT))) {
+			max = Math.max(max, Math.hypot(vertex.x(), vertex.y()));
+		}
+		return max;
+	}
+
+	/** The centroid of every hull vertex across all six superlayers of one sector -- a reliable proxy for that sector's own bisecting angle. */
 	private Point3 sectorCentroid(int sector) {
 		double sumX = 0, sumY = 0;
 		int count = 0;
