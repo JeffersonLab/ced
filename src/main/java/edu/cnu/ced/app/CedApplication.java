@@ -65,6 +65,7 @@ import edu.cnu.ced.view.central.CentralXYView;
 import edu.cnu.ced.view.central.CentralZView;
 import edu.cnu.ced.view.dc.AllDCView;
 import edu.cnu.ced.view.dc.DCHexView;
+import edu.cnu.ced.view.dc.DCXYView;
 import edu.cnu.ced.view.sector.SectorView;
 import edu.cnu.ced.view.sector.SectorView.Pair;
 import edu.cnu.ced.view.tracks.TrackTableView;
@@ -284,6 +285,10 @@ public final class CedApplication extends BaseMDIApplication {
 				ViewConfiguration.lazy("ALERT XY", () -> new AlertXYView(geometryService.alert(),
 						geometryService.cnd(), geometryService.ctof(), eventNavigator,
 						accumulationService.alert(), accumulationService.central(), swimCache),
+						8, 0, 0, VirtualView.CENTER)));
+		timeStep("DC XY (lazy registration)", () -> ViewManager.getInstance().addConfiguration(
+				ViewConfiguration.lazy("DC XY", () -> new DCXYView(geometryService.dc(),
+						eventNavigator, accumulationService.dc(), swimCache),
 						8, 0, 0, VirtualView.CENTER)));
 		timeStep("PCAL", () -> ViewManager.getInstance().addConfiguration(ViewConfiguration.eager(
 				"PCAL", () -> new PCalView(geometryService.pcal(), eventNavigator,
