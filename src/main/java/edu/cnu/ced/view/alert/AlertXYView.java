@@ -219,15 +219,29 @@ public final class AlertXYView extends CndCtofXYView {
 		}
 	}
 
+	/**
+	 * One light sector number, 0-based (matching the raw bank/geometry
+	 * addressing, and legacy's own 0-14 labels -- not the earlier,
+	 * off-by-one "1-15" this replaced), placed just beyond the outermost
+	 * zebra ring at that sector's angular center -- legacy's own outside
+	 * placement, not the earlier inner-layer centroid this replaced.
+	 */
 	private void drawTofSectorLabel(Graphics2D g, IContainer container, int sector) {
-		List<Paddle> paddles = geometry.tofPaddles(sector, 0, 1);
-		if (paddles.isEmpty()) return;
-		Point3 centroid = centroid(paddles.get(0).vertices());
-		Point p = screenMm(container, centroid.x(), centroid.y());
+		List<Paddle> first = geometry.tofPaddles(sector, 1, 0);
+		List<Paddle> last = geometry.tofPaddles(sector, 1, 3);
+		if (first.isEmpty() || last.isEmpty()) return;
+		RadialPhiBounds firstBounds = radialPhiBounds(first.get(0));
+		RadialPhiBounds lastBounds = radialPhiBounds(last.get(0));
+		double phiStart = firstBounds.phiStart();
+		double phiEnd = lastBounds.phiEnd();
+		if (phiEnd < phiStart) phiEnd += 360;
+		double phiCenter = Math.toRadians((phiStart + phiEnd) / 2);
+		double labelR = firstBounds.outerR() + 15;
+		Point p = screenMm(container, labelR * Math.cos(phiCenter), labelR * Math.sin(phiCenter));
 		Font old = g.getFont();
 		g.setFont(old.deriveFont(Font.BOLD, Math.max(10f, old.getSize2D())));
 		g.setColor(TOF_LABEL);
-		String label = Integer.toString(sector + 1);
+		String label = Integer.toString(sector);
 		g.drawString(label, p.x - g.getFontMetrics().stringWidth(label) / 2, p.y + 4);
 		g.setFont(old);
 	}
@@ -281,15 +295,6 @@ public final class AlertXYView extends CndCtofXYView {
 	 */
 	private static Point screenMm(IContainer container, double xMm, double yMm) {
 		return screen(container, xMm / 10, yMm / 10);
-	}
-
-	private static Point3 centroid(List<Point3> vertices) {
-		double x = 0, y = 0, z = 0;
-		for (Point3 vertex : vertices) {
-			x += vertex.x(); y += vertex.y(); z += vertex.z();
-		}
-		int n = vertices.size();
-		return new Point3(x / n, y / n, z / n);
 	}
 
 	private void drawWires(Graphics2D g, IContainer container) {
@@ -425,9 +430,9 @@ public final class AlertXYView extends CndCtofXYView {
 					TofCell cell = entry.getKey();
 					feedback.add(cell.superlayer() == 0
 							? String.format("$wheat$ATOF sector %d layer %d (superlayer 0)",
-									cell.sector() + 1, cell.layer())
+									cell.sector(), cell.layer())
 							: String.format("$wheat$ATOF sector %d layer %d superlayer 1 paddle %d",
-									cell.sector() + 1, cell.layer(), cell.paddle()));
+									cell.sector(), cell.layer(), cell.paddle()));
 					found = true;
 					break;
 				}
