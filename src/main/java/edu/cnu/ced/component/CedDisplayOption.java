@@ -4,6 +4,11 @@ package edu.cnu.ced.component;
 public enum CedDisplayOption {
 	SINGLE_EVENT("Single", true, "event-mode"),
 	ACCUMULATION("Accum.", false, "event-mode"),
+	// Added automatically to every CedView (see CedView.initializeCedView),
+	// not detector-specific like the rest -- gates only the delayed popup
+	// hover window (CedView.hoverUpdate); the continuous feedback-pane text
+	// is never suppressed by this.
+	HOVER_POPUP("Hover Popup", true, null),
 	RAW_DATA("Raw Data", true, null),
 	RECON_HITS("Recon Hits", true, null),
 	RECON_CAL("Recon Cal", true, null),

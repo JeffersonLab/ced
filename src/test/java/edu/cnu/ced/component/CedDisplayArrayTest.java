@@ -23,4 +23,21 @@ class CedDisplayArrayTest {
 		assertTrue(array.isSelected(CedDisplayOption.SINGLE_EVENT));
 		assertFalse(array.isSelected(CedDisplayOption.ACCUMULATION));
 	}
+
+	@Test
+	void hoverPopupTogglesIndependentlyAndDefaultsOn() {
+		// CedView.initializeCedView unions HOVER_POPUP into every view's own
+		// options automatically; this only pins the checkbox's own behavior
+		// once it's present, not that unioning (which needs a real CedView).
+		CedDisplayArray array = new CedDisplayArray(EnumSet.of(
+				CedDisplayOption.HOVER_POPUP, CedDisplayOption.RECON_HITS),
+				2, 0, 0, null);
+
+		assertTrue(array.isSelected(CedDisplayOption.HOVER_POPUP));
+
+		array.setSelected(CedDisplayOption.HOVER_POPUP, false);
+		assertFalse(array.isSelected(CedDisplayOption.HOVER_POPUP));
+		// Unrelated options are untouched by the hover toggle.
+		assertTrue(array.isSelected(CedDisplayOption.RECON_HITS));
+	}
 }

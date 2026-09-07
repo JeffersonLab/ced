@@ -60,7 +60,12 @@ public abstract class CedView extends BaseView {
 			List<String> bankPrefixes, ScientificColorMap colorMap, String legendTitle,
 			int controlWidth) {
 		FeedbackPane feedback = initFeedback(Color.CYAN, Color.BLACK, 10);
-		controls = new CedControlPanel(navigator, options, bankPrefixes, feedback, colorMap,
+		// HOVER_POPUP is unioned in here, not left for each view to remember to
+		// request, so every CED view gets the toggle uniformly -- see
+		// isHoveringEnabled().
+		EnumSet<CedDisplayOption> allOptions = EnumSet.copyOf(options);
+		allOptions.add(CedDisplayOption.HOVER_POPUP);
+		controls = new CedControlPanel(navigator, allOptions, bankPrefixes, feedback, colorMap,
 				legendTitle, this::refresh, controlWidth);
 		add(controls, BorderLayout.EAST);
 		// BaseView packs its canvas before detector-specific controls are installed.
@@ -136,6 +141,19 @@ public abstract class CedView extends BaseView {
 	}
 
 	/**
+	 * Whether the delayed popup hover window ({@link #hoverUpdate}) is
+	 * currently enabled, via the "Hover Popup" display toggle every CED view
+	 * gets automatically (see {@link #initializeCedView}) -- mirrors {@code
+	 * MapView2D}'s own {@code isHoveringEnabled()} in the {@code mdi}
+	 * framework itself. This does <em>not</em> gate the continuous
+	 * feedback-pane text (see {@link #getFeedbackStrings}), which is never
+	 * suppressed regardless of this toggle.
+	 */
+	protected final boolean isHoveringEnabled() {
+		return isDisplayed(CedDisplayOption.HOVER_POPUP);
+	}
+
+	/**
 	 * Shows a floating popup near the cursor after it pauses over this
 	 * view -- the same information already shown live in the black
 	 * feedback pane as the mouse moves, reused here rather than gathered a
@@ -143,10 +161,12 @@ public abstract class CedView extends BaseView {
 	 * {@link #getFeedbackStrings} and reformats the result as plain text.
 	 * Matches bCNU CED's own delayed hover popup, and {@code MapView2D}'s
 	 * identical approach for map feature hover in the {@code mdi}
-	 * framework itself.
+	 * framework itself. Suppressed entirely when {@link #isHoveringEnabled}
+	 * is false; the feedback pane itself is untouched either way.
 	 */
 	@Override
 	public void hoverUpdate(HoverEvent he) {
+		if (!isHoveringEnabled()) return;
 		IContainer container = getIContainer();
 		Point screenPoint = he.getLocation();
 		if (container == null || screenPoint == null) return;
