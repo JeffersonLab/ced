@@ -280,7 +280,7 @@ public final class DCXYView extends CedXYView implements MagneticFieldChangeList
 		Point3 centroid = sectorCentroid(sector);
 		if (centroid == null) return null;
 		double angle = Math.atan2(centroid.y(), centroid.x());
-		double radius = outermostRadius(sector) + 10;
+		double radius = outermostRadius(sector) + 4;
 		return new Point3(radius * Math.cos(angle), radius * Math.sin(angle), 0);
 	}
 
