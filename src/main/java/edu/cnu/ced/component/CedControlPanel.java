@@ -5,6 +5,8 @@ import java.awt.Color;
 import java.awt.Dimension;
 import java.awt.Component;
 import java.awt.Font;
+import java.awt.event.MouseAdapter;
+import java.awt.event.MouseEvent;
 import java.util.EnumSet;
 import java.util.List;
 
@@ -116,10 +118,20 @@ public final class CedControlPanel extends JPanel {
 
 		JList<String> banks = new JList<>(bankModel);
 		banks.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
-		banks.getSelectionModel().addListSelectionListener(event -> {
-			if (event.getValueIsAdjusting()) return;
-			String bankName = banks.getSelectedValue();
-			if (bankName != null) bankViewerOpener.open(bankName, snapshot);
+		// A click-driven listener, not a ListSelectionListener: Swing only
+		// fires a selection-change event when the selected row actually
+		// changes, so clicking an already-selected bank a second time --
+		// exactly the "bring the already-open window to front" gesture --
+		// would otherwise never re-invoke open(). Deriving the row from the
+		// click point itself, rather than from getSelectedValue(), makes a
+		// repeat click on the same row behave identically to the first.
+		banks.addMouseListener(new MouseAdapter() {
+			@Override
+			public void mouseClicked(MouseEvent event) {
+				int index = banks.locationToIndex(event.getPoint());
+				if (index < 0 || !banks.getCellBounds(index, index).contains(event.getPoint())) return;
+				bankViewerOpener.open(bankModel.getElementAt(index), snapshot);
+			}
 		});
 		tabs.addTab("banks", new JScrollPane(banks));
 		add(tabs, BorderLayout.NORTH);
