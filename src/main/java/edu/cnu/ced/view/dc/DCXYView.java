@@ -2,6 +2,7 @@ package edu.cnu.ced.view.dc;
 
 import java.awt.BasicStroke;
 import java.awt.Color;
+import java.awt.Font;
 import java.awt.Graphics2D;
 import java.awt.Point;
 import java.awt.Polygon;
@@ -76,6 +77,7 @@ public final class DCXYView extends CedXYView implements MagneticFieldChangeList
 			new Color(34, 139, 34), new Color(30, 144, 255), new Color(148, 0, 211)
 	};
 	private static final Color FRAMEWORK_COLOR = new Color(190, 195, 200);
+	private static final Color SECTOR_LABEL = new Color(60, 60, 60, 90);
 
 	private final DCGeometry geometry;
 	private final DCAccumulation accumulation;
@@ -238,6 +240,7 @@ public final class DCXYView extends CedXYView implements MagneticFieldChangeList
 				g.drawPolygon(polygon);
 			}
 		}
+		drawSectorLabels(g, container);
 	}
 
 	private Polygon panelPolygon(IContainer container, int sector, int superlayer) {
@@ -247,6 +250,41 @@ public final class DCXYView extends CedXYView implements MagneticFieldChangeList
 			polygon.addPoint(p.x, p.y);
 		}
 		return polygon;
+	}
+
+	/**
+	 * One big, semi-transparent sector number centered in the middle of each
+	 * sector's own wedge -- matching legacy's own large, faint, centered
+	 * labels, and the same style/technique already established for
+	 * URWTXYView's own sector labels (centroid of every hull vertex across
+	 * all superlayers in that sector, not just the outermost one).
+	 */
+	private void drawSectorLabels(Graphics2D g, IContainer container) {
+		Font old = g.getFont();
+		g.setFont(old.deriveFont(Font.BOLD, Math.max(26f, old.getSize2D() * 2.4f)));
+		g.setColor(SECTOR_LABEL);
+		for (int sector = 1; sector <= DCGeometry.SECTOR_COUNT; sector++) {
+			Point3 center = sectorCentroid(sector);
+			if (center == null) continue;
+			Point p = screen(container, center.x(), center.y());
+			String label = Integer.toString(sector);
+			g.drawString(label, p.x - g.getFontMetrics().stringWidth(label) / 2, p.y + 9);
+		}
+		g.setFont(old);
+	}
+
+	/** The centroid of every hull vertex across all six superlayers of one sector -- lands near the middle of that sector's wedge, both radially and angularly. */
+	private Point3 sectorCentroid(int sector) {
+		double sumX = 0, sumY = 0;
+		int count = 0;
+		for (int superlayer = 1; superlayer <= DCGeometry.SUPERLAYER_COUNT; superlayer++) {
+			for (Point3 vertex : panelOutlines.get(new PanelAddress(sector, superlayer))) {
+				sumX += vertex.x();
+				sumY += vertex.y();
+				count++;
+			}
+		}
+		return count == 0 ? null : new Point3(sumX / count, sumY / count, 0);
 	}
 
 	/** Every raw hit's own wire, drawn as its real full line -- legacy's own choice, not a schematic cell. */
