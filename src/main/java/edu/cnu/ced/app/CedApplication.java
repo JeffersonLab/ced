@@ -72,6 +72,7 @@ import edu.cnu.ced.view.tracks.TrackTableView;
 import edu.cnu.mdi.app.BaseMDIApplication;
 import edu.cnu.mdi.app.StartupInfo;
 import edu.cnu.mdi.app.StartupWindow;
+import edu.cnu.mdi.desktop.Desktop;
 import edu.cnu.mdi.dialog.FileDialogs;
 import edu.cnu.mdi.dialog.FileType;
 import edu.cnu.mdi.io.RecentFiles;
@@ -630,8 +631,33 @@ public final class CedApplication extends BaseMDIApplication {
 	}
 
 	@Override
+	protected void onVirtualDesktopReady() {
+		// super's own call chain (standardVirtualDesktopReady -> defaultViewLayout,
+		// above) has, by the time it returns, already loaded the saved layout
+		// file and applied it to every view the app creates on its own --
+		// exactly the saved data ViewConfiguration#wasOpenInSavedLayout needs.
+		// Reopening lazy (optional) views -- FMT/uRWT/ALERT/DC XY, an extra
+		// Sector view, the JSON Viewer, ... -- that were actually open (not
+		// merely present-but-hidden) the last time the layout was saved has
+		// no other hook: Desktop's own restoration can only reposition views
+		// this app already creates, never create one it wouldn't otherwise.
+		super.onVirtualDesktopReady();
+		ViewManager.getInstance().restorePreviouslyOpenLazyViews();
+	}
+
+	@Override
 	protected void prepareForShutdown() {
 		eventNavigator.close();
+		// Silent, automatic save (Desktop#writeConfigurationFile's own
+		// documented use case) -- without this, onVirtualDesktopReady's
+		// restorePreviouslyOpenLazyViews() call would never have anything
+		// to restore, since nothing else in this app ever writes the
+		// layout file (only an explicit "Save Layout..." menu action would,
+		// and this app doesn't have one).
+		Desktop desktop = Desktop.getInstance();
+		if (desktop != null) {
+			desktop.writeConfigurationFile();
+		}
 		super.prepareForShutdown();
 	}
 
