@@ -81,6 +81,7 @@ import edu.cnu.mdi.log.Log;
 import edu.cnu.mdi.ui.menu.MenuManager;
 import edu.cnu.mdi.ui.menu.MenuContribution;
 import edu.cnu.mdi.ui.menu.MenuId;
+import edu.cnu.mdi.util.Environment;
 import edu.cnu.mdi.util.PropertyUtils;
 import edu.cnu.mdi.view.JsonView;
 import edu.cnu.mdi.view.LogView;
@@ -648,14 +649,21 @@ public final class CedApplication extends BaseMDIApplication {
 	@Override
 	protected void prepareForShutdown() {
 		eventNavigator.close();
-		// Silent, automatic save (Desktop#writeConfigurationFile's own
-		// documented use case) -- without this, onVirtualDesktopReady's
-		// restorePreviouslyOpenLazyViews() call would never have anything
-		// to restore, since nothing else in this app ever writes the
-		// layout file (only an explicit "Save Layout..." menu action would,
-		// and this app doesn't have one).
+		// Silent, automatic re-save on exit (Desktop#writeConfigurationFile's
+		// own documented use case) -- but only once the user has actually
+		// opted in by saving at least one layout, via the framework's own
+		// File > "Save Layout..." menu item (Desktop#writeConfigurationFileInteractive).
+		// Auto-saving unconditionally would silently defeat File >
+		// "Delete Layout..." (Desktop#deleteConfigurationFile): confirmed
+		// against the running app -- deleting the file, then exiting
+		// normally, immediately wrote a fresh one capturing whatever was
+		// open at that moment, so "delete" never actually stuck past the
+		// next exit. Checking the file still exists here, right before
+		// re-writing it, respects an explicit delete as the lasting reset
+		// it's meant to be.
 		Desktop desktop = Desktop.getInstance();
-		if (desktop != null) {
+		File configurationFile = Environment.getInstance().getConfigurationFile();
+		if (desktop != null && configurationFile != null && configurationFile.exists()) {
 			desktop.writeConfigurationFile();
 		}
 		super.prepareForShutdown();
