@@ -35,7 +35,6 @@ import edu.cnu.ced.geometry.Segment3;
 import edu.cnu.ced.swim.SwimTrajectoryCache;
 import edu.cnu.ced.view.central.CndCtofXYView;
 import edu.cnu.mdi.container.IContainer;
-import edu.cnu.mdi.graphics.toolbar.ToolBits;
 import edu.cnu.mdi.ui.colors.ScientificColorMap;
 import edu.cnu.mdi.util.PropertyUtils;
 
@@ -115,7 +114,7 @@ public final class AlertXYView extends CndCtofXYView {
 				PropertyUtils.WIDTH, 860, PropertyUtils.HEIGHT, 760,
 				PropertyUtils.WORLDSYSTEM, new Rectangle2D.Double(40, -40, -80, 80),
 				PropertyUtils.BACKGROUND, Color.WHITE,
-				PropertyUtils.TOOLBARBITS, ToolBits.NAVIGATIONTOOLS,
+				PropertyUtils.TOOLBARBITS, TOOLBAR_BITS,
 				PropertyUtils.WHEELZOOM, true, PropertyUtils.VISIBLE, true);
 		this.geometry = geometry;
 		this.accumulation = accumulation;

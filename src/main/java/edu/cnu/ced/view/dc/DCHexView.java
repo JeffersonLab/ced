@@ -25,7 +25,6 @@ import edu.cnu.ced.event.EventNavigator;
 import edu.cnu.ced.style.CedDrawingStyle;
 import edu.cnu.ced.view.CedView;
 import edu.cnu.mdi.container.IContainer;
-import edu.cnu.mdi.graphics.toolbar.ToolBits;
 import edu.cnu.mdi.ui.colors.ScientificColorMap;
 import edu.cnu.mdi.ui.fonts.Fonts;
 import edu.cnu.mdi.util.PropertyUtils;
@@ -55,7 +54,7 @@ public final class DCHexView extends CedView {
 		super(navigator, PropertyUtils.TITLE, "DC Hex", PropertyUtils.WIDTH, 820,
 				PropertyUtils.HEIGHT, 790, PropertyUtils.WORLDSYSTEM,
 				new Rectangle2D.Double(430, -495, -860, 990), PropertyUtils.BACKGROUND,
-				BACKGROUND, PropertyUtils.TOOLBARBITS, ToolBits.NAVIGATIONTOOLS,
+				BACKGROUND, PropertyUtils.TOOLBARBITS, TOOLBAR_BITS,
 				PropertyUtils.WHEELZOOM, true, PropertyUtils.VISIBLE, true);
 		this.accumulation = accumulation;
 		setAfterDraw(this::draw);

@@ -30,7 +30,6 @@ import edu.cnu.ced.geometry.CTOFGeometry;
 import edu.cnu.ced.geometry.Point3;
 import edu.cnu.ced.swim.SwimTrajectoryCache;
 import edu.cnu.mdi.container.IContainer;
-import edu.cnu.mdi.graphics.toolbar.ToolBits;
 import edu.cnu.mdi.ui.colors.ScientificColorMap;
 import edu.cnu.mdi.util.PropertyUtils;
 
@@ -59,7 +58,7 @@ public final class CentralXYView extends CndCtofXYView {
 		super(cnd,ctof,navigator,accumulation,swimCache,
 				PropertyUtils.TITLE,"Central XY",PropertyUtils.WIDTH,860,PropertyUtils.HEIGHT,760,
 				PropertyUtils.WORLDSYSTEM,new Rectangle2D.Double(40,-40,-80,80),PropertyUtils.BACKGROUND,Color.WHITE,
-				PropertyUtils.TOOLBARBITS,ToolBits.NAVIGATIONTOOLS,PropertyUtils.WHEELZOOM,true,PropertyUtils.VISIBLE,true);
+				PropertyUtils.TOOLBARBITS,TOOLBAR_BITS,PropertyUtils.WHEELZOOM,true,PropertyUtils.VISIBLE,true);
 		this.bst=bst;this.bmt=bmt;
 		setAfterDraw(this::draw); initializeCedView(EnumSet.of(CedDisplayOption.SINGLE_EVENT,CedDisplayOption.ACCUMULATION,
 				CedDisplayOption.RAW_DATA,CedDisplayOption.RECON_HITS,CedDisplayOption.CLUSTERS,CedDisplayOption.CROSSES,

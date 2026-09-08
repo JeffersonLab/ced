@@ -21,6 +21,7 @@ import edu.cnu.ced.event.EventNavigationState;
 import edu.cnu.ced.event.EventNavigator;
 import edu.cnu.mdi.container.IContainer;
 import edu.cnu.mdi.feedback.FeedbackPane;
+import edu.cnu.mdi.graphics.toolbar.ToolBits;
 import edu.cnu.mdi.hover.HoverEvent;
 import edu.cnu.mdi.hover.HoverInfoWindow;
 import edu.cnu.mdi.ui.colors.ScientificColorMap;
@@ -29,6 +30,20 @@ import edu.cnu.mdi.view.BaseView;
 /** Common event-aware foundation for all CED detector views. */
 @SuppressWarnings("serial")
 public abstract class CedView extends BaseView {
+
+	/**
+	 * Standard toolbar for a CED detector view: MDI's usual pan/zoom
+	 * navigation tools plus the camera button ("Snapshot of the current
+	 * canvas as a png image"). Every detector view here should use this
+	 * (not {@link ToolBits#NAVIGATIONTOOLS} alone) so that exporting an
+	 * event display as an image -- routine for talks and papers -- is
+	 * available everywhere, rather than missing by omission; confirmed
+	 * empirically that every one of them previously used NAVIGATIONTOOLS
+	 * only, so none could. The capability itself needs no other wiring:
+	 * {@code TakePicture.takePicture} is already generic and already
+	 * driven by this one toolbar bit for every other mdi app that sets it.
+	 */
+	public static final long TOOLBAR_BITS = ToolBits.NAVIGATIONTOOLS | ToolBits.CAMERA;
 
 	private final EventNavigator navigator;
 	private final Consumer<EventNavigationState> eventListener = this::acceptEventState;

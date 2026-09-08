@@ -43,7 +43,6 @@ import edu.cnu.ced.swim.SwimTrajectoryCache;
 import edu.cnu.ced.swim.SwimmableParticle;
 import edu.cnu.ced.view.CedXYView;
 import edu.cnu.mdi.container.IContainer;
-import edu.cnu.mdi.graphics.toolbar.ToolBits;
 import edu.cnu.mdi.ui.colors.ScientificColorMap;
 import edu.cnu.mdi.util.PropertyUtils;
 
@@ -121,7 +120,7 @@ public final class DCXYView extends CedXYView implements MagneticFieldChangeList
 				// outerLabelPosition), matching legacy's own generous margin.
 				PropertyUtils.WORLDSYSTEM, new Rectangle2D.Double(490, -490, -980, 980),
 				PropertyUtils.BACKGROUND, Color.WHITE,
-				PropertyUtils.TOOLBARBITS, ToolBits.NAVIGATIONTOOLS,
+				PropertyUtils.TOOLBARBITS, TOOLBAR_BITS,
 				PropertyUtils.WHEELZOOM, true, PropertyUtils.VISIBLE, true);
 		this.geometry = geometry;
 		this.accumulation = accumulation;

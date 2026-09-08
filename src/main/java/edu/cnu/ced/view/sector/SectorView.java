@@ -73,7 +73,6 @@ import edu.cnu.ced.view.CedView;
 import edu.cnu.ced.view.swim.TrajectoryIntegralPlotView;
 import edu.cnu.mdi.container.IContainer;
 import edu.cnu.mdi.component.CommonBorder;
-import edu.cnu.mdi.graphics.toolbar.ToolBits;
 import edu.cnu.mdi.ui.colors.ColorScaleBar;
 import edu.cnu.mdi.ui.colors.ScientificColorMap;
 import edu.cnu.mdi.ui.fonts.Fonts;
@@ -171,7 +170,7 @@ public final class SectorView extends CedView implements MagneticFieldChangeList
 				PropertyUtils.WIDTH, 940, PropertyUtils.HEIGHT, 760,
 				PropertyUtils.WORLDSYSTEM, new Rectangle2D.Double(-10, -450, 840, 900),
 				PropertyUtils.BACKGROUND, BACKGROUND, PropertyUtils.TOOLBARBITS,
-				ToolBits.NAVIGATIONTOOLS, PropertyUtils.WHEELZOOM, true,
+				TOOLBAR_BITS, PropertyUtils.WHEELZOOM, true,
 				PropertyUtils.VISIBLE, true);
 		this.pair = pair;
 		this.geometry = geometry;

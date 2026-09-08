@@ -31,7 +31,6 @@ import edu.cnu.ced.style.CedDrawingStyle;
 import edu.cnu.ced.view.CedView;
 import edu.cnu.mdi.component.AspectRatioPanel;
 import edu.cnu.mdi.container.IContainer;
-import edu.cnu.mdi.graphics.toolbar.ToolBits;
 import edu.cnu.mdi.ui.colors.ScientificColorMap;
 import edu.cnu.mdi.ui.fonts.Fonts;
 import edu.cnu.mdi.util.PropertyUtils;
@@ -67,7 +66,7 @@ public final class AllDCView extends CedView {
 		super(navigator, PropertyUtils.TITLE, "All Drift Chambers", PropertyUtils.WIDTH, 1120,
 				PropertyUtils.HEIGHT, 760, PropertyUtils.WORLDSYSTEM,
 				new Rectangle2D.Double(0, 0, 3, 2), PropertyUtils.BACKGROUND,
-				Color.WHITE, PropertyUtils.TOOLBARBITS, ToolBits.NAVIGATIONTOOLS,
+				Color.WHITE, PropertyUtils.TOOLBARBITS, TOOLBAR_BITS,
 				PropertyUtils.WHEELZOOM, true, PropertyUtils.VISIBLE, true);
 		this.geometry = geometry;
 		this.accumulation = accumulation;

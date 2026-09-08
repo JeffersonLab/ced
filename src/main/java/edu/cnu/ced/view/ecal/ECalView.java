@@ -25,7 +25,6 @@ import edu.cnu.ced.geometry.Point3;
 import edu.cnu.ced.view.CedHexView;
 import edu.cnu.ced.view.calorimeter.CalorimeterDrawingSupport;
 import edu.cnu.mdi.container.IContainer;
-import edu.cnu.mdi.graphics.toolbar.ToolBits;
 import edu.cnu.mdi.ui.colors.ScientificColorMap;
 import edu.cnu.mdi.util.PropertyUtils;
 
@@ -51,7 +50,7 @@ public final class ECalView extends CedHexView {
 				PropertyUtils.WIDTH, 780, PropertyUtils.HEIGHT, 780,
 				PropertyUtils.WORLDSYSTEM, new Rectangle2D.Double(430, -496.53562, -860, 993.07124),
 				PropertyUtils.BACKGROUND, new Color(235, 245, 250),
-				PropertyUtils.TOOLBARBITS, ToolBits.NAVIGATIONTOOLS,
+				PropertyUtils.TOOLBARBITS, TOOLBAR_BITS,
 				PropertyUtils.WHEELZOOM, true, PropertyUtils.VISIBLE, true);
 		this.geometry = geometry;
 		this.accumulation = accumulation;

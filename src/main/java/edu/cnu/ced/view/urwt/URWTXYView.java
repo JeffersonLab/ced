@@ -40,7 +40,6 @@ import edu.cnu.ced.swim.SwimTrajectoryCache;
 import edu.cnu.ced.swim.SwimmableParticle;
 import edu.cnu.ced.view.CedXYView;
 import edu.cnu.mdi.container.IContainer;
-import edu.cnu.mdi.graphics.toolbar.ToolBits;
 import edu.cnu.mdi.ui.colors.ScientificColorMap;
 import edu.cnu.mdi.util.PropertyUtils;
 
@@ -116,7 +115,7 @@ public final class URWTXYView extends CedXYView implements MagneticFieldChangeLi
 				// origin, positive height) so +y is still up.
 				PropertyUtils.WORLDSYSTEM, new Rectangle2D.Double(250, -250, -500, 500),
 				PropertyUtils.BACKGROUND, Color.WHITE,
-				PropertyUtils.TOOLBARBITS, ToolBits.NAVIGATIONTOOLS,
+				PropertyUtils.TOOLBARBITS, TOOLBAR_BITS,
 				PropertyUtils.WHEELZOOM, true, PropertyUtils.VISIBLE, true);
 		this.geometry = geometry;
 		this.accumulation = accumulation;

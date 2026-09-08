@@ -51,7 +51,6 @@ import edu.cnu.ced.swim.SwimmableParticle;
 import edu.cnu.ced.view.CedView;
 import edu.cnu.mdi.component.AspectRatioPanel;
 import edu.cnu.mdi.container.IContainer;
-import edu.cnu.mdi.graphics.toolbar.ToolBits;
 import edu.cnu.mdi.ui.colors.ScientificColorMap;
 import edu.cnu.mdi.ui.fonts.Fonts;
 import edu.cnu.mdi.util.PropertyUtils;
@@ -92,7 +91,7 @@ public final class CentralZView extends CedView implements MagneticFieldChangeLi
 		super(navigator, PropertyUtils.TITLE, "Central Z", PropertyUtils.WIDTH, 900,
 				PropertyUtils.HEIGHT, 780, PropertyUtils.WORLDSYSTEM,
 				new Rectangle2D.Double(-24, -23, 52, 46), PropertyUtils.BACKGROUND,
-				Color.WHITE, PropertyUtils.TOOLBARBITS, ToolBits.NAVIGATIONTOOLS,
+				Color.WHITE, PropertyUtils.TOOLBARBITS, TOOLBAR_BITS,
 				PropertyUtils.WHEELZOOM, true, PropertyUtils.VISIBLE, true);
 		this.bst = bst;
 		this.bmt = bmt;

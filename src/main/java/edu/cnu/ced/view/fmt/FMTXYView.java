@@ -26,7 +26,6 @@ import edu.cnu.ced.geometry.FMTGeometry;
 import edu.cnu.ced.geometry.Segment3;
 import edu.cnu.ced.view.CedXYView;
 import edu.cnu.mdi.container.IContainer;
-import edu.cnu.mdi.graphics.toolbar.ToolBits;
 import edu.cnu.mdi.ui.colors.ScientificColorMap;
 import edu.cnu.mdi.util.PropertyUtils;
 
@@ -69,7 +68,7 @@ public final class FMTXYView extends CedXYView {
 				PropertyUtils.WIDTH, 700, PropertyUtils.HEIGHT, 700,
 				PropertyUtils.WORLDSYSTEM, new Rectangle2D.Double(-24, 24, 48, -48),
 				PropertyUtils.BACKGROUND, Color.WHITE,
-				PropertyUtils.TOOLBARBITS, ToolBits.NAVIGATIONTOOLS,
+				PropertyUtils.TOOLBARBITS, TOOLBAR_BITS,
 				PropertyUtils.WHEELZOOM, true, PropertyUtils.VISIBLE, true);
 		this.geometry = geometry;
 		this.accumulation = accumulation;
