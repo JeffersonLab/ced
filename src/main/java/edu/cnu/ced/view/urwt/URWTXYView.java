@@ -8,6 +8,8 @@ import java.awt.Point;
 import java.awt.Polygon;
 import java.awt.RenderingHints;
 import java.awt.Stroke;
+import java.awt.event.MouseAdapter;
+import java.awt.event.MouseEvent;
 import java.awt.geom.Point2D;
 import java.awt.geom.Rectangle2D;
 import java.util.ArrayList;
@@ -16,6 +18,9 @@ import java.util.EnumSet;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+
+import javax.swing.JMenuItem;
+import javax.swing.JPopupMenu;
 
 import cnuphys.magfield.FieldProbe;
 import cnuphys.magfield.MagneticFieldChangeListener;
@@ -36,9 +41,11 @@ import edu.cnu.ced.geometry.Point3;
 import edu.cnu.ced.geometry.Segment3;
 import edu.cnu.ced.geometry.URWTGeometry;
 import edu.cnu.ced.style.CedDrawingStyle;
+import edu.cnu.ced.swim.FieldIntegral;
 import edu.cnu.ced.swim.SwimTrajectoryCache;
 import edu.cnu.ced.swim.SwimmableParticle;
 import edu.cnu.ced.view.CedXYView;
+import edu.cnu.ced.view.swim.TrajectoryIntegralPlotView;
 import edu.cnu.mdi.container.IContainer;
 import edu.cnu.mdi.ui.colors.ScientificColorMap;
 import edu.cnu.mdi.util.PropertyUtils;
@@ -129,6 +136,7 @@ public final class URWTXYView extends CedXYView implements MagneticFieldChangeLi
 				CedDisplayOption.CLUSTERS, CedDisplayOption.CROSSES),
 				List.of("URWT::"), ScientificColorMap.TURBO, "Relative occupancy / accumulation");
 		MagneticFields.getInstance().addMagneticFieldChangeListener(this);
+		installTrajectoryIntegralPopup();
 	}
 
 	private void buildPanelOutlines() {
@@ -374,6 +382,62 @@ public final class URWTXYView extends CedXYView implements MagneticFieldChangeLi
 		g.setColor(CedDrawingStyle.outline(color));
 		g.setStroke(new BasicStroke(1f));
 		g.drawOval(vertex.x - 3, vertex.y - 3, 6, 6);
+	}
+
+	/**
+	 * Right-click a drawn trajectory to offer "Show Field Integral",
+	 * opening (or adding a curve to) the shared
+	 * {@link TrajectoryIntegralPlotView} -- matches {@code SectorView}'s
+	 * own per-track context-menu entry point into that diagnostic plot.
+	 */
+	private void installTrajectoryIntegralPopup() {
+		IContainer container = getIContainer();
+		if (container == null) return;
+		MouseAdapter listener = new MouseAdapter() {
+			@Override public void mousePressed(MouseEvent event) { maybeShowTrajectoryPopup(event); }
+			@Override public void mouseReleased(MouseEvent event) { maybeShowTrajectoryPopup(event); }
+		};
+		container.getComponent().addMouseListener(listener);
+	}
+
+	private void maybeShowTrajectoryPopup(MouseEvent event) {
+		if (!event.isPopupTrigger()) return;
+		Point screenPoint = event.getPoint();
+		if (offerTrajectoryIntegral(event, screenPoint, screenReconTracks, null)) return;
+		if (offerTrajectoryIntegral(event, screenPoint, screenMcTracks, "MC")) return;
+		if (offerTrajectoryIntegral(event, screenPoint, screenHbTracks, "HB")) return;
+		if (offerTrajectoryIntegral(event, screenPoint, screenTbTracks, "TB")) return;
+		if (offerTrajectoryIntegral(event, screenPoint, screenAiHbTracks, "AI HB")) return;
+		offerTrajectoryIntegral(event, screenPoint, screenAiTbTracks, "AI TB");
+	}
+
+	/** {@code label} is {@code null} for {@code screenReconTracks}, whose entries are already REC::Particle, not a labeled TrackRow group. */
+	private boolean offerTrajectoryIntegral(MouseEvent event, Point screenPoint, List<ScreenTrack> tracks, String label) {
+		for (ScreenTrack drawn : tracks) {
+			if (!nearAnySegment(drawn.points(), screenPoint, 5.0)) continue;
+			if (drawn.track() instanceof RecEventData.Particle particle) {
+				showTrajectoryIntegralMenu(event, SwimmableParticle.of(particle), particle.displayName());
+			} else if (drawn.track() instanceof TrackRow track) {
+				String name = (label == null ? "" : label + " ") + track.name();
+				showTrajectoryIntegralMenu(event, SwimmableParticle.of(track), name);
+			} else {
+				continue;
+			}
+			return true;
+		}
+		return false;
+	}
+
+	private void showTrajectoryIntegralMenu(MouseEvent event, SwimmableParticle particle, String name) {
+		JPopupMenu menu = new JPopupMenu();
+		JMenuItem item = new JMenuItem("Show Field Integral");
+		item.addActionListener(actionEvent -> {
+			List<Point3> trajectory = swimCache.trajectory(particle, fieldProbe);
+			TrajectoryIntegralPlotView.getInstance().addTrajectory(name,
+					FieldIntegral.compute(trajectory, fieldProbe));
+		});
+		menu.add(item);
+		menu.show(event.getComponent(), event.getX(), event.getY());
 	}
 
 	private static Point screen(IContainer container, double x, double y) {

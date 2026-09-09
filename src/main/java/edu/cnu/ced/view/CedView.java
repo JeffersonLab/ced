@@ -33,17 +33,19 @@ public abstract class CedView extends BaseView {
 
 	/**
 	 * Standard toolbar for a CED detector view: MDI's usual pan/zoom
-	 * navigation tools plus the camera button ("Snapshot of the current
-	 * canvas as a png image"). Every detector view here should use this
-	 * (not {@link ToolBits#NAVIGATIONTOOLS} alone) so that exporting an
-	 * event display as an image -- routine for talks and papers -- is
-	 * available everywhere, rather than missing by omission; confirmed
-	 * empirically that every one of them previously used NAVIGATIONTOOLS
-	 * only, so none could. The capability itself needs no other wiring:
-	 * {@code TakePicture.takePicture} is already generic and already
-	 * driven by this one toolbar bit for every other mdi app that sets it.
+	 * navigation tools plus {@link ToolBits#PICVIEWSTOOLS} (camera --
+	 * "Snapshot of the current canvas as a png image" -- and printer).
+	 * Every detector view here should use this (not
+	 * {@link ToolBits#NAVIGATIONTOOLS} alone) so that exporting or printing
+	 * an event display -- routine for talks and papers -- is available
+	 * everywhere, rather than missing by omission; confirmed empirically
+	 * that every one of them previously used NAVIGATIONTOOLS only, so none
+	 * could do either. Neither capability needs any other wiring:
+	 * {@code TakePicture.takePicture}/{@code PrintUtils.printComponent} are
+	 * already generic and already driven by these two toolbar bits for
+	 * every other mdi app that sets them.
 	 */
-	public static final long TOOLBAR_BITS = ToolBits.NAVIGATIONTOOLS | ToolBits.CAMERA;
+	public static final long TOOLBAR_BITS = ToolBits.NAVIGATIONTOOLS | ToolBits.PICVIEWSTOOLS;
 
 	private final EventNavigator navigator;
 	private final Consumer<EventNavigationState> eventListener = this::acceptEventState;

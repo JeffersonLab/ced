@@ -4,6 +4,7 @@ import java.awt.BasicStroke;
 import java.awt.Color;
 import java.awt.Graphics2D;
 import java.awt.Point;
+import java.awt.event.MouseEvent;
 import java.awt.geom.Arc2D;
 import java.awt.geom.Line2D;
 import java.awt.geom.Point2D;
@@ -29,6 +30,7 @@ import edu.cnu.ced.geometry.CNDGeometry;
 import edu.cnu.ced.geometry.CTOFGeometry;
 import edu.cnu.ced.geometry.Point3;
 import edu.cnu.ced.swim.SwimTrajectoryCache;
+import edu.cnu.ced.swim.SwimmableParticle;
 import edu.cnu.mdi.container.IContainer;
 import edu.cnu.mdi.ui.colors.ScientificColorMap;
 import edu.cnu.mdi.util.PropertyUtils;
@@ -65,6 +67,15 @@ public final class CentralXYView extends CndCtofXYView {
 				CedDisplayOption.CONNECT_CLUSTER_ENDPOINTS,CedDisplayOption.RECON_TRACKS,
 				CedDisplayOption.MC_TRACKS,CedDisplayOption.CVT_TRACKS),
 				List.of("BST","BMT","CND","CTOF","CVT"),ScientificColorMap.TURBO,"Relative ADC / accumulation");
+		installTrajectoryIntegralPopup();
+	}
+
+	/** CVT tracks first (this view's own extra source), then the base class's REC::Particle/MC-truth check. */
+	@Override protected void offerTrajectoryIntegralMenu(MouseEvent event,Point screenPoint){
+		for(ScreenTrack drawn:screenCvtTracks)if(nearAnySegment(drawn.points(),screenPoint,5.0)){
+			showTrajectoryIntegralMenu(event,SwimmableParticle.of(drawn.track()),"CVT "+drawn.track().name());return;
+		}
+		super.offerTrajectoryIntegralMenu(event,screenPoint);
 	}
 	@Override protected void eventChanged(EventNavigationState state){super.eventChanged(state);cvtTracks=ReconstructedTracks.cvtTracks(state.snapshot());}
 

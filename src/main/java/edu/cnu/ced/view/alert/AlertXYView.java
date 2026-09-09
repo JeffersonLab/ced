@@ -125,6 +125,7 @@ public final class AlertXYView extends CndCtofXYView {
 				CedDisplayOption.RECON_TRACKS, CedDisplayOption.MC_TRACKS),
 				List.of("AHDC::", "ATOF::", "CND", "CTOF"), ScientificColorMap.TURBO,
 				"Relative ADC / accumulation");
+		installTrajectoryIntegralPopup();
 	}
 
 	@Override

@@ -7,12 +7,17 @@ import java.awt.Graphics2D;
 import java.awt.Point;
 import java.awt.Polygon;
 import java.awt.Stroke;
+import java.awt.event.MouseAdapter;
+import java.awt.event.MouseEvent;
 import java.awt.geom.Line2D;
 import java.awt.geom.Point2D;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+
+import javax.swing.JMenuItem;
+import javax.swing.JPopupMenu;
 
 import cnuphys.magfield.FieldProbe;
 import cnuphys.magfield.MagneticFieldChangeListener;
@@ -36,9 +41,11 @@ import edu.cnu.ced.geometry.CTOFGeometry;
 import edu.cnu.ced.geometry.Point2;
 import edu.cnu.ced.geometry.Point3;
 import edu.cnu.ced.style.CedDrawingStyle;
+import edu.cnu.ced.swim.FieldIntegral;
 import edu.cnu.ced.swim.SwimTrajectoryCache;
 import edu.cnu.ced.swim.SwimmableParticle;
 import edu.cnu.ced.view.CedXYView;
+import edu.cnu.ced.view.swim.TrajectoryIntegralPlotView;
 import edu.cnu.mdi.container.IContainer;
 import edu.cnu.mdi.ui.colors.ScientificColorMap;
 
@@ -241,6 +248,80 @@ public abstract class CndCtofXYView extends CedXYView implements MagneticFieldCh
 			drawTrajectory(g, points, color, stroke);
 			sink.add(new ScreenTrack(t, points));
 		}
+	}
+
+	/**
+	 * Right-click a drawn trajectory to offer "Show Field Integral",
+	 * opening (or adding a curve to) the shared
+	 * {@link TrajectoryIntegralPlotView} -- matches {@code SectorView}'s
+	 * own per-track context-menu entry point into that diagnostic plot.
+	 * Call once, from a subclass's own constructor after
+	 * {@code initializeCedView}.
+	 * <p>
+	 * A plain {@link MouseAdapter}, not a generic container-level hook:
+	 * mousePressed/mouseReleased both check {@link MouseEvent#isPopupTrigger()}
+	 * since that differs by platform (Windows fires on press, macOS/Linux
+	 * on release) -- done once here, in {@link #maybeShowTrajectoryIntegralMenu},
+	 * so {@link #offerTrajectoryIntegralMenu} (the part a subclass with its
+	 * own additional track sources overrides) doesn't have to repeat it.
+	 * </p>
+	 */
+	protected final void installTrajectoryIntegralPopup() {
+		IContainer container = getIContainer();
+		if (container == null) return;
+		MouseAdapter listener = new MouseAdapter() {
+			@Override public void mousePressed(MouseEvent event) { maybeShowTrajectoryIntegralMenu(event); }
+			@Override public void mouseReleased(MouseEvent event) { maybeShowTrajectoryIntegralMenu(event); }
+		};
+		container.getComponent().addMouseListener(listener);
+	}
+
+	private void maybeShowTrajectoryIntegralMenu(MouseEvent event) {
+		if (!event.isPopupTrigger()) return;
+		offerTrajectoryIntegralMenu(event, event.getPoint());
+	}
+
+	/**
+	 * Checks this view's own REC::Particle/MC-truth trajectories (this
+	 * base class's own two track sources, shared by every subclass) for
+	 * one near {@code screenPoint} and, if found, shows "Show Field
+	 * Integral" for it.
+	 * <p>
+	 * A subclass with additional track sources of its own (e.g.
+	 * {@code CentralXYView}'s CVT tracks) should override this, checking
+	 * its own sources first and falling back to
+	 * {@code super.offerTrajectoryIntegralMenu(event, screenPoint)} --
+	 * {@link #installTrajectoryIntegralPopup}'s listener always calls this
+	 * method by ordinary dynamic dispatch, so it automatically reaches
+	 * whichever override is in effect without any extra wiring.
+	 * </p>
+	 */
+	protected void offerTrajectoryIntegralMenu(MouseEvent event, Point screenPoint) {
+		for (ScreenParticle drawn : screenParticles) {
+			if (nearAnySegment(drawn.points(), screenPoint, 5.0)) {
+				showTrajectoryIntegralMenu(event, SwimmableParticle.of(drawn.particle()), drawn.particle().displayName());
+				return;
+			}
+		}
+		for (ScreenTrack drawn : screenMcTracks) {
+			if (nearAnySegment(drawn.points(), screenPoint, 5.0)) {
+				showTrajectoryIntegralMenu(event, SwimmableParticle.of(drawn.track()), "MC " + drawn.track().name());
+				return;
+			}
+		}
+	}
+
+	/** Shows the one-item "Show Field Integral" popup for {@code particle}, re-querying {@link SwimTrajectoryCache} (a cache hit, not a re-swim) rather than caching raw trajectory points alongside the already-projected screen points. */
+	protected final void showTrajectoryIntegralMenu(MouseEvent event, SwimmableParticle particle, String name) {
+		JPopupMenu menu = new JPopupMenu();
+		JMenuItem item = new JMenuItem("Show Field Integral");
+		item.addActionListener(actionEvent -> {
+			List<Point3> trajectory = swimCache.trajectory(particle, fieldProbe);
+			TrajectoryIntegralPlotView.getInstance().addTrajectory(name,
+					FieldIntegral.compute(trajectory, fieldProbe));
+		});
+		menu.add(item);
+		menu.show(event.getComponent(), event.getX(), event.getY());
 	}
 
 	private static void drawTrajectory(Graphics2D g, List<Point> points, Color color, Stroke stroke) {
