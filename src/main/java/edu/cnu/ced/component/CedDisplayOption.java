@@ -50,7 +50,23 @@ public enum CedDisplayOption {
 	CND_LAYER_1("CND Layer 1", true, null),
 	CND_LAYER_2("CND Layer 2", true, null),
 	CND_LAYER_3("CND Layer 3", true, null),
-	CTOF("CTOF", true, null);
+	CTOF("CTOF", true, null),
+	// BST/BMT (barrel silicon/micromegas trackers): six physical layers
+	// each, per edu.cnu.ced.geometry.BSTGeometry/BMTGeometry.
+	BST("BST", true, null),
+	BST_LAYER_1("BST Layer 1", true, null),
+	BST_LAYER_2("BST Layer 2", true, null),
+	BST_LAYER_3("BST Layer 3", true, null),
+	BST_LAYER_4("BST Layer 4", true, null),
+	BST_LAYER_5("BST Layer 5", true, null),
+	BST_LAYER_6("BST Layer 6", true, null),
+	BMT("BMT", true, null),
+	BMT_LAYER_1("BMT Layer 1", true, null),
+	BMT_LAYER_2("BMT Layer 2", true, null),
+	BMT_LAYER_3("BMT Layer 3", true, null),
+	BMT_LAYER_4("BMT Layer 4", true, null),
+	BMT_LAYER_5("BMT Layer 5", true, null),
+	BMT_LAYER_6("BMT Layer 6", true, null);
 
 	private final String label;
 	private final boolean initiallySelected;

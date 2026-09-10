@@ -289,7 +289,7 @@ public final class CedApplication extends BaseMDIApplication {
 							12, 0, 0, VirtualView.CENTER)));
 			timeStep("Central 3D (lazy registration)", () -> ViewManager.getInstance().addConfiguration(
 					ViewConfiguration.lazy("Central 3D", () -> new CentralView3D(geometryService.cnd(),
-							geometryService.ctof(), eventNavigator),
+							geometryService.ctof(), geometryService.bst(), geometryService.bmt(), eventNavigator),
 							13, 0, 0, VirtualView.CENTER)));
 		}
 		timeStep("FMT XY (lazy registration)", () -> ViewManager.getInstance().addConfiguration(

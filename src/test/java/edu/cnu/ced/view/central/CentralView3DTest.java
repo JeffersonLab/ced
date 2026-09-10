@@ -9,6 +9,8 @@ import org.junit.jupiter.api.Test;
 
 import edu.cnu.ced.event.EventNavigator;
 import edu.cnu.ced.event.EventStore;
+import edu.cnu.ced.geometry.BMTGeometry;
+import edu.cnu.ced.geometry.BSTGeometry;
 import edu.cnu.ced.geometry.CNDGeometry;
 import edu.cnu.ced.geometry.CTOFGeometry;
 
@@ -27,10 +29,14 @@ class CentralView3DTest {
 		cnd.initializeFromSource();
 		CTOFGeometry ctof = new CTOFGeometry();
 		ctof.initializeFromSource();
+		BSTGeometry bst = new BSTGeometry();
+		bst.initializeFromSource();
+		BMTGeometry bmt = new BMTGeometry();
+		bmt.initializeFromSource();
 		EventNavigator navigator = new EventNavigator(new EventStore());
 
 		SwingUtilities.invokeAndWait(() -> {
-			CentralView3D view = assertDoesNotThrow(() -> new CentralView3D(cnd, ctof, navigator));
+			CentralView3D view = assertDoesNotThrow(() -> new CentralView3D(cnd, ctof, bst, bmt, navigator));
 			assertEquals("Central 3D", view.getTitle());
 			assertDoesNotThrow(view::dispose);
 		});
