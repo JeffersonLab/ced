@@ -42,7 +42,15 @@ public enum CedDisplayOption {
 	// enum rather than a 3D-specific one so a single vocabulary of display
 	// toggles covers both 2D and 3D CED views.
 	VOLUMES("Volumes", true, null),
-	TRUTH("Truth", true, null);
+	TRUTH("Truth", true, null),
+	// Central 3D View (edu.cnu.ced.view.central): independent per-detector
+	// master toggles, plus per-layer toggles for CND (three physical
+	// layers; CTOF is a single layer so needs no sub-toggle of its own).
+	CND("CND", true, null),
+	CND_LAYER_1("CND Layer 1", true, null),
+	CND_LAYER_2("CND Layer 2", true, null),
+	CND_LAYER_3("CND Layer 3", true, null),
+	CTOF("CTOF", true, null);
 
 	private final String label;
 	private final boolean initiallySelected;

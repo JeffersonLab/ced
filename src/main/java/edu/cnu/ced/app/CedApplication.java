@@ -63,6 +63,7 @@ import edu.cnu.ced.view.urwt.URWTXYView;
 import edu.cnu.ced.view.ftof.FTOFView;
 import edu.cnu.ced.view.pcal.PCalView;
 import edu.cnu.ced.view.ecal.ECalView;
+import edu.cnu.ced.view.central.CentralView3D;
 import edu.cnu.ced.view.central.CentralXYView;
 import edu.cnu.ced.view.central.CentralZView;
 import edu.cnu.ced.view.dc.AllDCView;
@@ -286,6 +287,10 @@ public final class CedApplication extends BaseMDIApplication {
 					ViewConfiguration.lazy("FTCal 3D", () -> new FTCalView3D(geometryService.ftcal(),
 							eventNavigator),
 							12, 0, 0, VirtualView.CENTER)));
+			timeStep("Central 3D (lazy registration)", () -> ViewManager.getInstance().addConfiguration(
+					ViewConfiguration.lazy("Central 3D", () -> new CentralView3D(geometryService.cnd(),
+							geometryService.ctof(), eventNavigator),
+							13, 0, 0, VirtualView.CENTER)));
 		}
 		timeStep("FMT XY (lazy registration)", () -> ViewManager.getInstance().addConfiguration(
 				ViewConfiguration.lazy("FMT XY", () -> new FMTXYView(geometryService.fmt(),
