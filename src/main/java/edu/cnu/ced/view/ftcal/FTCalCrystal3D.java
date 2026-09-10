@@ -28,6 +28,7 @@ final class FTCalCrystal3D extends DetectorItem3D {
 
 	private final int id;
 	private final float[] coords;
+	private final float[] sortPoint;
 	private final FTCalPanel3D panel;
 
 	FTCalCrystal3D(FTCalPanel3D panel, FTCALGeometry geometry, int id) {
@@ -35,19 +36,47 @@ final class FTCalCrystal3D extends DetectorItem3D {
 		this.panel = panel;
 		this.id = id;
 		this.coords = geometry.verticesCm(id);
+		this.sortPoint = centroid(coords);
 	}
 
+	// Every crystal's default fill inherits from Item3D's own FILLALPHA
+	// property (kept current by CedPanel3D.applyVolumeAlphaToItems), so
+	// Panel3D's opaque/transparent pass classification and the alpha this
+	// draws with never disagree -- see DetectorItem3D's own constructor.
 	@Override
 	protected void drawShape(GLAutoDrawable drawable) {
 		if (coords.length < 24) {
 			return;
 		}
-		int alpha = volumeAlpha();
 		Color base = color();
-		Color color = new Color(base.getRed(), base.getGreen(), base.getBlue(), alpha);
+		Color color = new Color(base.getRed(), base.getGreen(), base.getBlue(), getFillAlpha());
 		for (int[] face : FACES) {
 			Support3D.drawQuad(drawable, coords, face[0], face[1], face[2], face[3], color, 1f, true);
 		}
+	}
+
+	// The 332 crystals are mostly non-overlapping, but the transparent
+	// pass still sorts by distance from the camera; the default sort
+	// point (the scene origin) would put every crystal at the same
+	// distance and defeat that sort. Coordinates are fixed once from
+	// geometry, so this is computed once and cached rather than every
+	// frame.
+	@Override
+	public float[] getSortPoint() {
+		return sortPoint;
+	}
+
+	private static float[] centroid(float[] coords) {
+		if (coords.length < 24) {
+			return new float[] { 0f, 0f, 0f };
+		}
+		float cx = 0f, cy = 0f, cz = 0f;
+		for (int i = 0; i < 8; i++) {
+			cx += coords[3 * i];
+			cy += coords[3 * i + 1];
+			cz += coords[3 * i + 2];
+		}
+		return new float[] { cx / 8f, cy / 8f, cz / 8f };
 	}
 
 	private Color color() {

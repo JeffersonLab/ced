@@ -30,6 +30,13 @@ public abstract class DetectorItem3D extends Item3D {
 	protected DetectorItem3D(CedPanel3D panel3D) {
 		super(panel3D);
 		this.cedPanel3D = panel3D;
+		// Seeds this item's own FILLALPHA (see Item3D) to the panel's
+		// current volume alpha, so Panel3D's opaque/transparent pass
+		// classification -- decided once per frame, before drawShape() is
+		// ever called -- is already correct for this item's first frame.
+		// CedPanel3D.applyVolumeAlphaToItems keeps it in sync for every
+		// subsequent slider change.
+		setFillAlpha(cedPanel3D.getVolumeAlpha());
 	}
 
 	@Override
@@ -58,11 +65,6 @@ public abstract class DetectorItem3D extends Item3D {
 	 */
 	protected boolean show() {
 		return true;
-	}
-
-	/** The current alpha (0-255) to use for a translucent "volume" fill. */
-	protected final int volumeAlpha() {
-		return cedPanel3D.getVolumeAlpha();
 	}
 
 	/**

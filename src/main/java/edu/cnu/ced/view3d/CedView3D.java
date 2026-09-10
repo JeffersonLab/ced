@@ -35,6 +35,9 @@ import edu.cnu.mdi.util.PropertyUtils;
 @SuppressWarnings("serial")
 public abstract class CedView3D extends PlainView3D {
 
+	/** Default fraction of the main application window a 3D view sizes itself to, absent an explicit FRACTION. */
+	private static final double DEFAULT_SIZE_FRACTION = 0.75;
+
 	private final EventNavigator navigator;
 	private final Consumer<EventNavigationState> eventListener = this::acceptEventState;
 	private boolean listening;
@@ -77,12 +80,32 @@ public abstract class CedView3D extends PlainView3D {
 	 * that forgets to pass this. Appended last so it always wins even if a
 	 * subclass's own {@code keyVals} happens to set it too.
 	 * </p>
+	 *
+	 * <p>
+	 * Finally, unless a subclass's own {@code keyVals} already set {@code
+	 * FRACTION}, defaults it to {@value #DEFAULT_SIZE_FRACTION} -- without
+	 * an explicit {@code WIDTH}/{@code HEIGHT} or {@code FRACTION},
+	 * {@code BaseView} falls back to a fixed, small 400x300, which is not
+	 * a usable size for a 3D scene.
+	 * </p>
 	 */
 	private static Object[] prepareKeyVals(Object[] keyVals) {
 		GLWarmup.awaitReady(5000);
-		Object[] combined = Arrays.copyOf(keyVals, keyVals.length + 2);
-		combined[keyVals.length] = PropertyUtils.USECONTAINER;
-		combined[keyVals.length + 1] = false;
+		boolean hasFraction = false;
+		for (int i = 0; i < keyVals.length - 1; i += 2) {
+			if (PropertyUtils.FRACTION.equals(keyVals[i])) {
+				hasFraction = true;
+				break;
+			}
+		}
+		Object[] combined = Arrays.copyOf(keyVals, keyVals.length + (hasFraction ? 2 : 4));
+		int i = keyVals.length;
+		combined[i++] = PropertyUtils.USECONTAINER;
+		combined[i++] = false;
+		if (!hasFraction) {
+			combined[i++] = PropertyUtils.FRACTION;
+			combined[i++] = DEFAULT_SIZE_FRACTION;
+		}
 		return combined;
 	}
 

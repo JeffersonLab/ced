@@ -9,6 +9,8 @@ import javax.swing.JPanel;
 import edu.cnu.ced.component.CedDisplayArray;
 import edu.cnu.ced.component.CedDisplayOption;
 import edu.cnu.ced.component.PidLegend;
+import edu.cnu.mdi.mdi3D.adapter3D.AlphaSlider;
+import edu.cnu.mdi.mdi3D.item3D.Item3D;
 import edu.cnu.mdi.mdi3D.panel.Panel3D;
 
 /**
@@ -58,7 +60,7 @@ public abstract class CedPanel3D extends Panel3D {
 			float xDist, float yDist, float zDist) {
 		super(angleX, angleY, angleZ, xDist, yDist, zDist);
 
-		volumeAlphaSlider = new AlphaSlider(this, "Volume alpha");
+		volumeAlphaSlider = new AlphaSlider(this, "Volume alpha", this::applyVolumeAlphaToItems);
 		pidLegend = new PidLegend();
 		northPanel.add(pidLegend, BorderLayout.CENTER);
 		northPanel.add(volumeAlphaSlider, BorderLayout.EAST);
@@ -97,6 +99,35 @@ public abstract class CedPanel3D extends Panel3D {
 	/** Current "Volume alpha" slider value, 0-255. */
 	public final int getVolumeAlpha() {
 		return volumeAlphaSlider.getAlpha();
+	}
+
+	/**
+	 * Pushes a new volume-alpha value to every {@link DetectorItem3D}
+	 * currently in the scene, via {@code setFillAlpha(int)}.
+	 *
+	 * <p>
+	 * This exists because {@link Panel3D#display} decides which render
+	 * pass (opaque, blending disabled, or transparent, blending enabled)
+	 * an item belongs to <em>before</em> that item is asked to draw itself
+	 * for the frame -- from the item's own {@code getFillAlpha()}, not
+	 * from any color an item's {@code drawShape()} happens to construct.
+	 * An item that never calls {@code setFillAlpha} stays classified
+	 * opaque forever, so any alpha baked into its draw color is simply
+	 * ignored by the (disabled) blend state: it renders fully opaque no
+	 * matter what {@link #getVolumeAlpha()} says. Called from the alpha
+	 * slider's own change callback, before the {@code refresh()} that
+	 * follows it, so the very next frame's classification is already
+	 * correct -- not one frame behind. {@link DetectorItem3D}'s own
+	 * constructor seeds this same value for items created after this
+	 * point (e.g. during {@code createInitialItems()}).
+	 * </p>
+	 */
+	private void applyVolumeAlphaToItems(int alpha) {
+		for (Item3D item : _itemList) {
+			if (item instanceof DetectorItem3D detectorItem) {
+				detectorItem.setFillAlpha(alpha);
+			}
+		}
 	}
 
 	/** The shared PID legend shown in this panel's north strip. */
