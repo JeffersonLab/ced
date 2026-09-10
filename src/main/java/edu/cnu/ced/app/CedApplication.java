@@ -57,6 +57,7 @@ import edu.cnu.ced.view.currentevent.BankViewerDisplayMode;
 import edu.cnu.ced.view.alert.AlertXYView;
 import edu.cnu.ced.view.fmt.FMTXYView;
 import edu.cnu.ced.view.ftcal.FTCalXYView;
+import edu.cnu.ced.view.ftcal.FTCalView3D;
 import edu.cnu.ced.view.urwt.URWTXYView;
 import edu.cnu.ced.view.ftof.FTOFView;
 import edu.cnu.ced.view.pcal.PCalView;
@@ -275,6 +276,16 @@ public final class CedApplication extends BaseMDIApplication {
 				ViewConfiguration.lazy("FTCal XY", () -> new FTCalXYView(geometryService.ftcal(),
 						eventNavigator, accumulationService.ftcal()),
 						8, 0, 0, VirtualView.CENTER)));
+		// First of the 6 "3D columns" (12-17) reserved by VIRTUAL_DESKTOP_COLUMNS;
+		// the first of CED's 7 3D views (see edu.cnu.ced.view3d) -- gated on
+		// launchOptions.enable3D() since 3D rendering needs a working OpenGL
+		// context, unlike every other (2D, Java2D-only) view here.
+		if (launchOptions.enable3D()) {
+			timeStep("FTCal 3D (lazy registration)", () -> ViewManager.getInstance().addConfiguration(
+					ViewConfiguration.lazy("FTCal 3D", () -> new FTCalView3D(geometryService.ftcal(),
+							eventNavigator),
+							12, 0, 0, VirtualView.CENTER)));
+		}
 		timeStep("FMT XY (lazy registration)", () -> ViewManager.getInstance().addConfiguration(
 				ViewConfiguration.lazy("FMT XY", () -> new FMTXYView(geometryService.fmt(),
 						eventNavigator, accumulationService.fmt()),

@@ -37,7 +37,12 @@ public enum CedDisplayOption {
 	OUTER_PLANE("Outer", false, "ec-plane"),
 	U_STRIPS("U Strips", true, null),
 	V_STRIPS("V Strips", true, null),
-	W_STRIPS("W Strips", true, null);
+	W_STRIPS("W Strips", true, null),
+	// 3D-view-only toggles (see edu.cnu.ced.view3d). Kept in this shared
+	// enum rather than a 3D-specific one so a single vocabulary of display
+	// toggles covers both 2D and 3D CED views.
+	VOLUMES("Volumes", true, null),
+	TRUTH("Truth", true, null);
 
 	private final String label;
 	private final boolean initiallySelected;
