@@ -52,6 +52,7 @@ import edu.cnu.ced.magfield.MagneticFieldService;
 import edu.cnu.ced.magfield.RunFieldScaleApplier;
 import edu.cnu.ced.resources.Clas12Resources;
 import edu.cnu.ced.swim.SwimTrajectoryCache;
+import edu.cnu.ced.view3d.GLWarmup;
 import edu.cnu.ced.view.CurrentEventView;
 import edu.cnu.ced.view.currentevent.BankViewerDisplayMode;
 import edu.cnu.ced.view.alert.AlertXYView;
@@ -775,6 +776,14 @@ public final class CedApplication extends BaseMDIApplication {
 			// fall back to sqlite-jdbc's own default extraction location
 		}
 		launchOptions = CedLaunchOptions.parse(args);
+		if (launchOptions.enable3D()) {
+			// As early as possible: see GLWarmup's own javadoc for why (a
+			// macOS-specific EDT/AppKit deadlock the very first time any
+			// Panel3D is constructed, if that happens on the EDT). The
+			// several seconds of bootstrap work below give this a wide
+			// head start to finish well before any 3D view can be opened.
+			GLWarmup.start();
+		}
 		StartupWindow[] holder = new StartupWindow[1];
 		boolean bootstrapSucceeded = false;
 		try {

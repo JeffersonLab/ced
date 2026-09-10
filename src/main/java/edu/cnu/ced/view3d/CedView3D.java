@@ -1,13 +1,12 @@
 package edu.cnu.ced.view3d;
 
 import java.awt.event.ActionEvent;
+import java.util.Arrays;
 import java.util.function.Consumer;
 
 import javax.swing.JButton;
 import javax.swing.JMenuBar;
 import javax.swing.SwingUtilities;
-
-import java.util.Arrays;
 
 import edu.cnu.ced.data.RecEventData;
 import edu.cnu.ced.event.EventNavigationState;
@@ -41,7 +40,7 @@ public abstract class CedView3D extends PlainView3D {
 	private boolean listening;
 
 	protected CedView3D(EventNavigator navigator, Object... keyVals) {
-		super(withNo2DContainer(keyVals));
+		super(prepareKeyVals(keyVals));
 		this.navigator = navigator;
 		installNextButton();
 		navigator.addListener(eventListener);
@@ -53,17 +52,34 @@ public abstract class CedView3D extends PlainView3D {
 	protected abstract void eventChanged(EventNavigationState state);
 
 	/**
-	 * Appends {@code USECONTAINER=false} to a subclass's key/value pairs
-	 * before they reach {@link PlainView3D}. {@link PlainView3D#
-	 * resolveContainer} always returns {@code null} -- 3D views have no 2D
-	 * {@code IContainer} -- but {@code BaseView}'s own constructor only
+	 * Prepares a subclass's key/value pairs before they reach {@link
+	 * PlainView3D}'s constructor -- the last point any code of ours runs
+	 * before that constructor's own {@code make3DPanel(...)} call
+	 * eventually constructs a {@code Panel3D} on the EDT.
+	 *
+	 * <p>
+	 * First waits for {@link GLWarmup#awaitReady(long)}: without this, the
+	 * very first {@code Panel3D} ever constructed triggers JOGL's first GL
+	 * context creation synchronously on the EDT, which on macOS can
+	 * deadlock against the AppKit main thread (see {@link GLWarmup}'s own
+	 * javadoc). {@link GLWarmup#start()} is called once, early in {@code
+	 * main()}, well before this could ever run; five seconds is generous
+	 * headroom for a warm-up that normally finishes in well under one.
+	 * </p>
+	 *
+	 * <p>
+	 * Then appends {@code USECONTAINER=false}: {@link PlainView3D#
+	 * resolveContainer} always returns {@code null} (3D views have no 2D
+	 * {@code IContainer}), but {@code BaseView}'s own constructor only
 	 * skips using that {@code null} when told not to use a container at
 	 * all; its "use container" flag otherwise defaults {@code true} and
 	 * unconditionally dereferences the result, crashing every 3D CED view
 	 * that forgets to pass this. Appended last so it always wins even if a
 	 * subclass's own {@code keyVals} happens to set it too.
+	 * </p>
 	 */
-	private static Object[] withNo2DContainer(Object[] keyVals) {
+	private static Object[] prepareKeyVals(Object[] keyVals) {
+		GLWarmup.awaitReady(5000);
 		Object[] combined = Arrays.copyOf(keyVals, keyVals.length + 2);
 		combined[keyVals.length] = PropertyUtils.USECONTAINER;
 		combined[keyVals.length + 1] = false;
