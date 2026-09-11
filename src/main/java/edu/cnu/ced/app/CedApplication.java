@@ -56,6 +56,7 @@ import edu.cnu.ced.view3d.GLWarmup;
 import edu.cnu.ced.view.CurrentEventView;
 import edu.cnu.ced.view.currentevent.BankViewerDisplayMode;
 import edu.cnu.ced.view.alert.AlertXYView;
+import edu.cnu.ced.view.fmt.FMTView3D;
 import edu.cnu.ced.view.fmt.FMTXYView;
 import edu.cnu.ced.view.ftcal.FTCalXYView;
 import edu.cnu.ced.view.ftcal.FTCalView3D;
@@ -291,6 +292,9 @@ public final class CedApplication extends BaseMDIApplication {
 					ViewConfiguration.lazy("Central 3D", () -> new CentralView3D(geometryService.cnd(),
 							geometryService.ctof(), geometryService.bst(), geometryService.bmt(), eventNavigator),
 							13, 0, 0, VirtualView.CENTER)));
+			timeStep("FMT 3D (lazy registration)", () -> ViewManager.getInstance().addConfiguration(
+					ViewConfiguration.lazy("FMT 3D", () -> new FMTView3D(geometryService.fmt(), eventNavigator),
+							14, 0, 0, VirtualView.CENTER)));
 		}
 		timeStep("FMT XY (lazy registration)", () -> ViewManager.getInstance().addConfiguration(
 				ViewConfiguration.lazy("FMT XY", () -> new FMTXYView(geometryService.fmt(),

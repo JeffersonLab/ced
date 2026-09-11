@@ -66,7 +66,22 @@ public enum CedDisplayOption {
 	BMT_LAYER_3("BMT Layer 3", true, null),
 	BMT_LAYER_4("BMT Layer 4", true, null),
 	BMT_LAYER_5("BMT Layer 5", true, null),
-	BMT_LAYER_6("BMT Layer 6", true, null);
+	BMT_LAYER_6("BMT Layer 6", true, null),
+	// FMT 3D View (edu.cnu.ced.view.fmt): six physical layers and four
+	// disconnected strip regions per edu.cnu.ced.geometry.FMTGeometry.
+	// Hit/cluster highlighting reuses the existing generic RECON_HITS/
+	// CLUSTERS toggles rather than adding FMT-specific duplicates.
+	FMT("FMT", true, null),
+	FMT_LAYER_1("FMT Layer 1", true, null),
+	FMT_LAYER_2("FMT Layer 2", true, null),
+	FMT_LAYER_3("FMT Layer 3", true, null),
+	FMT_LAYER_4("FMT Layer 4", true, null),
+	FMT_LAYER_5("FMT Layer 5", true, null),
+	FMT_LAYER_6("FMT Layer 6", true, null),
+	FMT_REGION_1("FMT Region 1", true, null),
+	FMT_REGION_2("FMT Region 2", true, null),
+	FMT_REGION_3("FMT Region 3", true, null),
+	FMT_REGION_4("FMT Region 4", true, null);
 
 	private final String label;
 	private final boolean initiallySelected;
