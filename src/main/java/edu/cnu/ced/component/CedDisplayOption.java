@@ -81,7 +81,22 @@ public enum CedDisplayOption {
 	FMT_REGION_1("FMT Region 1", true, null),
 	FMT_REGION_2("FMT Region 2", true, null),
 	FMT_REGION_3("FMT Region 3", true, null),
-	FMT_REGION_4("FMT Region 4", true, null);
+	FMT_REGION_4("FMT Region 4", true, null),
+	// Forward 3D View (edu.cnu.ced.view.forward): per-sector master gate
+	// shared by every forward detector (DC/FTOF/PCAL/ECAL, matching legacy
+	// CED's own showSector(sector) convention), plus one master toggle per
+	// detector. Hit highlighting reuses the existing generic RAW_DATA
+	// toggle rather than adding per-detector duplicates.
+	SECTOR_1("Sector 1", true, null),
+	SECTOR_2("Sector 2", true, null),
+	SECTOR_3("Sector 3", true, null),
+	SECTOR_4("Sector 4", true, null),
+	SECTOR_5("Sector 5", true, null),
+	SECTOR_6("Sector 6", true, null),
+	DC("DC", true, null),
+	FTOF("FTOF", true, null),
+	PCAL("PCAL", true, null),
+	ECAL("ECAL", true, null);
 
 	private final String label;
 	private final boolean initiallySelected;
