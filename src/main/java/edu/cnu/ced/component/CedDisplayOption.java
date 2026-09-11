@@ -118,7 +118,14 @@ public enum CedDisplayOption {
 	ALERT_SECTOR_12("ALERT Sector 12", true, null),
 	ALERT_SECTOR_13("ALERT Sector 13", true, null),
 	ALERT_SECTOR_14("ALERT Sector 14", true, null),
-	ALERT_SECTOR_15("ALERT Sector 15", true, null);
+	ALERT_SECTOR_15("ALERT Sector 15", true, null),
+	// μRWT 3D View (edu.cnu.ced.view.urwt): per-layer toggles only, matching
+	// legacy CED's own cbaLabels -- all six sectors of a layer show or hide
+	// together, with no per-sector gate.
+	URWT_LAYER_1("μRWT Layer 1", true, null),
+	URWT_LAYER_2("μRWT Layer 2", true, null),
+	URWT_LAYER_3("μRWT Layer 3", true, null),
+	URWT_LAYER_4("μRWT Layer 4", true, null);
 
 	private final String label;
 	private final boolean initiallySelected;

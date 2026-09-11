@@ -58,6 +58,7 @@ import edu.cnu.ced.view.currentevent.BankViewerDisplayMode;
 import edu.cnu.ced.view.alert.AlertXYView;
 import edu.cnu.ced.view.fmt.FMTView3D;
 import edu.cnu.ced.view.alert.AlertView3D;
+import edu.cnu.ced.view.urwt.UrwtView3D;
 import edu.cnu.ced.view.forward.ForwardView3D;
 import edu.cnu.ced.view.fmt.FMTXYView;
 import edu.cnu.ced.view.ftcal.FTCalXYView;
@@ -304,6 +305,9 @@ public final class CedApplication extends BaseMDIApplication {
 			timeStep("ALERT 3D (lazy registration)", () -> ViewManager.getInstance().addConfiguration(
 					ViewConfiguration.lazy("ALERT 3D", () -> new AlertView3D(geometryService.alert(), eventNavigator),
 							16, 0, 0, VirtualView.CENTER)));
+			timeStep("uRWT 3D (lazy registration)", () -> ViewManager.getInstance().addConfiguration(
+					ViewConfiguration.lazy("uRWT 3D", () -> new UrwtView3D(geometryService.urwt(), eventNavigator),
+							17, 0, 0, VirtualView.CENTER)));
 		}
 		timeStep("FMT XY (lazy registration)", () -> ViewManager.getInstance().addConfiguration(
 				ViewConfiguration.lazy("FMT XY", () -> new FMTXYView(geometryService.fmt(),
