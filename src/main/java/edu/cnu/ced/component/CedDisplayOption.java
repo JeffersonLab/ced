@@ -96,7 +96,29 @@ public enum CedDisplayOption {
 	DC("DC", true, null),
 	FTOF("FTOF", true, null),
 	PCAL("PCAL", true, null),
-	ECAL("ECAL", true, null);
+	ECAL("ECAL", true, null),
+	// ALERT 3D View (edu.cnu.ced.view.alert): master toggles for the two
+	// ALERT subsystems (AHDC drift chamber, ATOF time-of-flight), plus
+	// per-sector gates for ATOF's 15 sectors -- AHDC has no real sector
+	// division (edu.cnu.ced.geometry.AlertGeometry's sole DC sector is
+	// always 0), so DC visibility is controlled by ALERT_DC alone.
+	ALERT_DC("ALERT DC", true, null),
+	ALERT_TOF("ALERT TOF", true, null),
+	ALERT_SECTOR_1("ALERT Sector 1", true, null),
+	ALERT_SECTOR_2("ALERT Sector 2", true, null),
+	ALERT_SECTOR_3("ALERT Sector 3", true, null),
+	ALERT_SECTOR_4("ALERT Sector 4", true, null),
+	ALERT_SECTOR_5("ALERT Sector 5", true, null),
+	ALERT_SECTOR_6("ALERT Sector 6", true, null),
+	ALERT_SECTOR_7("ALERT Sector 7", true, null),
+	ALERT_SECTOR_8("ALERT Sector 8", true, null),
+	ALERT_SECTOR_9("ALERT Sector 9", true, null),
+	ALERT_SECTOR_10("ALERT Sector 10", true, null),
+	ALERT_SECTOR_11("ALERT Sector 11", true, null),
+	ALERT_SECTOR_12("ALERT Sector 12", true, null),
+	ALERT_SECTOR_13("ALERT Sector 13", true, null),
+	ALERT_SECTOR_14("ALERT Sector 14", true, null),
+	ALERT_SECTOR_15("ALERT Sector 15", true, null);
 
 	private final String label;
 	private final boolean initiallySelected;
