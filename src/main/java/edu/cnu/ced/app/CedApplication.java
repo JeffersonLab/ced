@@ -58,6 +58,7 @@ import edu.cnu.ced.view.currentevent.BankViewerDisplayMode;
 import edu.cnu.ced.view.alert.AlertXYView;
 import edu.cnu.ced.view.fmt.FMTView3D;
 import edu.cnu.ced.view.alert.AlertView3D;
+import edu.cnu.ced.view.swim.SwimTestView3D;
 import edu.cnu.ced.view.urwt.UrwtView3D;
 import edu.cnu.ced.view.forward.ForwardView3D;
 import edu.cnu.ced.view.fmt.FMTXYView;
@@ -103,8 +104,8 @@ public final class CedApplication extends BaseMDIApplication {
 	/** Stable persistence key for this application. */
 	public static final String APPLICATION_ID = "mdi-ced";
 
-	/** Normal CED layout: 12 detector/event columns plus 6 3D columns. */
-	public static final int VIRTUAL_DESKTOP_COLUMNS = 18;
+	/** Normal CED layout: 12 detector/event columns plus 7 3D columns. */
+	public static final int VIRTUAL_DESKTOP_COLUMNS = 19;
 
 	/** Tiled background retained from the existing CED application. */
 	public static final String BACKGROUND_RESOURCE = "images/cnu.png";
@@ -282,7 +283,7 @@ public final class CedApplication extends BaseMDIApplication {
 				ViewConfiguration.lazy("FTCal XY", () -> new FTCalXYView(geometryService.ftcal(),
 						eventNavigator, accumulationService.ftcal()),
 						8, 0, 0, VirtualView.CENTER)));
-		// First of the 6 "3D columns" (12-17) reserved by VIRTUAL_DESKTOP_COLUMNS;
+		// First of the 7 "3D columns" (12-18) reserved by VIRTUAL_DESKTOP_COLUMNS;
 		// the first of CED's 7 3D views (see edu.cnu.ced.view3d) -- gated on
 		// launchOptions.enable3D() since 3D rendering needs a working OpenGL
 		// context, unlike every other (2D, Java2D-only) view here.
@@ -308,6 +309,11 @@ public final class CedApplication extends BaseMDIApplication {
 			timeStep("uRWT 3D (lazy registration)", () -> ViewManager.getInstance().addConfiguration(
 					ViewConfiguration.lazy("uRWT 3D", () -> new UrwtView3D(geometryService.urwt(), eventNavigator),
 							17, 0, 0, VirtualView.CENTER)));
+			// Last of the 7 3D views: not an event display at all (no
+			// EventNavigator dependency), so its factory takes no arguments.
+			timeStep("Swimming Testing 3D (lazy registration)", () -> ViewManager.getInstance().addConfiguration(
+					ViewConfiguration.lazy("Swimming Testing 3D", SwimTestView3D::new,
+							18, 0, 0, VirtualView.CENTER)));
 		}
 		timeStep("FMT XY (lazy registration)", () -> ViewManager.getInstance().addConfiguration(
 				ViewConfiguration.lazy("FMT XY", () -> new FMTXYView(geometryService.fmt(),
