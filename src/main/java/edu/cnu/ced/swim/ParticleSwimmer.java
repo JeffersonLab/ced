@@ -6,6 +6,7 @@ import java.util.List;
 import cnuphys.CLAS12Swim.CLAS12SwimResult;
 import cnuphys.CLAS12Swim.CLAS12Swimmer;
 import cnuphys.CLAS12Swim.CLAS12Trajectory;
+import cnuphys.CLAS12Swim.geometry.Plane;
 import cnuphys.magfield.FieldProbe;
 
 import edu.cnu.ced.geometry.Point3;
@@ -22,6 +23,15 @@ import edu.cnu.ced.geometry.Point3;
  * its {@code FieldProbe} (e.g. after a field-map change) never swims through
  * a stale probe.
  * </p>
+ * <p>
+ * Alongside the plain "swim to a maximum path length" {@link #swim} used by
+ * the production 2D/3D event views, this also exposes {@code
+ * CLAS12Swimmer}'s own surface-stopping variants -- {@link #swimToFixedZ},
+ * {@link #swimToFixedRho}, {@link #swimToPlane}, {@link #swimToCylinder} --
+ * for callers (currently just {@code edu.cnu.ced.view.swim}'s standalone
+ * swim-test view) that want a track stopped at a specific reference surface
+ * rather than run out to a fixed path length.
+ * </p>
  */
 public final class ParticleSwimmer {
 
@@ -35,6 +45,9 @@ public final class ParticleSwimmer {
 	 * #swim(SwimmableParticle, FieldProbe)} directly.
 	 */
 	public static final double DEFAULT_MAX_PATH_LENGTH_CM = 1000.0;
+
+	/** Default "reached the surface" accuracy, in cm, for the surface-stopping swims. */
+	public static final double DEFAULT_SURFACE_ACCURACY_CM = 0.01;
 
 	private static final double INITIAL_STEP_CM = 1.0;
 	// CLAS12Swimmer uses this directly as the adaptive integrator's absolute
@@ -84,8 +97,106 @@ public final class ParticleSwimmer {
 				particle.vx(), particle.vy(), particle.vz(), p,
 				particle.thetaDeg(), particle.phiDeg(),
 				maxPathLengthCm, INITIAL_STEP_CM, TOLERANCE_CM);
+		return trajectoryOf(result);
+	}
 
-		if (!result.isSuccess()) return List.of();
+	/**
+	 * Swim a particle until it reaches a fixed lab-frame z, or {@code
+	 * maxPathLengthCm} is exhausted first.
+	 *
+	 * @param targetZCm    the target z, in cm
+	 * @param accuracyCm   how close to {@code targetZCm} counts as "reached", in cm
+	 * @param maxPathLengthCm maximum path length to swim, in cm
+	 */
+	public static List<Point3> swimToFixedZ(SwimmableParticle particle, FieldProbe probe,
+			double targetZCm, double accuracyCm, double maxPathLengthCm) {
+		if (particle == null || probe == null) return List.of();
+		double p = particle.p();
+		if (!(p > 0.0)) return List.of();
+
+		CLAS12Swimmer swimmer = new CLAS12Swimmer(probe);
+		CLAS12SwimResult result = swimmer.swimZ(particle.charge(),
+				particle.vx(), particle.vy(), particle.vz(), p,
+				particle.thetaDeg(), particle.phiDeg(),
+				targetZCm, accuracyCm, maxPathLengthCm, INITIAL_STEP_CM, TOLERANCE_CM);
+		return trajectoryOf(result);
+	}
+
+	/**
+	 * Swim a particle until it reaches a fixed cylindrical radius (rho)
+	 * about the z axis, or {@code maxPathLengthCm} is exhausted first.
+	 *
+	 * @param targetRhoCm  the target rho, in cm
+	 * @param accuracyCm   how close to {@code targetRhoCm} counts as "reached", in cm
+	 * @param maxPathLengthCm maximum path length to swim, in cm
+	 */
+	public static List<Point3> swimToFixedRho(SwimmableParticle particle, FieldProbe probe,
+			double targetRhoCm, double accuracyCm, double maxPathLengthCm) {
+		if (particle == null || probe == null) return List.of();
+		double p = particle.p();
+		if (!(p > 0.0)) return List.of();
+
+		CLAS12Swimmer swimmer = new CLAS12Swimmer(probe);
+		CLAS12SwimResult result = swimmer.swimRho(particle.charge(),
+				particle.vx(), particle.vy(), particle.vz(), p,
+				particle.thetaDeg(), particle.phiDeg(),
+				targetRhoCm, accuracyCm, maxPathLengthCm, INITIAL_STEP_CM, TOLERANCE_CM);
+		return trajectoryOf(result);
+	}
+
+	/**
+	 * Swim a particle until it reaches an arbitrary plane, or {@code
+	 * maxPathLengthCm} is exhausted first.
+	 *
+	 * @param normal       the plane's normal vector, {@code [nx, ny, nz]}
+	 * @param point        a point in the plane, {@code [x, y, z]} cm
+	 * @param accuracyCm   how close to the plane counts as "reached", in cm
+	 * @param maxPathLengthCm maximum path length to swim, in cm
+	 */
+	public static List<Point3> swimToPlane(SwimmableParticle particle, FieldProbe probe,
+			double[] normal, double[] point, double accuracyCm, double maxPathLengthCm) {
+		if (particle == null || probe == null) return List.of();
+		double p = particle.p();
+		if (!(p > 0.0)) return List.of();
+
+		CLAS12Swimmer swimmer = new CLAS12Swimmer(probe);
+		Plane plane = new Plane(normal, point);
+		CLAS12SwimResult result = swimmer.swimPlane(particle.charge(),
+				particle.vx(), particle.vy(), particle.vz(), p,
+				particle.thetaDeg(), particle.phiDeg(),
+				plane, accuracyCm, maxPathLengthCm, INITIAL_STEP_CM, TOLERANCE_CM);
+		return trajectoryOf(result);
+	}
+
+	/**
+	 * Swim a particle until it reaches an arbitrary cylinder (defined by
+	 * its center line's two endpoints and a radius), or {@code
+	 * maxPathLengthCm} is exhausted first.
+	 *
+	 * @param centerLineP1 one endpoint of the cylinder's center line, {@code [x, y, z]} cm
+	 * @param centerLineP2 the other endpoint, {@code [x, y, z]} cm
+	 * @param radiusCm     the cylinder's radius, in cm
+	 * @param accuracyCm   how close to the cylinder counts as "reached", in cm
+	 * @param maxPathLengthCm maximum path length to swim, in cm
+	 */
+	public static List<Point3> swimToCylinder(SwimmableParticle particle, FieldProbe probe,
+			double[] centerLineP1, double[] centerLineP2, double radiusCm,
+			double accuracyCm, double maxPathLengthCm) {
+		if (particle == null || probe == null) return List.of();
+		double p = particle.p();
+		if (!(p > 0.0)) return List.of();
+
+		CLAS12Swimmer swimmer = new CLAS12Swimmer(probe);
+		CLAS12SwimResult result = swimmer.swimCylinder(particle.charge(),
+				particle.vx(), particle.vy(), particle.vz(), p,
+				particle.thetaDeg(), particle.phiDeg(),
+				centerLineP1, centerLineP2, radiusCm,
+				accuracyCm, maxPathLengthCm, INITIAL_STEP_CM, TOLERANCE_CM);
+		return trajectoryOf(result);
+	}
+
+	private static List<Point3> trajectoryOf(CLAS12SwimResult result) {
+		if (result == null || !result.isSuccess()) return List.of();
 
 		CLAS12Trajectory trajectory = result.getTrajectory();
 		if (trajectory == null || trajectory.size() < 2) return List.of();
