@@ -8,44 +8,60 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+import cnuphys.magfield.FieldProbe;
+import cnuphys.magfield.MagneticFieldChangeListener;
+import cnuphys.magfield.MagneticFields;
+
 import edu.cnu.ced.component.CedDisplayOption;
 import edu.cnu.ced.data.DCEventData;
 import edu.cnu.ced.data.ECalEventData;
 import edu.cnu.ced.data.FTOFEventData;
+import edu.cnu.ced.data.MonteCarloTracks;
 import edu.cnu.ced.data.PCalEventData;
+import edu.cnu.ced.data.RecEventData;
+import edu.cnu.ced.data.ReconstructedTracks;
+import edu.cnu.ced.data.TrackRow;
+import edu.cnu.ced.event.EventSnapshot;
 import edu.cnu.ced.geometry.DCGeometry;
 import edu.cnu.ced.geometry.ECGeometry;
 import edu.cnu.ced.geometry.FTOFGeometry;
 import edu.cnu.ced.geometry.PCALGeometry;
+import edu.cnu.ced.swim.SwimTrajectoryCache;
 import edu.cnu.ced.view3d.CedPanel3D;
 import edu.cnu.mdi.mdi3D.item3D.Axes3D;
 
 /**
  * The 3D scene for {@link ForwardView3D}: an axis set, one item per DC
- * superlayer, one item per FTOF sector, and one item per PCAL/ECAL
- * (sector, [stack,] view) plane.
+ * superlayer, one item per FTOF sector, one item per PCAL/ECAL (sector,
+ * [stack,] view) plane, and one item each for DC crosses and every
+ * category of reconstructed/Monte Carlo track.
  *
  * <p>
- * Scoped to DC/FTOF/PCAL/ECAL, consistent with every other 3D view so
- * far: reconstructed-cross, trajectory, and recon-cal drawing (legacy's
- * own {@code CrossDrawer3D}/{@code TrajectoryDrawer3D}/{@code
+ * Scoped to DC/FTOF/PCAL/ECAL plus tracks/crosses, consistent with every
+ * other 3D view so far: recon-cal drawing (legacy's own {@code
  * RecDrawer3D}) and the magnetic-field-boundary decoration ({@code
  * FieldBoundary}) are left as a follow-up.
  * </p>
  */
-final class ForwardPanel3D extends CedPanel3D {
+final class ForwardPanel3D extends CedPanel3D implements MagneticFieldChangeListener {
 
 	private static final float XY_MAX = 600f;
 	private static final float Z_MIN = -100f;
 	private static final float Z_MAX = 600f;
 
-	// Set via setGeometry() by ForwardView3D immediately after this panel
-	// is constructed (see make3DPanel()); see FTCalPanel3D's own comment
-	// on the identical constructor-ordering reason.
+	// Set via setGeometry()/setSwimCache() by ForwardView3D immediately
+	// after this panel is constructed (see make3DPanel()); see
+	// FTCalPanel3D's own comment on the identical constructor-ordering
+	// reason.
 	private DCGeometry dcGeometry;
 	private FTOFGeometry ftofGeometry;
 	private PCALGeometry pcalGeometry;
 	private ECGeometry ecalGeometry;
+	private SwimTrajectoryCache swimCache;
+
+	// Refreshed on every magnetic-field change, matching every 2D view's
+	// own identical fieldProbe field (e.g. SectorView, DCXYView).
+	private volatile FieldProbe fieldProbe = FieldProbe.factory();
 
 	private volatile Map<SuperlayerKey, List<LayerWire>> dcHits = Map.of();
 	private volatile Map<FtofKey, Integer> ftofAdc = Map.of();
@@ -55,12 +71,25 @@ final class ForwardPanel3D extends CedPanel3D {
 	private volatile int pcalMaxAdc;
 	private volatile int ecalMaxAdc;
 
+	private volatile List<TrackRow> mcTracks = List.of();
+	private volatile List<TrackRow> hbTracks = List.of();
+	private volatile List<TrackRow> tbTracks = List.of();
+	private volatile List<TrackRow> aiHbTracks = List.of();
+	private volatile List<TrackRow> aiTbTracks = List.of();
+	private volatile List<TrackRow> cvtTracks = List.of();
+	private volatile List<RecEventData.Particle> recParticles = List.of();
+	private volatile List<DCEventData.Cross> crosses = List.of();
+
 	ForwardPanel3D(float angleX, float angleY, float angleZ, float xDist, float yDist, float zDist) {
 		super(EnumSet.of(CedDisplayOption.VOLUMES, CedDisplayOption.TRUTH, CedDisplayOption.RAW_DATA,
 				CedDisplayOption.SECTOR_1, CedDisplayOption.SECTOR_2, CedDisplayOption.SECTOR_3,
 				CedDisplayOption.SECTOR_4, CedDisplayOption.SECTOR_5, CedDisplayOption.SECTOR_6,
-				CedDisplayOption.DC, CedDisplayOption.FTOF, CedDisplayOption.PCAL, CedDisplayOption.ECAL),
+				CedDisplayOption.DC, CedDisplayOption.FTOF, CedDisplayOption.PCAL, CedDisplayOption.ECAL,
+				CedDisplayOption.CROSSES, CedDisplayOption.MC_TRACKS, CedDisplayOption.HB_TRACKS,
+				CedDisplayOption.TB_TRACKS, CedDisplayOption.AI_HB_TRACKS, CedDisplayOption.AI_TB_TRACKS,
+				CedDisplayOption.RECON_TRACKS, CedDisplayOption.CVT_TRACKS),
 				angleX, angleY, angleZ, xDist, yDist, zDist);
+		MagneticFields.getInstance().addMagneticFieldChangeListener(this);
 	}
 
 	void setGeometry(DCGeometry dc, FTOFGeometry ftof, PCALGeometry pcal, ECGeometry ecal) {
@@ -68,6 +97,16 @@ final class ForwardPanel3D extends CedPanel3D {
 		this.ftofGeometry = ftof;
 		this.pcalGeometry = pcal;
 		this.ecalGeometry = ecal;
+	}
+
+	void setSwimCache(SwimTrajectoryCache swimCache) {
+		this.swimCache = swimCache;
+	}
+
+	@Override
+	public void magneticFieldChanged() {
+		fieldProbe = FieldProbe.factory();
+		refresh();
 	}
 
 	@Override
@@ -95,6 +134,8 @@ final class ForwardPanel3D extends CedPanel3D {
 				}
 			}
 		}
+		addItem(new ForwardCrossDrawer3D(this));
+		addItem(new ForwardTrajectoryDrawer3D(this));
 	}
 
 	@Override
@@ -102,14 +143,20 @@ final class ForwardPanel3D extends CedPanel3D {
 		return (Z_MAX - Z_MIN) / 50f;
 	}
 
-	/** Refreshes the current event's hits; called by {@link ForwardView3D}. */
-	void setEventData(DCEventData dc, FTOFEventData ftof, PCalEventData pcal, ECalEventData ecal) {
+	/** Refreshes every piece of this event's display data; called by {@link ForwardView3D}. */
+	void setEventData(EventSnapshot snapshot) {
+		DCEventData dc = DCEventData.from(snapshot);
+		FTOFEventData ftof = FTOFEventData.from(snapshot);
+		PCalEventData pcal = PCalEventData.from(snapshot);
+		ECalEventData ecal = ECalEventData.from(snapshot);
+
 		Map<SuperlayerKey, List<LayerWire>> dcMap = new HashMap<>();
 		for (DCEventData.RawHit hit : dc.rawHits()) {
 			dcMap.computeIfAbsent(new SuperlayerKey(hit.sector(), hit.superlayer()), k -> new ArrayList<>())
 					.add(new LayerWire(hit.layer(), hit.wire()));
 		}
 		this.dcHits = Map.copyOf(dcMap);
+		this.crosses = dc.crosses();
 
 		Map<FtofKey, Integer> ftofMap = new HashMap<>();
 		int ftofMax = 0;
@@ -139,6 +186,14 @@ final class ForwardPanel3D extends CedPanel3D {
 		}
 		this.ecalHits = Map.copyOf(ecalMap);
 		this.ecalMaxAdc = ecalMax;
+
+		this.mcTracks = MonteCarloTracks.from(snapshot).tracks();
+		this.hbTracks = ReconstructedTracks.hbTracks(snapshot);
+		this.tbTracks = ReconstructedTracks.tbTracks(snapshot);
+		this.aiHbTracks = ReconstructedTracks.aiHbTracks(snapshot);
+		this.aiTbTracks = ReconstructedTracks.aiTbTracks(snapshot);
+		this.cvtTracks = ReconstructedTracks.cvtTracks(snapshot);
+		this.recParticles = RecEventData.from(snapshot).particles();
 	}
 
 	DCGeometry dcGeometry() {
@@ -155,6 +210,14 @@ final class ForwardPanel3D extends CedPanel3D {
 
 	ECGeometry ecalGeometry() {
 		return ecalGeometry;
+	}
+
+	SwimTrajectoryCache swimCache() {
+		return swimCache;
+	}
+
+	FieldProbe fieldProbe() {
+		return fieldProbe;
 	}
 
 	List<LayerWire> dcRawHits(int sector, int superlayer) {
@@ -183,6 +246,38 @@ final class ForwardPanel3D extends CedPanel3D {
 
 	int ecalMaximumAdc() {
 		return ecalMaxAdc;
+	}
+
+	List<TrackRow> mcTracks() {
+		return mcTracks;
+	}
+
+	List<TrackRow> hbTracks() {
+		return hbTracks;
+	}
+
+	List<TrackRow> tbTracks() {
+		return tbTracks;
+	}
+
+	List<TrackRow> aiHbTracks() {
+		return aiHbTracks;
+	}
+
+	List<TrackRow> aiTbTracks() {
+		return aiTbTracks;
+	}
+
+	List<TrackRow> cvtTracks() {
+		return cvtTracks;
+	}
+
+	List<RecEventData.Particle> recParticles() {
+		return recParticles;
+	}
+
+	List<DCEventData.Cross> crosses() {
+		return crosses;
 	}
 
 	/** The shared per-sector master display toggle used by every forward detector item. */

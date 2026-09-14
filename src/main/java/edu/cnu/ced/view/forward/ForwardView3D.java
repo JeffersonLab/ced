@@ -1,25 +1,25 @@
 package edu.cnu.ced.view.forward;
 
-import edu.cnu.ced.data.DCEventData;
-import edu.cnu.ced.data.ECalEventData;
-import edu.cnu.ced.data.FTOFEventData;
-import edu.cnu.ced.data.PCalEventData;
 import edu.cnu.ced.event.EventNavigationState;
 import edu.cnu.ced.event.EventNavigator;
 import edu.cnu.ced.geometry.DCGeometry;
 import edu.cnu.ced.geometry.ECGeometry;
 import edu.cnu.ced.geometry.FTOFGeometry;
 import edu.cnu.ced.geometry.PCALGeometry;
+import edu.cnu.ced.swim.SwimTrajectoryCache;
 import edu.cnu.ced.view3d.CedView3D;
 import edu.cnu.mdi.mdi3D.panel.Panel3D;
 import edu.cnu.mdi.util.PropertyUtils;
 
 /**
  * Forward detector 3D view: DC (six superlayers per sector), FTOF (three
- * panels per sector), and PCAL/ECAL (U/V/W strip-view triangles, inner and
- * outer stack for ECAL), every element colored by this event's ADC/raw hit
- * where present. Fifth of CED's seven 3D views, built on the same shared
- * {@code edu.cnu.ced.view3d} infrastructure as the others.
+ * panels per sector), PCAL/ECAL (U/V/W strip-view triangles, inner and
+ * outer stack for ECAL) -- every element colored by this event's ADC/raw
+ * hit where present -- plus DC crosses and every category of
+ * reconstructed/Monte Carlo track, each swum on demand through the same
+ * shared {@link SwimTrajectoryCache} every 2D view already uses. Fifth of
+ * CED's seven 3D views, built on the same shared {@code
+ * edu.cnu.ced.view3d} infrastructure as the others.
  */
 public final class ForwardView3D extends CedView3D {
 
@@ -34,13 +34,15 @@ public final class ForwardView3D extends CedView3D {
 	private static final float DIST_Z = -1600f;
 
 	public ForwardView3D(DCGeometry dc, FTOFGeometry ftof, PCALGeometry pcal, ECGeometry ecal,
-			EventNavigator navigator) {
+			SwimTrajectoryCache swimCache, EventNavigator navigator) {
 		super(navigator,
 				PropertyUtils.TITLE, TITLE,
 				PropertyUtils.ANGLE_X, ANGLE_X, PropertyUtils.ANGLE_Y, ANGLE_Y, PropertyUtils.ANGLE_Z, ANGLE_Z,
 				PropertyUtils.DIST_X, DIST_X, PropertyUtils.DIST_Y, DIST_Y, PropertyUtils.DIST_Z, DIST_Z,
 				PropertyUtils.VISIBLE, true);
-		((ForwardPanel3D) cedPanel3D()).setGeometry(dc, ftof, pcal, ecal);
+		ForwardPanel3D panel = (ForwardPanel3D) cedPanel3D();
+		panel.setGeometry(dc, ftof, pcal, ecal);
+		panel.setSwimCache(swimCache);
 	}
 
 	@Override
@@ -50,10 +52,6 @@ public final class ForwardView3D extends CedView3D {
 
 	@Override
 	protected void eventChanged(EventNavigationState state) {
-		((ForwardPanel3D) cedPanel3D()).setEventData(
-				DCEventData.from(state.snapshot()),
-				FTOFEventData.from(state.snapshot()),
-				PCalEventData.from(state.snapshot()),
-				ECalEventData.from(state.snapshot()));
+		((ForwardPanel3D) cedPanel3D()).setEventData(state.snapshot());
 	}
 }

@@ -13,6 +13,7 @@ import edu.cnu.ced.geometry.DCGeometry;
 import edu.cnu.ced.geometry.ECGeometry;
 import edu.cnu.ced.geometry.FTOFGeometry;
 import edu.cnu.ced.geometry.PCALGeometry;
+import edu.cnu.ced.swim.SwimTrajectoryCache;
 
 /**
  * Construction smoke test for {@link ForwardView3D}, mirroring {@code
@@ -32,9 +33,11 @@ class ForwardView3DTest {
 		ECGeometry ecal = new ECGeometry();
 		ecal.initializeFromSource();
 		EventNavigator navigator = new EventNavigator(new EventStore());
+		SwimTrajectoryCache swimCache = new SwimTrajectoryCache();
 
 		SwingUtilities.invokeAndWait(() -> {
-			ForwardView3D view = assertDoesNotThrow(() -> new ForwardView3D(dc, ftof, pcal, ecal, navigator));
+			ForwardView3D view = assertDoesNotThrow(
+					() -> new ForwardView3D(dc, ftof, pcal, ecal, swimCache, navigator));
 			assertEquals("Forward 3D", view.getTitle());
 			assertDoesNotThrow(view::dispose);
 		});
