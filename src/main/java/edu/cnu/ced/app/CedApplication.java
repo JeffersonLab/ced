@@ -304,7 +304,7 @@ public final class CedApplication extends BaseMDIApplication {
 							geometryService.ftof(), geometryService.pcal(), geometryService.ec(), swimCache, eventNavigator),
 							15, 0, 0, VirtualView.CENTER)));
 			timeStep("ALERT 3D (lazy registration)", () -> ViewManager.getInstance().addConfiguration(
-					ViewConfiguration.lazy("ALERT 3D", () -> new AlertView3D(geometryService.alert(), eventNavigator),
+					ViewConfiguration.lazy("ALERT 3D", () -> new AlertView3D(geometryService.alert(), swimCache, eventNavigator),
 							16, 0, 0, VirtualView.CENTER)));
 			timeStep("uRWT 3D (lazy registration)", () -> ViewManager.getInstance().addConfiguration(
 					ViewConfiguration.lazy("uRWT 3D", () -> new UrwtView3D(geometryService.urwt(), eventNavigator),

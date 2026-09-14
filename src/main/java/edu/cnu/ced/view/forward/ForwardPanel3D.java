@@ -28,6 +28,8 @@ import edu.cnu.ced.geometry.FTOFGeometry;
 import edu.cnu.ced.geometry.PCALGeometry;
 import edu.cnu.ced.swim.SwimTrajectoryCache;
 import edu.cnu.ced.view3d.CedPanel3D;
+import edu.cnu.ced.view3d.TrackTrajectoryDrawer3D;
+import edu.cnu.ced.view3d.TrackTrajectorySource;
 import edu.cnu.mdi.mdi3D.item3D.Axes3D;
 
 /**
@@ -43,7 +45,7 @@ import edu.cnu.mdi.mdi3D.item3D.Axes3D;
  * FieldBoundary}) are left as a follow-up.
  * </p>
  */
-final class ForwardPanel3D extends CedPanel3D implements MagneticFieldChangeListener {
+final class ForwardPanel3D extends CedPanel3D implements MagneticFieldChangeListener, TrackTrajectorySource {
 
 	private static final float XY_MAX = 600f;
 	private static final float Z_MIN = -100f;
@@ -135,7 +137,7 @@ final class ForwardPanel3D extends CedPanel3D implements MagneticFieldChangeList
 			}
 		}
 		addItem(new ForwardCrossDrawer3D(this));
-		addItem(new ForwardTrajectoryDrawer3D(this));
+		addItem(new TrackTrajectoryDrawer3D<>(this));
 	}
 
 	@Override
@@ -212,11 +214,13 @@ final class ForwardPanel3D extends CedPanel3D implements MagneticFieldChangeList
 		return ecalGeometry;
 	}
 
-	SwimTrajectoryCache swimCache() {
+	@Override
+	public SwimTrajectoryCache swimCache() {
 		return swimCache;
 	}
 
-	FieldProbe fieldProbe() {
+	@Override
+	public FieldProbe fieldProbe() {
 		return fieldProbe;
 	}
 
@@ -248,31 +252,38 @@ final class ForwardPanel3D extends CedPanel3D implements MagneticFieldChangeList
 		return ecalMaxAdc;
 	}
 
-	List<TrackRow> mcTracks() {
+	@Override
+	public List<TrackRow> mcTracks() {
 		return mcTracks;
 	}
 
-	List<TrackRow> hbTracks() {
+	@Override
+	public List<TrackRow> hbTracks() {
 		return hbTracks;
 	}
 
-	List<TrackRow> tbTracks() {
+	@Override
+	public List<TrackRow> tbTracks() {
 		return tbTracks;
 	}
 
-	List<TrackRow> aiHbTracks() {
+	@Override
+	public List<TrackRow> aiHbTracks() {
 		return aiHbTracks;
 	}
 
-	List<TrackRow> aiTbTracks() {
+	@Override
+	public List<TrackRow> aiTbTracks() {
 		return aiTbTracks;
 	}
 
-	List<TrackRow> cvtTracks() {
+	@Override
+	public List<TrackRow> cvtTracks() {
 		return cvtTracks;
 	}
 
-	List<RecEventData.Particle> recParticles() {
+	@Override
+	public List<RecEventData.Particle> recParticles() {
 		return recParticles;
 	}
 

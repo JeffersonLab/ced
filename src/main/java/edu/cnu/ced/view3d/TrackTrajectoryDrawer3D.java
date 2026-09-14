@@ -1,4 +1,4 @@
-package edu.cnu.ced.view.forward;
+package edu.cnu.ced.view3d;
 
 import java.awt.Color;
 import java.util.List;
@@ -17,27 +17,36 @@ import edu.cnu.mdi.mdi3D.panel.Support3D;
 /**
  * Draws every swum trajectory for the current event -- Monte Carlo truth,
  * DC hit-based/time-based (plain and AI), {@code REC::Particle}, and CVT
- * -- each gated by its own {@link CedDisplayOption} toggle. Matches legacy
- * CED's own {@code cnuphys.ced.ced3d.TrajectoryDrawer3D} in spirit, but
- * swims on demand through the shared {@link edu.cnu.ced.swim.
- * SwimTrajectoryCache} (the same one every 2D view already uses) rather
- * than reading a pre-populated {@code Swimming} trajectory cache legacy
- * relies on elsewhere.
+ * -- each gated by its own {@link CedDisplayOption} toggle, for any
+ * {@link CedPanel3D} that is also a {@link TrackTrajectorySource}.
+ * Generalized out of {@code edu.cnu.ced.view.forward.
+ * ForwardTrajectoryDrawer3D} (Forward 3D's original, detector-specific
+ * version) once {@code edu.cnu.ced.view.alert.AlertView3D} needed the
+ * identical logic -- legacy CED's own {@code cnuphys.ced.ced3d.
+ * TrajectoryDrawer3D} is itself shared the same way, added unmodified to
+ * every one of its 3D views that wants tracks at all.
  *
  * <p>
- * Extends {@link Item3D} directly rather than {@link
- * edu.cnu.ced.view3d.DetectorItem3D}, matching {@link
- * ForwardCrossDrawer3D}'s own reasoning: a trajectory is live event data,
- * not a detector "volume".
+ * Swims on demand through the {@link edu.cnu.ced.swim.SwimTrajectoryCache}
+ * every 2D view already uses, rather than reading a pre-populated {@code
+ * Swimming} trajectory cache the way legacy's own class does.
+ * </p>
+ *
+ * <p>
+ * Extends {@link Item3D} directly rather than {@link DetectorItem3D}:
+ * a trajectory is live event data, not a detector "volume", so it should
+ * draw regardless of the Volumes toggle or alpha, which {@code
+ * DetectorItem3D}'s template method would otherwise gate it on -- matching
+ * legacy's own choice for this class.
  * </p>
  */
-final class ForwardTrajectoryDrawer3D extends Item3D {
+public final class TrackTrajectoryDrawer3D<P extends CedPanel3D & TrackTrajectorySource> extends Item3D {
 
 	private static final float LINE_WIDTH = 2f;
 
-	private final ForwardPanel3D panel;
+	private final P panel;
 
-	ForwardTrajectoryDrawer3D(ForwardPanel3D panel) {
+	public TrackTrajectoryDrawer3D(P panel) {
 		super(panel);
 		this.panel = panel;
 	}

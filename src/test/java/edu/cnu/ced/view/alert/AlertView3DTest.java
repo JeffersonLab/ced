@@ -10,6 +10,7 @@ import org.junit.jupiter.api.Test;
 import edu.cnu.ced.event.EventNavigator;
 import edu.cnu.ced.event.EventStore;
 import edu.cnu.ced.geometry.AlertGeometry;
+import edu.cnu.ced.swim.SwimTrajectoryCache;
 
 /**
  * Construction smoke test for {@link AlertView3D}, mirroring {@code
@@ -23,9 +24,10 @@ class AlertView3DTest {
 		AlertGeometry geometry = new AlertGeometry();
 		geometry.initializeFromSource();
 		EventNavigator navigator = new EventNavigator(new EventStore());
+		SwimTrajectoryCache swimCache = new SwimTrajectoryCache();
 
 		SwingUtilities.invokeAndWait(() -> {
-			AlertView3D view = assertDoesNotThrow(() -> new AlertView3D(geometry, navigator));
+			AlertView3D view = assertDoesNotThrow(() -> new AlertView3D(geometry, swimCache, navigator));
 			assertEquals("ALERT 3D", view.getTitle());
 			assertDoesNotThrow(view::dispose);
 		});
