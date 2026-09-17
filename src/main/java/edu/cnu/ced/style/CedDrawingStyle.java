@@ -21,6 +21,7 @@ public final class CedDrawingStyle {
 	public static final Color RECON_HIT = RAW_HIT;
 	public static final Color RECON_CLUSTER = new Color(205, 0, 205);
 	public static final Color RECON_CROSS = new Color(20, 145, 35);
+	public static final Color RECON_CALORIMETER_FILL = new Color(255, 0, 0, 64);
 
 	private CedDrawingStyle() {
 	}
