@@ -13,6 +13,7 @@ import edu.cnu.ced.geometry.BMTGeometry;
 import edu.cnu.ced.geometry.BSTGeometry;
 import edu.cnu.ced.geometry.CNDGeometry;
 import edu.cnu.ced.geometry.CTOFGeometry;
+import edu.cnu.ced.swim.SwimTrajectoryCache;
 
 /**
  * Construction smoke test for {@link CentralView3D}, mirroring {@code
@@ -34,9 +35,10 @@ class CentralView3DTest {
 		BMTGeometry bmt = new BMTGeometry();
 		bmt.initializeFromSource();
 		EventNavigator navigator = new EventNavigator(new EventStore());
+		SwimTrajectoryCache swimCache = new SwimTrajectoryCache();
 
 		SwingUtilities.invokeAndWait(() -> {
-			CentralView3D view = assertDoesNotThrow(() -> new CentralView3D(cnd, ctof, bst, bmt, navigator));
+			CentralView3D view = assertDoesNotThrow(() -> new CentralView3D(cnd, ctof, bst, bmt, swimCache, navigator));
 			assertEquals("Central 3D", view.getTitle());
 			assertDoesNotThrow(view::dispose);
 		});

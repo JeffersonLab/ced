@@ -4,36 +4,57 @@ import java.awt.Color;
 import java.awt.Font;
 import java.util.EnumSet;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
+
+import cnuphys.magfield.FieldProbe;
+import cnuphys.magfield.MagneticFieldChangeListener;
+import cnuphys.magfield.MagneticFields;
 
 import edu.cnu.ced.component.CedDisplayOption;
 import edu.cnu.ced.data.CentralEventData;
 import edu.cnu.ced.data.CentralEventData.AdcHit;
-import edu.cnu.ced.data.CentralEventData.Detector;
+import edu.cnu.ced.data.CentralEventData.Cross;
+import edu.cnu.ced.data.MonteCarloTracks;
+import edu.cnu.ced.data.RecEventData;
+import edu.cnu.ced.data.ReconstructedTracks;
+import edu.cnu.ced.data.TrackRow;
+import edu.cnu.ced.event.EventSnapshot;
 import edu.cnu.ced.geometry.BMTGeometry;
 import edu.cnu.ced.geometry.BSTGeometry;
 import edu.cnu.ced.geometry.CNDGeometry;
 import edu.cnu.ced.geometry.CTOFGeometry;
+import edu.cnu.ced.swim.SwimTrajectoryCache;
 import edu.cnu.ced.view3d.CedPanel3D;
+import edu.cnu.ced.view3d.TrackTrajectoryDrawer3D;
+import edu.cnu.ced.view3d.TrackTrajectorySource;
 import edu.cnu.mdi.mdi3D.item3D.Axes3D;
 
 /**
  * The 3D scene for {@link CentralView3D}: an axis set, one item per CND
- * layer, one item for all of CTOF, and one item per BST/BMT layer.
+ * layer, one item for all of CTOF, one item per BST/BMT layer, one item
+ * for BST/BMT reconstructed crosses, and one item for every category of
+ * reconstructed/Monte Carlo track.
  */
-final class CentralPanel3D extends CedPanel3D {
+final class CentralPanel3D extends CedPanel3D implements MagneticFieldChangeListener, TrackTrajectorySource {
 
 	private static final float XY_MAX = 50f;
 	private static final float Z_MIN = -50f;
 	private static final float Z_MAX = 50f;
 
-	// Set via setGeometry() by CentralView3D immediately after this panel
-	// is constructed (see make3DPanel()); see FTCalPanel3D's own comment
-	// on the identical constructor-ordering reason.
+	// Set via setGeometry()/setSwimCache() by CentralView3D immediately
+	// after this panel is constructed (see make3DPanel()); see
+	// FTCalPanel3D's own comment on the identical constructor-ordering
+	// reason.
 	private CNDGeometry cndGeometry;
 	private CTOFGeometry ctofGeometry;
 	private BSTGeometry bstGeometry;
 	private BMTGeometry bmtGeometry;
+	private SwimTrajectoryCache swimCache;
+
+	// Refreshed on every magnetic-field change, matching every 2D view's
+	// own identical fieldProbe field (e.g. SectorView, DCXYView).
+	private volatile FieldProbe fieldProbe = FieldProbe.factory();
 
 	private volatile Map<CndKey, AdcHit> cndByKey = Map.of();
 	private volatile Map<Integer, AdcHit> ctofByPaddle = Map.of();
@@ -43,6 +64,15 @@ final class CentralPanel3D extends CedPanel3D {
 	private volatile int ctofMaxAdc;
 	private volatile int bstMaxAdc;
 	private volatile int bmtMaxAdc;
+	private volatile List<Cross> crosses = List.of();
+
+	private volatile List<TrackRow> mcTracks = List.of();
+	private volatile List<TrackRow> hbTracks = List.of();
+	private volatile List<TrackRow> tbTracks = List.of();
+	private volatile List<TrackRow> aiHbTracks = List.of();
+	private volatile List<TrackRow> aiTbTracks = List.of();
+	private volatile List<TrackRow> cvtTracks = List.of();
+	private volatile List<RecEventData.Particle> recParticles = List.of();
 
 	CentralPanel3D(float angleX, float angleY, float angleZ, float xDist, float yDist, float zDist) {
 		super(EnumSet.of(CedDisplayOption.VOLUMES, CedDisplayOption.TRUTH,
@@ -53,8 +83,12 @@ final class CentralPanel3D extends CedPanel3D {
 				CedDisplayOption.BST_LAYER_6,
 				CedDisplayOption.BMT, CedDisplayOption.BMT_LAYER_1, CedDisplayOption.BMT_LAYER_2,
 				CedDisplayOption.BMT_LAYER_3, CedDisplayOption.BMT_LAYER_4, CedDisplayOption.BMT_LAYER_5,
-				CedDisplayOption.BMT_LAYER_6),
+				CedDisplayOption.BMT_LAYER_6,
+				CedDisplayOption.CROSSES, CedDisplayOption.MC_TRACKS, CedDisplayOption.HB_TRACKS,
+				CedDisplayOption.TB_TRACKS, CedDisplayOption.AI_HB_TRACKS, CedDisplayOption.AI_TB_TRACKS,
+				CedDisplayOption.RECON_TRACKS, CedDisplayOption.CVT_TRACKS),
 				angleX, angleY, angleZ, xDist, yDist, zDist);
+		MagneticFields.getInstance().addMagneticFieldChangeListener(this);
 	}
 
 	void setGeometry(CNDGeometry cnd, CTOFGeometry ctof, BSTGeometry bst, BMTGeometry bmt) {
@@ -62,6 +96,16 @@ final class CentralPanel3D extends CedPanel3D {
 		this.ctofGeometry = ctof;
 		this.bstGeometry = bst;
 		this.bmtGeometry = bmt;
+	}
+
+	void setSwimCache(SwimTrajectoryCache swimCache) {
+		this.swimCache = swimCache;
+	}
+
+	@Override
+	public void magneticFieldChanged() {
+		fieldProbe = FieldProbe.factory();
+		refresh();
 	}
 
 	@Override
@@ -85,6 +129,8 @@ final class CentralPanel3D extends CedPanel3D {
 		addItem(new BmtLayer3D(this, 4, CedDisplayOption.BMT_LAYER_4));
 		addItem(new BmtLayer3D(this, 5, CedDisplayOption.BMT_LAYER_5));
 		addItem(new BmtLayer3D(this, 6, CedDisplayOption.BMT_LAYER_6));
+		addItem(new CentralCrossDrawer3D(this));
+		addItem(new TrackTrajectoryDrawer3D<>(this));
 	}
 
 	@Override
@@ -92,8 +138,10 @@ final class CentralPanel3D extends CedPanel3D {
 		return (Z_MAX - Z_MIN) / 50f;
 	}
 
-	/** Refreshes the current event's ADC hits; called by {@link CentralView3D}. */
-	void setEventData(CentralEventData data) {
+	/** Refreshes every piece of this event's display data; called by {@link CentralView3D}. */
+	void setEventData(EventSnapshot snapshot) {
+		CentralEventData data = CentralEventData.from(snapshot);
+
 		Map<CndKey, AdcHit> cnd = new HashMap<>();
 		Map<Integer, AdcHit> ctof = new HashMap<>();
 		Map<PanelKey, Integer> bst = new HashMap<>();
@@ -132,6 +180,15 @@ final class CentralPanel3D extends CedPanel3D {
 		this.ctofMaxAdc = ctofMax;
 		this.bstMaxAdc = bstMax;
 		this.bmtMaxAdc = bmtMax;
+		this.crosses = data.crosses();
+
+		this.mcTracks = MonteCarloTracks.from(snapshot).tracks();
+		this.hbTracks = ReconstructedTracks.hbTracks(snapshot);
+		this.tbTracks = ReconstructedTracks.tbTracks(snapshot);
+		this.aiHbTracks = ReconstructedTracks.aiHbTracks(snapshot);
+		this.aiTbTracks = ReconstructedTracks.aiTbTracks(snapshot);
+		this.cvtTracks = ReconstructedTracks.cvtTracks(snapshot);
+		this.recParticles = RecEventData.from(snapshot).particles();
 	}
 
 	CNDGeometry cndGeometry() {
@@ -186,6 +243,55 @@ final class CentralPanel3D extends CedPanel3D {
 
 	int bmtMaximumAdc() {
 		return bmtMaxAdc;
+	}
+
+	List<Cross> crosses() {
+		return crosses;
+	}
+
+	@Override
+	public SwimTrajectoryCache swimCache() {
+		return swimCache;
+	}
+
+	@Override
+	public FieldProbe fieldProbe() {
+		return fieldProbe;
+	}
+
+	@Override
+	public List<TrackRow> mcTracks() {
+		return mcTracks;
+	}
+
+	@Override
+	public List<TrackRow> hbTracks() {
+		return hbTracks;
+	}
+
+	@Override
+	public List<TrackRow> tbTracks() {
+		return tbTracks;
+	}
+
+	@Override
+	public List<TrackRow> aiHbTracks() {
+		return aiHbTracks;
+	}
+
+	@Override
+	public List<TrackRow> aiTbTracks() {
+		return aiTbTracks;
+	}
+
+	@Override
+	public List<TrackRow> cvtTracks() {
+		return cvtTracks;
+	}
+
+	@Override
+	public List<RecEventData.Particle> recParticles() {
+		return recParticles;
 	}
 
 	private record CndKey(int sector, int layer, int order) {
