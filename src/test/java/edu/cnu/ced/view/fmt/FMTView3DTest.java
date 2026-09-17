@@ -10,6 +10,7 @@ import org.junit.jupiter.api.Test;
 import edu.cnu.ced.event.EventNavigator;
 import edu.cnu.ced.event.EventStore;
 import edu.cnu.ced.geometry.FMTGeometry;
+import edu.cnu.ced.swim.SwimTrajectoryCache;
 
 /**
  * Construction smoke test for {@link FMTView3D}, mirroring {@code
@@ -23,9 +24,10 @@ class FMTView3DTest {
 		FMTGeometry geometry = new FMTGeometry();
 		geometry.initializeFromSource();
 		EventNavigator navigator = new EventNavigator(new EventStore());
+		SwimTrajectoryCache swimCache = new SwimTrajectoryCache();
 
 		SwingUtilities.invokeAndWait(() -> {
-			FMTView3D view = assertDoesNotThrow(() -> new FMTView3D(geometry, navigator));
+			FMTView3D view = assertDoesNotThrow(() -> new FMTView3D(geometry, swimCache, navigator));
 			assertEquals("FMT 3D", view.getTitle());
 			assertDoesNotThrow(view::dispose);
 		});

@@ -5,34 +5,75 @@ import java.awt.Font;
 import java.util.EnumSet;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
+
+import cnuphys.magfield.FieldProbe;
+import cnuphys.magfield.MagneticFieldChangeListener;
+import cnuphys.magfield.MagneticFields;
 
 import edu.cnu.ced.component.CedDisplayOption;
 import edu.cnu.ced.data.FMTEventData;
 import edu.cnu.ced.data.FMTEventData.AdcHit;
 import edu.cnu.ced.data.FMTEventData.Cluster;
+import edu.cnu.ced.data.FMTEventData.Cross;
 import edu.cnu.ced.data.FMTEventData.ReconHit;
+import edu.cnu.ced.data.MonteCarloTracks;
+import edu.cnu.ced.data.RecEventData;
+import edu.cnu.ced.data.ReconstructedTracks;
+import edu.cnu.ced.data.TrackRow;
+import edu.cnu.ced.event.EventSnapshot;
 import edu.cnu.ced.geometry.FMTGeometry;
+import edu.cnu.ced.swim.SwimTrajectoryCache;
 import edu.cnu.ced.view3d.CedPanel3D;
+import edu.cnu.ced.view3d.TrackTrajectoryDrawer3D;
+import edu.cnu.ced.view3d.TrackTrajectorySource;
 import edu.cnu.mdi.mdi3D.item3D.Axes3D;
 
-/** The 3D scene for {@link FMTView3D}: an axis set and one item per FMT layer. */
-final class FMTPanel3D extends CedPanel3D {
+/**
+ * The 3D scene for {@link FMTView3D}: an axis set, one item per FMT
+ * layer, one item for FMT reconstructed crosses, and one item for every
+ * category of reconstructed/Monte Carlo track.
+ *
+ * <p>
+ * Scoped to the swim-cache-based track drawing every other 3D view
+ * shares, not legacy CED's own additional {@code FMTTrajectoryDrawer3D}
+ * (discrete points at each layer a track's own {@code FMTRec::Traj}
+ * crossing lands on, distinguishing an FMT-only extension from a track
+ * that already had DC hits) -- there is no {@code mdi_ced} data class for
+ * that bank yet, so it is left as a follow-up.
+ * </p>
+ */
+final class FMTPanel3D extends CedPanel3D implements MagneticFieldChangeListener, TrackTrajectorySource {
 
 	private static final float XY_MAX = 25f;
 	private static final float Z_MIN = 0f;
 	private static final float Z_MAX = 50f;
 
-	// Set via setGeometry() by FMTView3D immediately after this panel is
-	// constructed (see make3DPanel()); see FTCalPanel3D's own comment on
-	// the identical constructor-ordering reason.
+	// Set via setGeometry()/setSwimCache() by FMTView3D immediately after
+	// this panel is constructed (see make3DPanel()); see FTCalPanel3D's
+	// own comment on the identical constructor-ordering reason.
 	private FMTGeometry geometry;
+	private SwimTrajectoryCache swimCache;
+
+	// Refreshed on every magnetic-field change, matching every 2D view's
+	// own identical fieldProbe field (e.g. SectorView, DCXYView).
+	private volatile FieldProbe fieldProbe = FieldProbe.factory();
 
 	private volatile Map<LayerStrip, Integer> adcByStrip = Map.of();
 	private volatile Set<LayerStrip> clusterSeeds = Set.of();
 	private volatile Set<LayerStrip> reconHitStrips = Set.of();
 	private volatile int maxAdc;
+	private volatile List<Cross> crosses = List.of();
+
+	private volatile List<TrackRow> mcTracks = List.of();
+	private volatile List<TrackRow> hbTracks = List.of();
+	private volatile List<TrackRow> tbTracks = List.of();
+	private volatile List<TrackRow> aiHbTracks = List.of();
+	private volatile List<TrackRow> aiTbTracks = List.of();
+	private volatile List<TrackRow> cvtTracks = List.of();
+	private volatile List<RecEventData.Particle> recParticles = List.of();
 
 	FMTPanel3D(float angleX, float angleY, float angleZ, float xDist, float yDist, float zDist) {
 		super(EnumSet.of(CedDisplayOption.VOLUMES, CedDisplayOption.TRUTH, CedDisplayOption.RECON_HITS,
@@ -41,12 +82,26 @@ final class FMTPanel3D extends CedPanel3D {
 				CedDisplayOption.FMT_LAYER_3, CedDisplayOption.FMT_LAYER_4, CedDisplayOption.FMT_LAYER_5,
 				CedDisplayOption.FMT_LAYER_6,
 				CedDisplayOption.FMT_REGION_1, CedDisplayOption.FMT_REGION_2, CedDisplayOption.FMT_REGION_3,
-				CedDisplayOption.FMT_REGION_4),
+				CedDisplayOption.FMT_REGION_4,
+				CedDisplayOption.CROSSES, CedDisplayOption.MC_TRACKS, CedDisplayOption.HB_TRACKS,
+				CedDisplayOption.TB_TRACKS, CedDisplayOption.AI_HB_TRACKS, CedDisplayOption.AI_TB_TRACKS,
+				CedDisplayOption.RECON_TRACKS, CedDisplayOption.CVT_TRACKS),
 				angleX, angleY, angleZ, xDist, yDist, zDist);
+		MagneticFields.getInstance().addMagneticFieldChangeListener(this);
 	}
 
 	void setGeometry(FMTGeometry geometry) {
 		this.geometry = geometry;
+	}
+
+	void setSwimCache(SwimTrajectoryCache swimCache) {
+		this.swimCache = swimCache;
+	}
+
+	@Override
+	public void magneticFieldChanged() {
+		fieldProbe = FieldProbe.factory();
+		refresh();
 	}
 
 	@Override
@@ -60,6 +115,8 @@ final class FMTPanel3D extends CedPanel3D {
 		addItem(new FmtLayer3D(this, 4, CedDisplayOption.FMT_LAYER_4));
 		addItem(new FmtLayer3D(this, 5, CedDisplayOption.FMT_LAYER_5));
 		addItem(new FmtLayer3D(this, 6, CedDisplayOption.FMT_LAYER_6));
+		addItem(new FmtCrossDrawer3D(this));
+		addItem(new TrackTrajectoryDrawer3D<>(this));
 	}
 
 	@Override
@@ -67,8 +124,10 @@ final class FMTPanel3D extends CedPanel3D {
 		return (Z_MAX - Z_MIN) / 50f;
 	}
 
-	/** Refreshes the current event's ADC hits/recon hits/cluster seeds; called by {@link FMTView3D}. */
-	void setEventData(FMTEventData data) {
+	/** Refreshes every piece of this event's display data; called by {@link FMTView3D}. */
+	void setEventData(EventSnapshot snapshot) {
+		FMTEventData data = FMTEventData.from(snapshot);
+
 		Map<LayerStrip, Integer> adc = new HashMap<>();
 		int max = 0;
 		for (AdcHit hit : data.adcHits()) {
@@ -87,6 +146,15 @@ final class FMTPanel3D extends CedPanel3D {
 		this.reconHitStrips = Set.copyOf(recon);
 		this.clusterSeeds = Set.copyOf(clusters);
 		this.maxAdc = max;
+		this.crosses = data.crosses();
+
+		this.mcTracks = MonteCarloTracks.from(snapshot).tracks();
+		this.hbTracks = ReconstructedTracks.hbTracks(snapshot);
+		this.tbTracks = ReconstructedTracks.tbTracks(snapshot);
+		this.aiHbTracks = ReconstructedTracks.aiHbTracks(snapshot);
+		this.aiTbTracks = ReconstructedTracks.aiTbTracks(snapshot);
+		this.cvtTracks = ReconstructedTracks.cvtTracks(snapshot);
+		this.recParticles = RecEventData.from(snapshot).particles();
 	}
 
 	FMTGeometry geometry() {
@@ -108,6 +176,55 @@ final class FMTPanel3D extends CedPanel3D {
 
 	boolean isClusterSeed(int layer, int strip) {
 		return clusterSeeds.contains(new LayerStrip(layer, strip));
+	}
+
+	List<Cross> crosses() {
+		return crosses;
+	}
+
+	@Override
+	public SwimTrajectoryCache swimCache() {
+		return swimCache;
+	}
+
+	@Override
+	public FieldProbe fieldProbe() {
+		return fieldProbe;
+	}
+
+	@Override
+	public List<TrackRow> mcTracks() {
+		return mcTracks;
+	}
+
+	@Override
+	public List<TrackRow> hbTracks() {
+		return hbTracks;
+	}
+
+	@Override
+	public List<TrackRow> tbTracks() {
+		return tbTracks;
+	}
+
+	@Override
+	public List<TrackRow> aiHbTracks() {
+		return aiHbTracks;
+	}
+
+	@Override
+	public List<TrackRow> aiTbTracks() {
+		return aiTbTracks;
+	}
+
+	@Override
+	public List<TrackRow> cvtTracks() {
+		return cvtTracks;
+	}
+
+	@Override
+	public List<RecEventData.Particle> recParticles() {
+		return recParticles;
 	}
 
 	/** 0-based layer, 1-based strip -- matching FMTEventData's own addressing. */

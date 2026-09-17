@@ -297,7 +297,7 @@ public final class CedApplication extends BaseMDIApplication {
 							geometryService.ctof(), geometryService.bst(), geometryService.bmt(), swimCache, eventNavigator),
 							13, 0, 0, VirtualView.CENTER)));
 			timeStep("FMT 3D (lazy registration)", () -> ViewManager.getInstance().addConfiguration(
-					ViewConfiguration.lazy("FMT 3D", () -> new FMTView3D(geometryService.fmt(), eventNavigator),
+					ViewConfiguration.lazy("FMT 3D", () -> new FMTView3D(geometryService.fmt(), swimCache, eventNavigator),
 							14, 0, 0, VirtualView.CENTER)));
 			timeStep("Forward 3D (lazy registration)", () -> ViewManager.getInstance().addConfiguration(
 					ViewConfiguration.lazy("Forward 3D", () -> new ForwardView3D(geometryService.dc(),
