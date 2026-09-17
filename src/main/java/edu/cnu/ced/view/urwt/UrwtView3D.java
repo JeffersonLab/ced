@@ -1,9 +1,9 @@
 package edu.cnu.ced.view.urwt;
 
-import edu.cnu.ced.data.URWTEventData;
 import edu.cnu.ced.event.EventNavigationState;
 import edu.cnu.ced.event.EventNavigator;
 import edu.cnu.ced.geometry.URWTGeometry;
+import edu.cnu.ced.swim.SwimTrajectoryCache;
 import edu.cnu.ced.view3d.CedView3D;
 import edu.cnu.mdi.mdi3D.panel.Panel3D;
 import edu.cnu.mdi.util.PropertyUtils;
@@ -11,9 +11,11 @@ import edu.cnu.mdi.util.PropertyUtils;
 /**
  * μrWT (radial wall tagger) 3D view: six sectors of four layers each,
  * every detector drawn as a filled polygon tracing its strips' swept
- * area, with hit strips highlighted. Last of CED's seven 3D views, built
- * on the same shared {@code edu.cnu.ced.view3d} infrastructure as the
- * others.
+ * area, with hit strips highlighted, plus every category of
+ * reconstructed/Monte Carlo track, each swum on demand through the same
+ * shared {@link SwimTrajectoryCache} every 2D view already uses. Last of
+ * CED's seven 3D views, built on the same shared {@code edu.cnu.ced.view3d}
+ * infrastructure as the others.
  */
 public final class UrwtView3D extends CedView3D {
 
@@ -27,13 +29,15 @@ public final class UrwtView3D extends CedView3D {
 	private static final float DIST_Y = 0f;
 	private static final float DIST_Z = -450f;
 
-	public UrwtView3D(URWTGeometry geometry, EventNavigator navigator) {
+	public UrwtView3D(URWTGeometry geometry, SwimTrajectoryCache swimCache, EventNavigator navigator) {
 		super(navigator,
 				PropertyUtils.TITLE, TITLE,
 				PropertyUtils.ANGLE_X, ANGLE_X, PropertyUtils.ANGLE_Y, ANGLE_Y, PropertyUtils.ANGLE_Z, ANGLE_Z,
 				PropertyUtils.DIST_X, DIST_X, PropertyUtils.DIST_Y, DIST_Y, PropertyUtils.DIST_Z, DIST_Z,
 				PropertyUtils.VISIBLE, true);
-		((UrwtPanel3D) cedPanel3D()).setGeometry(geometry);
+		UrwtPanel3D panel = (UrwtPanel3D) cedPanel3D();
+		panel.setGeometry(geometry);
+		panel.setSwimCache(swimCache);
 	}
 
 	@Override
@@ -49,6 +53,6 @@ public final class UrwtView3D extends CedView3D {
 
 	@Override
 	protected void eventChanged(EventNavigationState state) {
-		((UrwtPanel3D) cedPanel3D()).setEventData(URWTEventData.from(state.snapshot()));
+		((UrwtPanel3D) cedPanel3D()).setEventData(state.snapshot());
 	}
 }

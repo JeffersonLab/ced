@@ -10,6 +10,7 @@ import org.junit.jupiter.api.Test;
 import edu.cnu.ced.event.EventNavigator;
 import edu.cnu.ced.event.EventStore;
 import edu.cnu.ced.geometry.URWTGeometry;
+import edu.cnu.ced.swim.SwimTrajectoryCache;
 
 /**
  * Construction smoke test for {@link UrwtView3D}, mirroring {@code
@@ -23,9 +24,10 @@ class UrwtView3DTest {
 		URWTGeometry geometry = new URWTGeometry();
 		geometry.initializeFromSource();
 		EventNavigator navigator = new EventNavigator(new EventStore());
+		SwimTrajectoryCache swimCache = new SwimTrajectoryCache();
 
 		SwingUtilities.invokeAndWait(() -> {
-			UrwtView3D view = assertDoesNotThrow(() -> new UrwtView3D(geometry, navigator));
+			UrwtView3D view = assertDoesNotThrow(() -> new UrwtView3D(geometry, swimCache, navigator));
 			assertEquals("μRWT 3D", view.getTitle());
 			assertDoesNotThrow(view::dispose);
 		});

@@ -307,7 +307,7 @@ public final class CedApplication extends BaseMDIApplication {
 					ViewConfiguration.lazy("ALERT 3D", () -> new AlertView3D(geometryService.alert(), swimCache, eventNavigator),
 							16, 0, 0, VirtualView.CENTER)));
 			timeStep("uRWT 3D (lazy registration)", () -> ViewManager.getInstance().addConfiguration(
-					ViewConfiguration.lazy("uRWT 3D", () -> new UrwtView3D(geometryService.urwt(), eventNavigator),
+					ViewConfiguration.lazy("uRWT 3D", () -> new UrwtView3D(geometryService.urwt(), swimCache, eventNavigator),
 							17, 0, 0, VirtualView.CENTER)));
 			// Last of the 7 3D views: not an event display at all (no
 			// EventNavigator dependency), so its factory takes no arguments.
