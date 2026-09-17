@@ -58,6 +58,7 @@ final class AlertPanel3D extends CedPanel3D implements MagneticFieldChangeListen
 	private volatile FieldProbe fieldProbe = FieldProbe.factory();
 
 	private volatile Map<Address, List<AlertEventData.DcAdcHit>> dcAdcHits = Map.of();
+	private volatile Map<Address, List<AlertEventData.TofHit>> tofHits = Map.of();
 	private volatile List<AlertEventData.DcCluster> dcClusters = List.of();
 	private volatile List<AlertEventData.TofCluster> tofClusters = List.of();
 
@@ -140,6 +141,15 @@ final class AlertPanel3D extends CedPanel3D implements MagneticFieldChangeListen
 					.add(hit);
 		}
 		this.dcAdcHits = Map.copyOf(map);
+
+		Map<Address, List<AlertEventData.TofHit>> tofMap = new HashMap<>();
+		for (AlertEventData.TofHit hit : data.tofHits()) {
+			int superlayer = hit.component() == 10 ? 0 : 1;
+			tofMap.computeIfAbsent(new Address(hit.sector(), superlayer, hit.layer()), k -> new ArrayList<>())
+					.add(hit);
+		}
+		this.tofHits = Map.copyOf(tofMap);
+
 		this.dcClusters = data.dcClusters();
 		this.tofClusters = data.tofClusters();
 
@@ -158,6 +168,10 @@ final class AlertPanel3D extends CedPanel3D implements MagneticFieldChangeListen
 
 	List<AlertEventData.DcAdcHit> dcAdcHits(int sector, int superlayer, int layer) {
 		return dcAdcHits.getOrDefault(new Address(sector, superlayer, layer), List.of());
+	}
+
+	List<AlertEventData.TofHit> tofHits(int sector, int superlayer, int layer) {
+		return tofHits.getOrDefault(new Address(sector, superlayer, layer), List.of());
 	}
 
 	List<AlertEventData.DcCluster> dcClusters() {

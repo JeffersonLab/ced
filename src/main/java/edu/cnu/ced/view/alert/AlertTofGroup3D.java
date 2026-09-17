@@ -6,6 +6,7 @@ import java.util.List;
 import com.jogamp.opengl.GLAutoDrawable;
 
 import edu.cnu.ced.component.CedDisplayOption;
+import edu.cnu.ced.data.AlertEventData;
 import edu.cnu.ced.geometry.AlertGeometry;
 import edu.cnu.ced.geometry.Point3;
 import edu.cnu.ced.view3d.DetectorItem3D;
@@ -21,12 +22,17 @@ import edu.cnu.mdi.mdi3D.panel.Support3D;
  * address, so this collapses each group into one item instead.
  *
  * <p>
- * ATOF hits ({@code ATOF::hits}) carry the paddle's own resolved world
- * position but an address that {@code edu.cnu.ced.data.AlertEventData}
- * documents as "not resolved via geometry" -- unlike AHDC's ADC hits,
- * there is no confirmed mapping back to a specific paddle box here, so
- * (consistent with never fabricating an unconfirmed numbering) paddles
- * draw in their plain default color only; no hit highlighting.
+ * ATOF hits ({@code ATOF::hits}) address a paddle by {@code component}
+ * (10 for the lone superlayer-0 bar; 0-9 for superlayer 1's own paddle
+ * index), which lines up directly with {@link AlertGeometry.Paddle
+ * #componentId()} within a (sector, superlayer, layer) group -- confirmed
+ * against legacy CED's own {@code AlertTOFGeometryNumbering
+ * .fromHipoNumbering} (same decode already used by the 2D {@code
+ * AlertXYView#drawTofHits}) and empirically against this geometry's own
+ * {@code componentId()} values (always {@code 10} for superlayer 0's
+ * single paddle; {@code 0..9} in order for superlayer 1's ten). A hit
+ * paddle is redrawn in {@link #HIT_COLOR}, matching legacy's own {@code
+ * AlertPaddle3D#drawData}.
  * </p>
  */
 final class AlertTofGroup3D extends DetectorItem3D {
@@ -38,6 +44,7 @@ final class AlertTofGroup3D extends DetectorItem3D {
 	private static final Color SUPERLAYER_0_COLOR = new Color(224, 255, 255); // light cyan
 	private static final Color EVEN_LAYER_COLOR = new Color(255, 255, 224); // light yellow
 	private static final Color ODD_LAYER_COLOR = new Color(144, 238, 144); // light green
+	private static final Color HIT_COLOR = Color.red;
 
 	private final AlertPanel3D panel;
 	private final int sector;
@@ -65,6 +72,36 @@ final class AlertTofGroup3D extends DetectorItem3D {
 				Support3D.drawQuad(drawable, coords, face[0], face[1], face[2], face[3], color, 1f, true);
 			}
 		}
+	}
+
+	@Override
+	protected void drawData(GLAutoDrawable drawable) {
+		if (!panel.isDisplayed(CedDisplayOption.RAW_DATA)) {
+			return;
+		}
+		List<AlertEventData.TofHit> hits = panel.tofHits(sector, superlayer, layer);
+		if (hits.isEmpty()) {
+			return;
+		}
+		float[] coords = new float[24];
+		for (AlertGeometry.Paddle paddle : panel.geometry().tofPaddles(sector, superlayer, layer)) {
+			if (!hasHit(hits, paddle.componentId())) {
+				continue;
+			}
+			toFloats(paddle.vertices(), coords);
+			for (int[] face : FACES) {
+				Support3D.drawQuad(drawable, coords, face[0], face[1], face[2], face[3], HIT_COLOR, 1f, true);
+			}
+		}
+	}
+
+	private static boolean hasHit(List<AlertEventData.TofHit> hits, int componentId) {
+		for (AlertEventData.TofHit hit : hits) {
+			if (hit.component() == componentId) {
+				return true;
+			}
+		}
+		return false;
 	}
 
 	private static void toFloats(List<Point3> points, float[] coords) {
