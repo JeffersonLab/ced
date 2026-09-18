@@ -1,6 +1,7 @@
 package edu.cnu.ced.swim;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.List;
@@ -123,5 +124,54 @@ class ParticleSwimmerTest {
 		assertTrue(trajectory.size() >= 2);
 		Point3 end = trajectory.get(trajectory.size() - 1);
 		assertEquals(40.0, Math.hypot(end.x(), end.y()), 0.1);
+	}
+
+	// The *Outcome swims below back the swim-test view's own batch tester --
+	// unlike their plain counterparts above, they keep the partial
+	// trajectory even when the target wasn't reached.
+
+	@Test
+	void swimOutcomeSucceedsForANormalSwim() {
+		SwimmableParticle particle = new SwimmableParticle(2212, 1, 0.0, 0.0, 0.0, 1.0, 60.0, 30.0, 0);
+
+		ParticleSwimmer.Outcome outcome = ParticleSwimmer.swimOutcome(particle, new ZeroProbe(), 100.0);
+
+		assertTrue(outcome.success());
+		assertTrue(outcome.trajectory().size() >= 2);
+	}
+
+	@Test
+	void swimToFixedZOutcomeSucceedsWhenTheTargetIsReached() {
+		SwimmableParticle particle = new SwimmableParticle(2212, 1, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0);
+
+		ParticleSwimmer.Outcome outcome = ParticleSwimmer.swimToFixedZOutcome(particle, new ZeroProbe(), 50.0, 0.01, 200.0);
+
+		assertTrue(outcome.success());
+		Point3 end = outcome.trajectory().get(outcome.trajectory().size() - 1);
+		assertEquals(50.0, end.z(), 0.1);
+	}
+
+	@Test
+	void swimToFixedZOutcomeFailsButKeepsThePartialPathWhenUnreachable() {
+		// theta=0, straight line along +z, but the max path length (10 cm)
+		// is far short of the target z (1000 cm) -- can never get there.
+		SwimmableParticle particle = new SwimmableParticle(2212, 1, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0);
+
+		ParticleSwimmer.Outcome outcome = ParticleSwimmer.swimToFixedZOutcome(particle, new ZeroProbe(), 1000.0, 0.01, 10.0);
+
+		assertFalse(outcome.success());
+		assertTrue(outcome.trajectory().size() >= 2, "a failed swim should still keep the path it managed");
+		Point3 end = outcome.trajectory().get(outcome.trajectory().size() - 1);
+		assertTrue(end.z() < 1000.0, "the partial path should fall well short of the unreachable target");
+	}
+
+	@Test
+	void outcomeMethodsReturnNoneForNullOrZeroMomentum() {
+		SwimmableParticle zeroMomentum = new SwimmableParticle(2212, 1, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0);
+		SwimmableParticle particle = new SwimmableParticle(2212, 1, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0);
+
+		assertEquals(ParticleSwimmer.Outcome.NONE, ParticleSwimmer.swimOutcome(null, new ZeroProbe(), 100.0));
+		assertEquals(ParticleSwimmer.Outcome.NONE, ParticleSwimmer.swimOutcome(particle, null, 100.0));
+		assertEquals(ParticleSwimmer.Outcome.NONE, ParticleSwimmer.swimOutcome(zeroMomentum, new ZeroProbe(), 100.0));
 	}
 }

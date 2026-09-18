@@ -3,11 +3,13 @@ package edu.cnu.ced.view.swim;
 import java.awt.Color;
 import java.awt.FlowLayout;
 import java.awt.Font;
+import java.util.ArrayList;
 import java.util.List;
 
 import javax.swing.JComponent;
 import javax.swing.JLabel;
 import javax.swing.JPanel;
+import javax.swing.JTabbedPane;
 
 import cnuphys.CLAS12Swim.geometry.Plane;
 import cnuphys.magfield.FieldProbe;
@@ -25,8 +27,9 @@ import edu.cnu.mdi.mdi3D.panel.Panel3D;
 
 /**
  * The 3D scene for {@link SwimTestView3D}: an axis set, an optional
- * reference-surface visual aid, and -- once the user swims a hypothetical
- * particle -- its trajectory and vertex.
+ * reference-surface visual aid, a manually-swum hypothetical particle's
+ * trajectory and vertex, and every accumulated result from the
+ * randomized batch tester ({@link SwimBatchDrawer3D}).
  *
  * <p>
  * Deliberately not a {@link edu.cnu.ced.view3d.CedPanel3D}: this view has
@@ -40,13 +43,7 @@ import edu.cnu.mdi.mdi3D.panel.Panel3D;
  * <p>
  * Scoped to the swim itself: legacy's optional background detector
  * volumes (DC/FTOF/PCAL/ECAL, all unchecked by default there too) are
- * still deferred as a follow-up. The reference-surface picker itself
- * (constant-z plane, constant-rho or arbitrary cylinder, arbitrary plane)
- * -- and the matching {@code CLAS12Swimmer.swimZ/swimRho/swimPlane/
- * swimCylinder} stopping algorithms, via {@link ParticleSwimmer}'s own
- * surface-stopping methods -- is not: legacy's much larger randomized
- * batch-testing apparatus around it (swim counts, random seeds, charge
- * randomization, success/failure filtering) is what's left out here.
+ * still deferred as a follow-up.
  * </p>
  */
 final class SwimTestPanel3D extends Panel3D {
@@ -72,6 +69,13 @@ final class SwimTestPanel3D extends Panel3D {
 	private Sphere vertexItem;
 	private Item3D surfaceItem;
 
+	// Batch-tester state (see SwimBatchControlPanel/SwimBatchDrawer3D):
+	// copy-on-write, matching this codebase's own convention for state a
+	// GL-thread draw() reads while an EDT button listener writes it (e.g.
+	// ForwardPanel3D's own event-data fields).
+	private volatile List<SwimBatchResult> batchResults = List.of();
+	private volatile SwimBatchShowMode batchShowMode = SwimBatchShowMode.ALL;
+
 	SwimTestPanel3D(float angleX, float angleY, float angleZ, float xDist, float yDist, float zDist) {
 		super(angleX, angleY, angleZ, xDist, yDist, zDist);
 	}
@@ -81,6 +85,7 @@ final class SwimTestPanel3D extends Panel3D {
 		addItem(new Axes3D(this, -XY_MAX, XY_MAX, -XY_MAX, XY_MAX, Z_MIN, Z_MAX,
 				new String[] { "x", "y", "z" }, Color.darkGray, 1f, 7, 7, 8,
 				Color.black, new Color(0, 100, 0), new Font("SansSerif", Font.PLAIN, 10), 0));
+		addItem(new SwimBatchDrawer3D(this));
 	}
 
 	@Override
@@ -90,7 +95,10 @@ final class SwimTestPanel3D extends Panel3D {
 
 	@Override
 	protected JComponent addWest() {
-		return new SwimTestControlPanel(this);
+		JTabbedPane tabs = new JTabbedPane();
+		tabs.addTab("Manual", new SwimTestControlPanel(this));
+		tabs.addTab("Batch", new SwimBatchControlPanel(this));
+		return tabs;
 	}
 
 	@Override
@@ -203,6 +211,70 @@ final class SwimTestPanel3D extends Panel3D {
 			vertexItem = null;
 		}
 		refresh();
+	}
+
+	/**
+	 * Swims a whole batch of hypothetical particles at once -- each
+	 * stopped at {@code surface}, same as {@link #swim} -- appending
+	 * every one that produced a usable (even if unsuccessful) trajectory
+	 * to the accumulated batch results, updating the reference-surface
+	 * visual aid once, and refreshing once at the end. Matches legacy
+	 * CED's own {@code SwimmerControlPanel.handleSwim()}: one {@code
+	 * setDisplayItem()} and one {@code refresh()} per "Swim Trajectories"
+	 * click, not per individual swim.
+	 *
+	 * @return how many of {@code specs} actually reached {@code surface}
+	 *         (or completed the full path, for {@link SurfaceType#FULL_PATH})
+	 */
+	int runBatch(List<SwimSpec> specs, SurfaceChoice surface) {
+		updateSurfaceItem(surface);
+
+		FieldProbe probe = FieldProbe.factory();
+		double maxPath = ParticleSwimmer.DEFAULT_MAX_PATH_LENGTH_CM;
+		List<SwimBatchResult> appended = new ArrayList<>(batchResults);
+		int successes = 0;
+		for (SwimSpec spec : specs) {
+			SwimmableParticle particle = new SwimmableParticle(0, spec.charge(), spec.vx(), spec.vy(), spec.vz(),
+					spec.p(), spec.thetaDeg(), spec.phiDeg(), 0);
+			ParticleSwimmer.Outcome outcome = switch (surface.type()) {
+			case FULL_PATH -> ParticleSwimmer.swimOutcome(particle, probe, maxPath);
+			case FIXED_Z -> ParticleSwimmer.swimToFixedZOutcome(particle, probe, surface.fixedZCm(), surface.accuracyCm(), maxPath);
+			case FIXED_RHO -> ParticleSwimmer.swimToFixedRhoOutcome(particle, probe, surface.fixedRhoCm(), surface.accuracyCm(), maxPath);
+			case PLANE -> ParticleSwimmer.swimToPlaneOutcome(particle, probe, surface.planeNormal(), surface.planePoint(),
+					surface.accuracyCm(), maxPath);
+			case CYLINDER -> ParticleSwimmer.swimToCylinderOutcome(particle, probe, surface.cylinderP1(), surface.cylinderP2(),
+					surface.cylinderRadiusCm(), surface.accuracyCm(), maxPath);
+			};
+			if (outcome.success()) {
+				successes++;
+			}
+			if (!outcome.trajectory().isEmpty()) {
+				appended.add(new SwimBatchResult(outcome.trajectory(), spec.charge(), outcome.success()));
+			}
+		}
+		batchResults = List.copyOf(appended);
+		refresh();
+		return successes;
+	}
+
+	/** Empties the accumulated batch results. Leaves the reference-surface visual aid and the manual trajectory alone. */
+	void clearBatch() {
+		batchResults = List.of();
+		refresh();
+	}
+
+	/** Re-filters which accumulated batch results {@link SwimBatchDrawer3D} draws, without re-swimming. */
+	void setBatchShowMode(SwimBatchShowMode mode) {
+		this.batchShowMode = mode;
+		refresh();
+	}
+
+	List<SwimBatchResult> batchResults() {
+		return batchResults;
+	}
+
+	SwimBatchShowMode batchShowMode() {
+		return batchShowMode;
 	}
 
 	/** Which stopping condition a swim uses. */

@@ -32,6 +32,21 @@ import edu.cnu.ced.geometry.Point3;
  * swim-test view) that want a track stopped at a specific reference surface
  * rather than run out to a fixed path length.
  * </p>
+ * <p>
+ * Every method above returns an empty trajectory on failure (target missed,
+ * momentum too low, integration error), which is exactly what a production
+ * event view wants -- nothing to draw. The swim-test view's own randomized
+ * batch tester wants the opposite for a failed swim: legacy CED's own
+ * {@code SwimResultDrawer} still draws the partial path a failed swim
+ * reached before giving up, in black, so a developer can see how close (or
+ * not) it got. {@link #swimOutcome}/{@link #swimToFixedZOutcome}/{@link
+ * #swimToFixedRhoOutcome}/{@link #swimToPlaneOutcome}/{@link
+ * #swimToCylinderOutcome} are the same five swims, but returning an {@link
+ * Outcome} that keeps the trajectory (confirmed non-null via {@code
+ * CLAS12SwimResult.getTrajectory()}, empirically, even when {@code
+ * isSuccess()} is {@code false}) alongside a success flag, rather than
+ * discarding it.
+ * </p>
  */
 public final class ParticleSwimmer {
 
@@ -63,6 +78,16 @@ public final class ParticleSwimmer {
 	private static final double TOLERANCE_CM = 1.0e-2;
 
 	private ParticleSwimmer() { }
+
+	/**
+	 * A swim's trajectory (lab-frame points, oldest first -- the partial
+	 * path reached so far if {@code success} is {@code false}) alongside
+	 * whether it actually succeeded. {@link #NONE} for a swim that never
+	 * started at all (null probe/particle, non-positive momentum).
+	 */
+	public record Outcome(List<Point3> trajectory, boolean success) {
+		public static final Outcome NONE = new Outcome(List.of(), false);
+	}
 
 	/**
 	 * Swim a particle from its reconstruction vertex through the field, out
@@ -197,8 +222,15 @@ public final class ParticleSwimmer {
 
 	private static List<Point3> trajectoryOf(CLAS12SwimResult result) {
 		if (result == null || !result.isSuccess()) return List.of();
+		return pointsOf(result.getTrajectory());
+	}
 
-		CLAS12Trajectory trajectory = result.getTrajectory();
+	private static Outcome outcomeOf(CLAS12SwimResult result) {
+		if (result == null) return Outcome.NONE;
+		return new Outcome(pointsOf(result.getTrajectory()), result.isSuccess());
+	}
+
+	private static List<Point3> pointsOf(CLAS12Trajectory trajectory) {
 		if (trajectory == null || trajectory.size() < 2) return List.of();
 
 		List<Point3> points = new ArrayList<>(trajectory.size());
@@ -207,5 +239,82 @@ public final class ParticleSwimmer {
 			points.add(new Point3(u[0], u[1], u[2]));
 		}
 		return points;
+	}
+
+	/** Same as {@link #swim(SwimmableParticle, FieldProbe, double)}, but keeping the partial trajectory on failure. */
+	public static Outcome swimOutcome(SwimmableParticle particle, FieldProbe probe, double maxPathLengthCm) {
+		if (particle == null || probe == null) return Outcome.NONE;
+		double p = particle.p();
+		if (!(p > 0.0)) return Outcome.NONE;
+
+		CLAS12Swimmer swimmer = new CLAS12Swimmer(probe);
+		CLAS12SwimResult result = swimmer.swim(particle.charge(),
+				particle.vx(), particle.vy(), particle.vz(), p,
+				particle.thetaDeg(), particle.phiDeg(),
+				maxPathLengthCm, INITIAL_STEP_CM, TOLERANCE_CM);
+		return outcomeOf(result);
+	}
+
+	/** Same as {@link #swimToFixedZ}, but keeping the partial trajectory on failure. */
+	public static Outcome swimToFixedZOutcome(SwimmableParticle particle, FieldProbe probe,
+			double targetZCm, double accuracyCm, double maxPathLengthCm) {
+		if (particle == null || probe == null) return Outcome.NONE;
+		double p = particle.p();
+		if (!(p > 0.0)) return Outcome.NONE;
+
+		CLAS12Swimmer swimmer = new CLAS12Swimmer(probe);
+		CLAS12SwimResult result = swimmer.swimZ(particle.charge(),
+				particle.vx(), particle.vy(), particle.vz(), p,
+				particle.thetaDeg(), particle.phiDeg(),
+				targetZCm, accuracyCm, maxPathLengthCm, INITIAL_STEP_CM, TOLERANCE_CM);
+		return outcomeOf(result);
+	}
+
+	/** Same as {@link #swimToFixedRho}, but keeping the partial trajectory on failure. */
+	public static Outcome swimToFixedRhoOutcome(SwimmableParticle particle, FieldProbe probe,
+			double targetRhoCm, double accuracyCm, double maxPathLengthCm) {
+		if (particle == null || probe == null) return Outcome.NONE;
+		double p = particle.p();
+		if (!(p > 0.0)) return Outcome.NONE;
+
+		CLAS12Swimmer swimmer = new CLAS12Swimmer(probe);
+		CLAS12SwimResult result = swimmer.swimRho(particle.charge(),
+				particle.vx(), particle.vy(), particle.vz(), p,
+				particle.thetaDeg(), particle.phiDeg(),
+				targetRhoCm, accuracyCm, maxPathLengthCm, INITIAL_STEP_CM, TOLERANCE_CM);
+		return outcomeOf(result);
+	}
+
+	/** Same as {@link #swimToPlane}, but keeping the partial trajectory on failure. */
+	public static Outcome swimToPlaneOutcome(SwimmableParticle particle, FieldProbe probe,
+			double[] normal, double[] point, double accuracyCm, double maxPathLengthCm) {
+		if (particle == null || probe == null) return Outcome.NONE;
+		double p = particle.p();
+		if (!(p > 0.0)) return Outcome.NONE;
+
+		CLAS12Swimmer swimmer = new CLAS12Swimmer(probe);
+		Plane plane = new Plane(normal, point);
+		CLAS12SwimResult result = swimmer.swimPlane(particle.charge(),
+				particle.vx(), particle.vy(), particle.vz(), p,
+				particle.thetaDeg(), particle.phiDeg(),
+				plane, accuracyCm, maxPathLengthCm, INITIAL_STEP_CM, TOLERANCE_CM);
+		return outcomeOf(result);
+	}
+
+	/** Same as {@link #swimToCylinder}, but keeping the partial trajectory on failure. */
+	public static Outcome swimToCylinderOutcome(SwimmableParticle particle, FieldProbe probe,
+			double[] centerLineP1, double[] centerLineP2, double radiusCm,
+			double accuracyCm, double maxPathLengthCm) {
+		if (particle == null || probe == null) return Outcome.NONE;
+		double p = particle.p();
+		if (!(p > 0.0)) return Outcome.NONE;
+
+		CLAS12Swimmer swimmer = new CLAS12Swimmer(probe);
+		CLAS12SwimResult result = swimmer.swimCylinder(particle.charge(),
+				particle.vx(), particle.vy(), particle.vz(), p,
+				particle.thetaDeg(), particle.phiDeg(),
+				centerLineP1, centerLineP2, radiusCm,
+				accuracyCm, maxPathLengthCm, INITIAL_STEP_CM, TOLERANCE_CM);
+		return outcomeOf(result);
 	}
 }
