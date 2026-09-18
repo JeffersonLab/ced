@@ -79,6 +79,42 @@ class FMTEventDataTest {
 		assertEquals(9, cross.trackId());
 	}
 
+	@Test void readsTrajectoriesWithZeroBasedLayer() {
+		DataBank trajectory = bank(new String[] { "index", "layer", "x", "y", "z", "dx", "dy", "dz" }, 1,
+				Map.of("index", new short[] { 3 }, "layer", new byte[] { 4 },
+						"x", new float[] { 0f }, "y", new float[] { 0f }, "z", new float[] { 0f },
+						"dx", new float[] { 1.1f }, "dy", new float[] { 2.2f }, "dz", new float[] { 3.3f }));
+		FMTEventData data = FMTEventData.from(EventSnapshot.of(event(Map.of(FMTEventData.TRAJECTORY_BANK, trajectory))));
+
+		assertEquals(1, data.trajectories().size());
+		FMTEventData.Trajectory point = data.trajectories().get(0);
+		assertEquals(3, point.trackIndex());
+		assertEquals(3, point.layer()); // 1-based layer 4 -> 0-based 3
+		assertEquals(0f, point.x());
+		assertEquals(1.1f, point.dx());
+		assertEquals(2.2f, point.dy());
+		assertEquals(3.3f, point.dz());
+	}
+
+	@Test void skipsOutOfRangeTrajectoryLayers() {
+		DataBank trajectory = bank(new String[] { "index", "layer", "x", "y", "z", "dx", "dy", "dz" }, 1,
+				Map.of("index", new short[] { 0 }, "layer", new byte[] { 0 },
+						"x", new float[] { 0f }, "y", new float[] { 0f }, "z", new float[] { 0f },
+						"dx", new float[] { 0f }, "dy", new float[] { 0f }, "dz", new float[] { 0f }));
+		FMTEventData data = FMTEventData.from(EventSnapshot.of(event(Map.of(FMTEventData.TRAJECTORY_BANK, trajectory))));
+		assertTrue(data.trajectories().isEmpty());
+	}
+
+	@Test void readsTrackStatuses() {
+		DataBank tracks = bank(new String[] { "index", "status" }, 2,
+				Map.of("index", new short[] { 0, 1 }, "status", new byte[] { 0, 1 }));
+		FMTEventData data = FMTEventData.from(EventSnapshot.of(event(Map.of(FMTEventData.TRACKS_BANK, tracks))));
+
+		assertEquals(2, data.trackStatuses().size());
+		assertTrue(!data.trackStatuses().get(0).isOriginalDcTrack());
+		assertTrue(data.trackStatuses().get(1).isOriginalDcTrack());
+	}
+
 	@Test void emptyOrMissingBanksYieldNoData() {
 		assertTrue(FMTEventData.from(EventSnapshot.empty()).adcHits().isEmpty());
 		assertTrue(FMTEventData.from(null).adcHits().isEmpty());

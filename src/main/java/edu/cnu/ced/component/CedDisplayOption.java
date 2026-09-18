@@ -82,6 +82,13 @@ public enum CedDisplayOption {
 	FMT_REGION_2("FMT Region 2", true, null),
 	FMT_REGION_3("FMT Region 3", true, null),
 	FMT_REGION_4("FMT Region 4", true, null),
+	// FMT's own per-layer track-trajectory points (edu.cnu.ced.view.fmt
+	// .FmtTrajectoryDrawer3D), matching legacy's own showFMTTrajectories()
+	// checkbox -- distinct from the generic, swim-cache-based
+	// TrackTrajectoryDrawer3D/RECON_TRACKS etc. every 3D view already
+	// shares, since these points come directly from FMT::Trajectory
+	// (a per-detector-surface crossing bank), not from swimming.
+	FMT_TRAJECTORIES("FMT Trajectories", true, null),
 	// Forward 3D View (edu.cnu.ced.view.forward): per-sector master gate
 	// shared by every forward detector (DC/FTOF/PCAL/ECAL, matching legacy
 	// CED's own showSector(sector) convention), plus one master toggle per

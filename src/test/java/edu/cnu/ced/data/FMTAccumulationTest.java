@@ -11,8 +11,8 @@ class FMTAccumulationTest {
 	@Test void countsLayerStripOccupancyAndClears() {
 		FMTAccumulation accumulation = new FMTAccumulation();
 		FMTEventData.AdcHit hit = new FMTEventData.AdcHit(2, 500, 0, 1200, 12f);
-		accumulation.add(new FMTEventData(List.of(hit), List.of(), List.of(), List.of(), 1200));
-		accumulation.add(new FMTEventData(List.of(hit), List.of(), List.of(), List.of(), 1200));
+		accumulation.add(new FMTEventData(List.of(hit), List.of(), List.of(), List.of(), List.of(), List.of(), 1200));
+		accumulation.add(new FMTEventData(List.of(hit), List.of(), List.of(), List.of(), List.of(), List.of(), 1200));
 
 		assertEquals(2, accumulation.count(2, 500));
 		assertEquals(2, accumulation.maximumCount());
@@ -31,7 +31,7 @@ class FMTAccumulationTest {
 						new FMTEventData.AdcHit(6, 500, 0, 100, 1f),
 						new FMTEventData.AdcHit(2, 0, 0, 100, 1f),
 						new FMTEventData.AdcHit(2, 1025, 0, 100, 1f)),
-				List.of(), List.of(), List.of(), 100));
+				List.of(), List.of(), List.of(), List.of(), List.of(), 100));
 		assertEquals(0, accumulation.maximumCount());
 	}
 

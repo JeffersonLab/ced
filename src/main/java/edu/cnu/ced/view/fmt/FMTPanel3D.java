@@ -19,6 +19,8 @@ import edu.cnu.ced.data.FMTEventData.AdcHit;
 import edu.cnu.ced.data.FMTEventData.Cluster;
 import edu.cnu.ced.data.FMTEventData.Cross;
 import edu.cnu.ced.data.FMTEventData.ReconHit;
+import edu.cnu.ced.data.FMTEventData.TrackStatus;
+import edu.cnu.ced.data.FMTEventData.Trajectory;
 import edu.cnu.ced.data.MonteCarloTracks;
 import edu.cnu.ced.data.RecEventData;
 import edu.cnu.ced.data.ReconstructedTracks;
@@ -33,17 +35,9 @@ import edu.cnu.mdi.mdi3D.item3D.Axes3D;
 
 /**
  * The 3D scene for {@link FMTView3D}: an axis set, one item per FMT
- * layer, one item for FMT reconstructed crosses, and one item for every
- * category of reconstructed/Monte Carlo track.
- *
- * <p>
- * Scoped to the swim-cache-based track drawing every other 3D view
- * shares, not legacy CED's own additional {@code FMTTrajectoryDrawer3D}
- * (discrete points at each layer a track's own {@code FMTRec::Traj}
- * crossing lands on, distinguishing an FMT-only extension from a track
- * that already had DC hits) -- there is no {@code mdi_ced} data class for
- * that bank yet, so it is left as a follow-up.
- * </p>
+ * layer, one item for FMT reconstructed crosses, one item for every
+ * category of reconstructed/Monte Carlo track, and one item for FMT's
+ * own per-layer track-trajectory points ({@code FMT::Trajectory}).
  */
 final class FMTPanel3D extends CedPanel3D implements MagneticFieldChangeListener, TrackTrajectorySource {
 
@@ -66,6 +60,8 @@ final class FMTPanel3D extends CedPanel3D implements MagneticFieldChangeListener
 	private volatile Set<LayerStrip> reconHitStrips = Set.of();
 	private volatile int maxAdc;
 	private volatile List<Cross> crosses = List.of();
+	private volatile List<Trajectory> trajectories = List.of();
+	private volatile Map<Integer, Boolean> originalDcTrackByIndex = Map.of();
 
 	private volatile List<TrackRow> mcTracks = List.of();
 	private volatile List<TrackRow> hbTracks = List.of();
@@ -85,7 +81,7 @@ final class FMTPanel3D extends CedPanel3D implements MagneticFieldChangeListener
 				CedDisplayOption.FMT_REGION_4,
 				CedDisplayOption.CROSSES, CedDisplayOption.MC_TRACKS, CedDisplayOption.HB_TRACKS,
 				CedDisplayOption.TB_TRACKS, CedDisplayOption.AI_HB_TRACKS, CedDisplayOption.AI_TB_TRACKS,
-				CedDisplayOption.RECON_TRACKS, CedDisplayOption.CVT_TRACKS),
+				CedDisplayOption.RECON_TRACKS, CedDisplayOption.CVT_TRACKS, CedDisplayOption.FMT_TRAJECTORIES),
 				angleX, angleY, angleZ, xDist, yDist, zDist);
 		MagneticFields.getInstance().addMagneticFieldChangeListener(this);
 	}
@@ -116,6 +112,7 @@ final class FMTPanel3D extends CedPanel3D implements MagneticFieldChangeListener
 		addItem(new FmtLayer3D(this, 5, CedDisplayOption.FMT_LAYER_5));
 		addItem(new FmtLayer3D(this, 6, CedDisplayOption.FMT_LAYER_6));
 		addItem(new FmtCrossDrawer3D(this));
+		addItem(new FmtTrajectoryDrawer3D(this));
 		addItem(new TrackTrajectoryDrawer3D<>(this));
 	}
 
@@ -147,6 +144,13 @@ final class FMTPanel3D extends CedPanel3D implements MagneticFieldChangeListener
 		this.clusterSeeds = Set.copyOf(clusters);
 		this.maxAdc = max;
 		this.crosses = data.crosses();
+		this.trajectories = data.trajectories();
+
+		Map<Integer, Boolean> statusByIndex = new HashMap<>();
+		for (TrackStatus status : data.trackStatuses()) {
+			statusByIndex.put(status.trackIndex(), status.isOriginalDcTrack());
+		}
+		this.originalDcTrackByIndex = Map.copyOf(statusByIndex);
 
 		this.mcTracks = MonteCarloTracks.from(snapshot).tracks();
 		this.hbTracks = ReconstructedTracks.hbTracks(snapshot);
@@ -180,6 +184,15 @@ final class FMTPanel3D extends CedPanel3D implements MagneticFieldChangeListener
 
 	List<Cross> crosses() {
 		return crosses;
+	}
+
+	List<Trajectory> trajectories() {
+		return trajectories;
+	}
+
+	/** Whether {@code trackIndex} (a DC track index from an {@link Trajectory}) is still just its original DC-only fit. */
+	boolean isOriginalDcTrack(int trackIndex) {
+		return originalDcTrackByIndex.getOrDefault(trackIndex, Boolean.FALSE);
 	}
 
 	@Override
