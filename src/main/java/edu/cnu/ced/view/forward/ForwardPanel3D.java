@@ -35,14 +35,10 @@ import edu.cnu.mdi.mdi3D.item3D.Axes3D;
 /**
  * The 3D scene for {@link ForwardView3D}: an axis set, one item per DC
  * superlayer, one item per FTOF sector, one item per PCAL/ECAL (sector,
- * [stack,] view) plane, and one item each for DC crosses, reconstructed
- * PCAL/ECAL hits, and every category of reconstructed/Monte Carlo track.
- *
- * <p>
- * Scoped to DC/FTOF/PCAL/ECAL plus tracks/crosses/recon-cal, consistent
- * with every other 3D view so far: the magnetic-field-boundary decoration
- * (legacy's own {@code FieldBoundary}) is left as a follow-up.
- * </p>
+ * [stack,] view) plane, one item each for DC crosses, reconstructed
+ * PCAL/ECAL hits, and every category of reconstructed/Monte Carlo track,
+ * plus one magnetic-field-magnitude point-grid item per active field
+ * (torus, solenoid).
  */
 final class ForwardPanel3D extends CedPanel3D implements MagneticFieldChangeListener, TrackTrajectorySource {
 
@@ -88,7 +84,7 @@ final class ForwardPanel3D extends CedPanel3D implements MagneticFieldChangeList
 				CedDisplayOption.SECTOR_1, CedDisplayOption.SECTOR_2, CedDisplayOption.SECTOR_3,
 				CedDisplayOption.SECTOR_4, CedDisplayOption.SECTOR_5, CedDisplayOption.SECTOR_6,
 				CedDisplayOption.DC, CedDisplayOption.FTOF, CedDisplayOption.PCAL, CedDisplayOption.ECAL,
-				CedDisplayOption.RECON_CAL,
+				CedDisplayOption.RECON_CAL, CedDisplayOption.FIELD_MAP,
 				CedDisplayOption.CROSSES, CedDisplayOption.MC_TRACKS, CedDisplayOption.HB_TRACKS,
 				CedDisplayOption.TB_TRACKS, CedDisplayOption.AI_HB_TRACKS, CedDisplayOption.AI_TB_TRACKS,
 				CedDisplayOption.RECON_TRACKS, CedDisplayOption.CVT_TRACKS),
@@ -141,6 +137,12 @@ final class ForwardPanel3D extends CedPanel3D implements MagneticFieldChangeList
 		addItem(new ForwardCrossDrawer3D(this));
 		addItem(new ForwardRecDrawer3D(this));
 		addItem(new TrackTrajectoryDrawer3D<>(this));
+		if (MagneticFields.getInstance().hasActiveSolenoid()) {
+			addItem(new ForwardFieldMapDrawer3D(this, MagneticFields.getInstance().getSolenoid()));
+		}
+		if (MagneticFields.getInstance().hasActiveTorus()) {
+			addItem(new ForwardFieldMapDrawer3D(this, MagneticFields.getInstance().getTorus()));
+		}
 	}
 
 	@Override

@@ -97,6 +97,11 @@ public enum CedDisplayOption {
 	FTOF("FTOF", true, null),
 	PCAL("PCAL", true, null),
 	ECAL("ECAL", true, null),
+	// Coarse magnetic-field-magnitude point grid (edu.cnu.ced.view.forward
+	// .ForwardFieldMapDrawer3D), matching legacy CED's own "Map Extents"
+	// checkbox -- unchecked by default, since it's expensive to redraw
+	// every frame (recomputed live, no caching).
+	FIELD_MAP("Map Extents", false, null),
 	// ALERT 3D View (edu.cnu.ced.view.alert): master toggles for the two
 	// ALERT subsystems (AHDC drift chamber, ATOF time-of-flight), plus
 	// per-sector gates for ATOF's 15 sectors -- AHDC has no real sector
