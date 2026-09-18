@@ -76,7 +76,7 @@ public abstract class CedView extends BaseView {
 	protected final void initializeCedView(EnumSet<CedDisplayOption> options,
 			List<String> bankPrefixes, ScientificColorMap colorMap, String legendTitle,
 			int controlWidth) {
-		FeedbackPane feedback = initFeedback(Color.CYAN, Color.BLACK, 10);
+		FeedbackPane feedback = initFeedback(Color.CYAN, Color.BLACK, 12);
 		// HOVER_POPUP is unioned in here, not left for each view to remember to
 		// request, so every CED view gets the toggle uniformly -- see
 		// isHoveringEnabled().
