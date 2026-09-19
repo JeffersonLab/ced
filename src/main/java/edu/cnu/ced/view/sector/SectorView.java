@@ -30,6 +30,8 @@ import javax.swing.JPopupMenu;
 import javax.swing.JSlider;
 
 import cnuphys.magfield.FieldProbe;
+import cnuphys.magfield.GridCoordinate;
+import cnuphys.magfield.MagneticField;
 import cnuphys.magfield.MagneticFieldChangeListener;
 import cnuphys.magfield.MagneticFields;
 import cnuphys.magfield.Solenoid;
@@ -92,6 +94,8 @@ public final class SectorView extends CedView implements MagneticFieldChangeList
 	private static final double COLOR_CEILING_PERCENTILE = 0.95;
 	private static final double DEFAULT_MAX_FIELD_TESLA = 6.5;
 	private static final double FIELD_SCALE_SPEEDUP = 6.0;
+	private static final Color SOLENOID_GRID_COLOR = new Color(30, 30, 190, 64);
+	private static final Color TORUS_GRID_COLOR = new Color(190, 0, 30, 64);
 	private static final Color BACKGROUND = new Color(220, 232, 238);
 	// Alternating dark/light segments of the local-theta-25-degree reference
 	// axis, matching bCNU CED's own SliceView.TRANSCOLOR/TRANSCOLOR2 exactly.
@@ -157,6 +161,7 @@ public final class SectorView extends CedView implements MagneticFieldChangeList
 	private volatile List<TrackRow> aiTbTracks = List.of();
 	private volatile FieldProbe fieldProbe = FieldProbe.factory();
 	private volatile boolean showMagneticField;
+	private volatile boolean showFieldGrid;
 	private ColorScaleBar fieldScale;
 	private double phiOffsetDegrees;
 
@@ -243,6 +248,7 @@ public final class SectorView extends CedView implements MagneticFieldChangeList
 			screenAiHbTracks.clear();
 			screenAiTbTracks.clear();
 			if (showMagneticField) drawMagneticField(g, container);
+			if (showFieldGrid) drawFieldGrid(g, container);
 			drawBeamline(g, container);
 			drawTarget(g, container);
 			drawTiltedAxis(g, container, pair.upper);
@@ -309,11 +315,21 @@ public final class SectorView extends CedView implements MagneticFieldChangeList
 			refresh();
 		});
 
+		JCheckBox grid = new JCheckBox("Field map grid");
+		grid.setFont(Fonts.defaultFont);
+		grid.setSelected(showFieldGrid);
+		grid.addActionListener(event -> {
+			showFieldGrid = grid.isSelected();
+			refresh();
+		});
+
 		JPanel options = new JPanel();
 		options.setLayout(new BoxLayout(options, BoxLayout.Y_AXIS));
 		options.setBorder(new CommonBorder("Field display"));
 		magnitude.setAlignmentX(LEFT_ALIGNMENT);
+		grid.setAlignmentX(LEFT_ALIGNMENT);
 		options.add(magnitude);
+		options.add(grid);
 
 		fieldScale = new ColorScaleBar(ScientificColorMap.VIRIDIS);
 		updateFieldScaleLabels();
@@ -383,6 +399,61 @@ public final class SectorView extends CedView implements MagneticFieldChangeList
 
 	private static String formatFieldTick(double tesla) {
 		return String.format("%.2f", tesla);
+	}
+
+	/**
+	 * Draws each active field's own internal computational grid -- the
+	 * (rho, z) sample points its map file was built from -- as reference
+	 * lines, translucent blue for the solenoid and red for the torus.
+	 * Distinct from {@link #drawMagneticField}'s interpolated magnitude
+	 * wash: this is a diagnostic for the raw field map's own resolution
+	 * and extent, matching legacy CED's own {@code
+	 * cnuphys.ced.cedview.magfieldview.MagfieldView#drawGrids}.
+	 */
+	private void drawFieldGrid(Graphics2D g, IContainer container) {
+		Solenoid solenoid = MagneticFields.getInstance().getSolenoid();
+		Torus torus = MagneticFields.getInstance().getTorus();
+		Rectangle2D.Double world = container.getWorldSystem();
+		if (solenoid != null) drawFieldGridLines(g, container, world, SOLENOID_GRID_COLOR, solenoid);
+		if (torus != null) drawFieldGridLines(g, container, world, TORUS_GRID_COLOR, torus);
+	}
+
+	private void drawFieldGridLines(Graphics2D g, IContainer container, Rectangle2D.Double world,
+			Color color, MagneticField field) {
+		g.setColor(color);
+		GridCoordinate rhoGrid = field.getRCoordinate();
+		GridCoordinate zGrid = field.getZCoordinate();
+		double rhoMax = rhoGrid.getMax();
+		double minY = clampToRhoMax(world.getMinY(), rhoMax);
+		double maxY = clampToRhoMax(world.getMaxY(), rhoMax);
+		double zMin = zGrid.getMin();
+		double zMax = zGrid.getMax();
+
+		for (int iz = 0; iz < zGrid.getNumPoints(); iz++) {
+			double z = zGrid.getValue(iz);
+			if (z < world.getMinX() || z > world.getMaxX()) continue;
+			Point p0 = local(container, z, minY);
+			Point p1 = local(container, z, maxY);
+			g.drawLine(p0.x, p0.y, p1.x, p1.y);
+		}
+
+		double z0 = Math.max(zMin, world.getMinX());
+		double z1 = Math.min(zMax, world.getMaxX());
+		for (int ir = 0; ir < rhoGrid.getNumPoints(); ir++) {
+			double rho = rhoGrid.getValue(ir);
+			for (double signedRho : new double[] { rho, -rho }) {
+				if (signedRho < minY || signedRho > maxY) continue;
+				Point p0 = local(container, z0, signedRho);
+				Point p1 = local(container, z1, signedRho);
+				g.drawLine(p0.x, p0.y, p1.x, p1.y);
+			}
+		}
+	}
+
+	static double clampToRhoMax(double y, double rhoMax) {
+		if (y > 0) return Math.min(y, rhoMax);
+		if (y < 0) return Math.max(y, -rhoMax);
+		return y;
 	}
 
 	private void drawBeamline(Graphics2D g, IContainer container) {

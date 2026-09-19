@@ -254,6 +254,15 @@ class SectorProjectionTest {
 	}
 
 	@Test
+	void clampToRhoMaxLeavesInRangeValuesAloneAndClampsByOwnSign() {
+		assertEquals(50.0, SectorView.clampToRhoMax(50.0, 100.0));
+		assertEquals(-50.0, SectorView.clampToRhoMax(-50.0, 100.0));
+		assertEquals(100.0, SectorView.clampToRhoMax(250.0, 100.0));
+		assertEquals(-100.0, SectorView.clampToRhoMax(-250.0, 100.0));
+		assertEquals(0.0, SectorView.clampToRhoMax(0.0, 100.0));
+	}
+
+	@Test
 	void paddleSliceUsesLongEdgeIntersectionsAndRejectsMisses() {
 		List<Segment3> crossing = List.of(
 				edge(-2, -1, 10, 2, 1, 30), edge(2, -1, 10, -2, 1, 30),
