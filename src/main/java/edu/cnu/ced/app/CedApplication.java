@@ -34,6 +34,7 @@ import javax.swing.Timer;
 import cnuphys.magfield.MagneticFields;
 
 import edu.cnu.ced.CedVersion;
+import edu.cnu.ced.data.DcNoiseAnalysis;
 import edu.cnu.ced.data.MonteCarloTracks;
 import edu.cnu.ced.data.ReconstructedTracks;
 import edu.cnu.ced.event.EventNavigator;
@@ -132,6 +133,7 @@ public final class CedApplication extends BaseMDIApplication {
 	private Clas12Resources clas12Resources;
 	private AccumulationService accumulationService;
 	private SwimTrajectoryCache swimCache;
+	private DcNoiseAnalysis dcNoiseAnalysis;
 	private RunFieldScaleApplier runFieldScaleApplier;
 	private RecentFiles recentEventFiles;
 	private RecentFilesMenu recentEventMenuHelper;
@@ -256,6 +258,7 @@ public final class CedApplication extends BaseMDIApplication {
 		accumulationService = new AccumulationService();
 		eventNavigator.addSourceListener(accumulationService::clear);
 		swimCache = new SwimTrajectoryCache();
+		dcNoiseAnalysis = new DcNoiseAnalysis();
 		runFieldScaleApplier = new RunFieldScaleApplier();
 		eventNavigator.addListener(state -> runFieldScaleApplier.apply(
 				RunConfig.from(state.snapshot()).orElse(null)));
@@ -355,11 +358,11 @@ public final class CedApplication extends BaseMDIApplication {
 				8, 0, 0, VirtualView.CENTER)));
 		timeStep("All Drift Chambers", () -> ViewManager.getInstance().addConfiguration(
 				ViewConfiguration.eager("All Drift Chambers", () -> new AllDCView(geometryService.dc(),
-						eventNavigator, accumulationService.dc()),
+						eventNavigator, accumulationService.dc(), dcNoiseAnalysis),
 						3, 0, 0, VirtualView.CENTER)));
 		timeStep("DC Hex (lazy registration)", () -> ViewManager.getInstance().addConfiguration(
 				ViewConfiguration.lazy("DC Hex", () -> new DCHexView(eventNavigator,
-						accumulationService.dc()),
+						accumulationService.dc(), dcNoiseAnalysis),
 						6, 0, 0, VirtualView.CENTER)));
 		timeStep("Sectors 3 and 6", () -> ViewManager.getInstance().addConfiguration(ViewConfiguration.eager(
 				"Sectors 3 and 6", () -> new SectorView(Pair.SECTORS_3_6,

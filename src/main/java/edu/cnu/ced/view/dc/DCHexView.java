@@ -16,6 +16,7 @@ import java.util.Map;
 
 import edu.cnu.ced.component.CedDisplayOption;
 import edu.cnu.ced.data.DCAccumulation;
+import edu.cnu.ced.data.DcNoiseAnalysis;
 import edu.cnu.ced.data.DCEventData;
 import edu.cnu.ced.data.DCEventData.RawHit;
 import edu.cnu.ced.data.DCEventData.ReconHit;
@@ -47,19 +48,23 @@ public final class DCHexView extends CedView {
 	private static final Color CELL_LINE = new Color(235, 210, 210);
 
 	private final DCAccumulation accumulation;
+	private final DcNoiseAnalysis noiseAnalysis;
 	private final Map<Cell, Polygon> screenCells = new HashMap<>();
 	private volatile DCEventData data = DCEventData.from(null);
+	private volatile boolean[] noiseFlags = new boolean[0];
 
-	public DCHexView(EventNavigator navigator, DCAccumulation accumulation) {
+	public DCHexView(EventNavigator navigator, DCAccumulation accumulation, DcNoiseAnalysis noiseAnalysis) {
 		super(navigator, PropertyUtils.TITLE, "DC Hex", PropertyUtils.WIDTH, 820,
 				PropertyUtils.HEIGHT, 790, PropertyUtils.WORLDSYSTEM,
 				new Rectangle2D.Double(430, -495, -860, 990), PropertyUtils.BACKGROUND,
 				BACKGROUND, PropertyUtils.TOOLBARBITS, TOOLBAR_BITS,
 				PropertyUtils.WHEELZOOM, true, PropertyUtils.VISIBLE, true);
 		this.accumulation = accumulation;
+		this.noiseAnalysis = noiseAnalysis;
 		setAfterDraw(this::draw);
 		initializeCedView(EnumSet.of(CedDisplayOption.SINGLE_EVENT,
 				CedDisplayOption.ACCUMULATION, CedDisplayOption.RAW_DATA,
+				CedDisplayOption.SHOW_DC_NOISE, CedDisplayOption.HIDE_DC_NOISE,
 				CedDisplayOption.HB_HITS, CedDisplayOption.TB_HITS,
 				CedDisplayOption.AI_HB_HITS, CedDisplayOption.AI_TB_HITS),
 				List.of("DC::", "HitBasedTrkg::", "TimeBasedTrkg::"),
@@ -69,6 +74,7 @@ public final class DCHexView extends CedView {
 	@Override
 	protected void eventChanged(EventNavigationState state) {
 		data = DCEventData.from(state.snapshot());
+		noiseFlags = noiseAnalysis.noiseFlags(data.rawHits());
 	}
 
 	private void draw(Graphics2D graphics, IContainer container) {
@@ -103,9 +109,16 @@ public final class DCHexView extends CedView {
 	}
 
 	private void drawRaw(Graphics2D g, IContainer container) {
-		for (RawHit hit : data.rawHits()) fillCell(g, container,
-				new Cell(hit.sector(), hit.superlayer(), hit.layer(), hit.wire()),
-				CedDrawingStyle.RAW_HIT);
+		List<RawHit> hits = data.rawHits();
+		boolean showNoise = isDisplayed(CedDisplayOption.SHOW_DC_NOISE);
+		boolean hideNoise = showNoise && isDisplayed(CedDisplayOption.HIDE_DC_NOISE);
+		for (int i = 0; i < hits.size(); i++) {
+			RawHit hit = hits.get(i);
+			boolean noise = showNoise && i < noiseFlags.length && noiseFlags[i];
+			if (hideNoise && noise) continue;
+			Color color = noise ? Color.BLACK : CedDrawingStyle.RAW_HIT;
+			fillCell(g, container, new Cell(hit.sector(), hit.superlayer(), hit.layer(), hit.wire()), color);
+		}
 	}
 
 	private void drawRecon(Graphics2D g, IContainer container) {
@@ -180,8 +193,16 @@ public final class DCHexView extends CedView {
 					accumulation.percentileCount(cell.superlayer, COLOR_CEILING_PERCENTILE),
 					accumulation.maximumCount(cell.superlayer)));
 		} else {
-			for (RawHit hit : data.rawHits()) if (cell.matches(hit))
+			List<RawHit> hits = data.rawHits();
+			for (int i = 0; i < hits.size(); i++) {
+				RawHit hit = hits.get(i);
+				if (!cell.matches(hit)) continue;
 				feedback.add(String.format("$red$raw hit tdc %d order %d", hit.tdc(), hit.order()));
+				if (isDisplayed(CedDisplayOption.SHOW_DC_NOISE)) {
+					boolean noise = i < noiseFlags.length && noiseFlags[i];
+					feedback.add("$red$DC noise guess " + (noise ? "noise" : "not noise"));
+				}
+			}
 			for (ReconHit hit : data.reconHits()) if (show(hit.kind()) && cell.matches(hit))
 				feedback.add(String.format("$orange$%s hit cluster %d status %d trkDOCA %.3f",
 						hit.kind(), hit.clusterId(), hit.status(), hit.trackDoca()));

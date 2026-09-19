@@ -10,6 +10,14 @@ public enum CedDisplayOption {
 	// is never suppressed by this.
 	HOVER_POPUP("Hover Popup", true, null),
 	RAW_DATA("Raw Data", true, null),
+	// DC noise-rejection display (edu.cnu.ced.data.DcNoiseAnalysis), used
+	// only by DCHexView/AllDCView -- matching legacy CED's own NoisePanel:
+	// SHOW_DC_NOISE is its "Noise analysis" checkbox (on by default),
+	// HIDE_DC_NOISE its "Hide noise" vs "Highlight noise" radio choice
+	// (off by default, i.e. highlight). HIDE_DC_NOISE has no effect unless
+	// SHOW_DC_NOISE is also on.
+	SHOW_DC_NOISE("Noise Analysis", true, null),
+	HIDE_DC_NOISE("Hide Noise", false, null),
 	RECON_HITS("Recon Hits", true, null),
 	RECON_CAL("Recon Cal", true, null),
 	RECON_TRACKS("Recon Tracks", true, null),

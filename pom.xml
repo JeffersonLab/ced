@@ -66,6 +66,16 @@
 			<version>14.1.2-SNAPSHOT</version>
 		</dependency>
 
+		<!--
+			CLAS12 drift-chamber noise-rejection algorithm (cnuphys.snr),
+			used by DcNoiseAnalysis to flag likely-noise raw DC hits.
+		-->
+		<dependency>
+			<groupId>cnuphys</groupId>
+			<artifactId>snr</artifactId>
+			<version>13.7.1-SNAPSHOT</version>
+		</dependency>
+
 		<dependency>
 			<groupId>org.xerial</groupId>
 			<artifactId>sqlite-jdbc</artifactId>
