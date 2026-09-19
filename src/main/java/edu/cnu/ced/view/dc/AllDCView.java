@@ -56,6 +56,9 @@ public final class AllDCView extends CedView {
 	private static final Color SECTOR_FILL = new Color(47, 79, 79);
 	private static final Color SHELL = new Color(245, 247, 247);
 	private static final Color LAYER_SHADE = new Color(155, 155, 155, 48);
+	// Matches legacy CED's own NoiseManager.maskFillLeft/maskFillRight.
+	private static final Color MASK_FILL_LEFT = new Color(255, 128, 0, 48);
+	private static final Color MASK_FILL_RIGHT = new Color(0, 128, 255, 48);
 
 	private final DCGeometry geometry;
 	private final DCAccumulation accumulation;
@@ -63,6 +66,7 @@ public final class AllDCView extends CedView {
 	private final Map<Cell, Rectangle> cells = new HashMap<>();
 	private volatile DCEventData data = DCEventData.from(null);
 	private volatile boolean[] noiseFlags = new boolean[0];
+	private volatile Map<DcNoiseAnalysis.Address, List<DcNoiseAnalysis.MaskCell>> maskCells = Map.of();
 
 	public AllDCView(DCGeometry geometry, EventNavigator navigator,
 			DCAccumulation accumulation, DcNoiseAnalysis noiseAnalysis) {
@@ -79,6 +83,7 @@ public final class AllDCView extends CedView {
 		initializeCedView(EnumSet.of(CedDisplayOption.SINGLE_EVENT,
 				CedDisplayOption.ACCUMULATION, CedDisplayOption.RAW_DATA,
 				CedDisplayOption.SHOW_DC_NOISE, CedDisplayOption.HIDE_DC_NOISE,
+				CedDisplayOption.SHOW_DC_NOISE_MASKS,
 				CedDisplayOption.HB_HITS, CedDisplayOption.TB_HITS,
 				CedDisplayOption.AI_HB_HITS, CedDisplayOption.AI_TB_HITS),
 				List.of("DC::", "HitBasedTrkg::", "TimeBasedTrkg::"),
@@ -99,6 +104,7 @@ public final class AllDCView extends CedView {
 	protected void eventChanged(EventNavigationState state) {
 		data = DCEventData.from(state.snapshot());
 		noiseFlags = noiseAnalysis.noiseFlags(data.rawHits());
+		maskCells = noiseAnalysis.allMaskCells();
 	}
 
 	private void draw(Graphics2D graphics, IContainer container) {
@@ -110,6 +116,9 @@ public final class AllDCView extends CedView {
 			drawFramework(g, container);
 			if (isDisplayed(CedDisplayOption.ACCUMULATION)) drawAccumulation(g, container);
 			else {
+				if (isDisplayed(CedDisplayOption.SHOW_DC_NOISE) && isDisplayed(CedDisplayOption.SHOW_DC_NOISE_MASKS)) {
+					drawMasks(g, container);
+				}
 				if (isDisplayed(CedDisplayOption.RAW_DATA)) drawRaw(g, container);
 				drawRecon(g, container);
 			}
@@ -171,6 +180,24 @@ public final class AllDCView extends CedView {
 			if (!show(hit.kind())) continue;
 			fillCell(g, container, new Cell(hit.sector(), hit.superlayer(), hit.layer(), hit.wire()),
 					CedDrawingStyle.reconstructionColor(hit.kind()), 1);
+		}
+	}
+
+	/**
+	 * Draws the noise algorithm's own segment masks -- matching legacy's
+	 * own {@code AllDCSuperLayer}'s mask drawing: a wire's cell, drawn
+	 * here regardless of {@link CedDisplayOption#RAW_DATA}, for every
+	 * (layer, wire) cell {@link DcNoiseAnalysis#allMaskCells} says the
+	 * algorithm associated with a real track-like segment.
+	 */
+	private void drawMasks(Graphics2D g, IContainer container) {
+		for (Map.Entry<DcNoiseAnalysis.Address, List<DcNoiseAnalysis.MaskCell>> entry : maskCells.entrySet()) {
+			int sector = entry.getKey().sector();
+			int superlayer = entry.getKey().superlayer();
+			for (DcNoiseAnalysis.MaskCell cell : entry.getValue()) {
+				Color color = cell.left() ? MASK_FILL_LEFT : MASK_FILL_RIGHT;
+				fillCell(g, container, new Cell(sector, superlayer, cell.layer(), cell.wire()), color, 0);
+			}
 		}
 	}
 

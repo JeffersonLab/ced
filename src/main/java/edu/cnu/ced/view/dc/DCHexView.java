@@ -46,12 +46,16 @@ public final class DCHexView extends CedView {
 	private static final Color[] LAYER_COLORS = {
 			new Color(240, 255, 255), new Color(240, 248, 255)};
 	private static final Color CELL_LINE = new Color(235, 210, 210);
+	// Matches legacy CED's own NoiseManager.maskFillLeft/maskFillRight.
+	private static final Color MASK_FILL_LEFT = new Color(255, 128, 0, 48);
+	private static final Color MASK_FILL_RIGHT = new Color(0, 128, 255, 48);
 
 	private final DCAccumulation accumulation;
 	private final DcNoiseAnalysis noiseAnalysis;
 	private final Map<Cell, Polygon> screenCells = new HashMap<>();
 	private volatile DCEventData data = DCEventData.from(null);
 	private volatile boolean[] noiseFlags = new boolean[0];
+	private volatile Map<DcNoiseAnalysis.Address, List<DcNoiseAnalysis.MaskCell>> maskCells = Map.of();
 
 	public DCHexView(EventNavigator navigator, DCAccumulation accumulation, DcNoiseAnalysis noiseAnalysis) {
 		super(navigator, PropertyUtils.TITLE, "DC Hex", PropertyUtils.WIDTH, 820,
@@ -65,6 +69,7 @@ public final class DCHexView extends CedView {
 		initializeCedView(EnumSet.of(CedDisplayOption.SINGLE_EVENT,
 				CedDisplayOption.ACCUMULATION, CedDisplayOption.RAW_DATA,
 				CedDisplayOption.SHOW_DC_NOISE, CedDisplayOption.HIDE_DC_NOISE,
+				CedDisplayOption.SHOW_DC_NOISE_MASKS,
 				CedDisplayOption.HB_HITS, CedDisplayOption.TB_HITS,
 				CedDisplayOption.AI_HB_HITS, CedDisplayOption.AI_TB_HITS),
 				List.of("DC::", "HitBasedTrkg::", "TimeBasedTrkg::"),
@@ -75,6 +80,7 @@ public final class DCHexView extends CedView {
 	protected void eventChanged(EventNavigationState state) {
 		data = DCEventData.from(state.snapshot());
 		noiseFlags = noiseAnalysis.noiseFlags(data.rawHits());
+		maskCells = noiseAnalysis.allMaskCells();
 	}
 
 	private void draw(Graphics2D graphics, IContainer container) {
@@ -86,6 +92,9 @@ public final class DCHexView extends CedView {
 			drawFramework(g, container);
 			if (isDisplayed(CedDisplayOption.ACCUMULATION)) drawAccumulation(g, container);
 			else {
+				if (isDisplayed(CedDisplayOption.SHOW_DC_NOISE) && isDisplayed(CedDisplayOption.SHOW_DC_NOISE_MASKS)) {
+					drawMasks(g, container);
+				}
 				if (isDisplayed(CedDisplayOption.RAW_DATA)) drawRaw(g, container);
 				drawRecon(g, container);
 			}
@@ -125,6 +134,24 @@ public final class DCHexView extends CedView {
 		for (ReconHit hit : data.reconHits()) if (show(hit.kind()))
 			fillCell(g, container, new Cell(hit.sector(), hit.superlayer(), hit.layer(), hit.wire()),
 					CedDrawingStyle.reconstructionColor(hit.kind()));
+	}
+
+	/**
+	 * Draws the noise algorithm's own segment masks -- matching legacy's
+	 * own {@code DCHexSuperLayer#drawMasks}: a wire's box, drawn here
+	 * regardless of {@link CedDisplayOption#RAW_DATA}, for every (layer,
+	 * wire) cell {@link DcNoiseAnalysis#allMaskCells} says the algorithm
+	 * associated with a real track-like segment.
+	 */
+	private void drawMasks(Graphics2D g, IContainer container) {
+		for (Map.Entry<DcNoiseAnalysis.Address, List<DcNoiseAnalysis.MaskCell>> entry : maskCells.entrySet()) {
+			int sector = entry.getKey().sector();
+			int superlayer = entry.getKey().superlayer();
+			for (DcNoiseAnalysis.MaskCell cell : entry.getValue()) {
+				Color color = cell.left() ? MASK_FILL_LEFT : MASK_FILL_RIGHT;
+				fillCell(g, container, new Cell(sector, superlayer, cell.layer(), cell.wire()), color);
+			}
+		}
 	}
 
 	private void drawAccumulation(Graphics2D g, IContainer container) {

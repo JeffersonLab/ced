@@ -14,10 +14,14 @@ public enum CedDisplayOption {
 	// only by DCHexView/AllDCView -- matching legacy CED's own NoisePanel:
 	// SHOW_DC_NOISE is its "Noise analysis" checkbox (on by default),
 	// HIDE_DC_NOISE its "Hide noise" vs "Highlight noise" radio choice
-	// (off by default, i.e. highlight). HIDE_DC_NOISE has no effect unless
-	// SHOW_DC_NOISE is also on.
+	// (off by default, i.e. highlight), and SHOW_DC_NOISE_MASKS its
+	// "Show masks" checkbox (off by default) -- the algorithm's own
+	// visual explanation of which wires it associated with a real
+	// track-like segment. Neither HIDE_DC_NOISE nor SHOW_DC_NOISE_MASKS
+	// has any effect unless SHOW_DC_NOISE is also on.
 	SHOW_DC_NOISE("Noise Analysis", true, null),
 	HIDE_DC_NOISE("Hide Noise", false, null),
+	SHOW_DC_NOISE_MASKS("Show Masks", false, null),
 	RECON_HITS("Recon Hits", true, null),
 	RECON_CAL("Recon Cal", true, null),
 	RECON_TRACKS("Recon Tracks", true, null),
