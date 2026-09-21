@@ -13,8 +13,8 @@ class DCAccumulationTest {
 	void countsWireOccupancyAndClears() {
 		DCAccumulation accumulation = new DCAccumulation();
 		var hit = new DCEventData.RawHit(0, 2, 3, 4, 55, 0, 120);
-		accumulation.add(new DCEventData(List.of(hit), List.of()));
-		accumulation.add(new DCEventData(List.of(hit), List.of()));
+		accumulation.add(new DCEventData(List.of(hit), List.of(), List.of(), List.of(), List.of()));
+		accumulation.add(new DCEventData(List.of(hit), List.of(), List.of(), List.of(), List.of()));
 		assertEquals(2, accumulation.count(2, 3, 4, 55));
 		assertEquals(2, accumulation.eventCount());
 		assertEquals(2, accumulation.maximumCount());
@@ -34,7 +34,7 @@ class DCAccumulationTest {
 			hits.add(new DCEventData.RawHit(wire, 1, 2, 1, wire, 0, 100));
 		for (int occurrence = 0; occurrence < 100; occurrence++)
 			hits.add(new DCEventData.RawHit(1000 + occurrence, 1, 2, 1, 112, 0, 100));
-		accumulation.add(new DCEventData(hits, List.of()));
+		accumulation.add(new DCEventData(hits, List.of(), List.of(), List.of(), List.of()));
 
 		assertEquals(1, accumulation.percentileCount(2, 0.95));
 		assertEquals(100, accumulation.maximumCount(2));

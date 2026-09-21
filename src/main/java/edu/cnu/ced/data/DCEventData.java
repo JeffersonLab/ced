@@ -27,17 +27,6 @@ public record DCEventData(List<RawHit> rawHits, List<ReconHit> reconHits,
 		crosses = List.copyOf(crosses);
 	}
 
-	/** Compatibility constructor for callers that only supply hit data. */
-	public DCEventData(List<RawHit> rawHits, List<ReconHit> reconHits) {
-		this(rawHits, reconHits, List.of(), List.of(), List.of());
-	}
-
-	/** Compatibility constructor for callers that do not yet supply crosses. */
-	public DCEventData(List<RawHit> rawHits, List<ReconHit> reconHits,
-			List<Cluster> clusters, List<Segment> segments) {
-		this(rawHits, reconHits, clusters, segments, List.of());
-	}
-
 	public static DCEventData from(EventSnapshot snapshot) {
 		if (snapshot == null || !snapshot.hasEvent()) return EMPTY;
 		ArrayList<RawHit> raw = new ArrayList<>();
