@@ -125,4 +125,45 @@ class SwimTestPanel3DTest {
 			assertEquals(SwimBatchShowMode.FAILURES, panel.batchShowMode());
 		});
 	}
+
+	@Test
+	void fastMcHitsAreOffByDefaultAndOnlyComputedWhenEnabled() throws Exception {
+		SwingUtilities.invokeAndWait(() -> {
+			SwimTestPanel3D panel = new SwimTestPanel3D(0f, 0f, 0f, 0f, 0f, 0f);
+			assertTrue(!panel.showFastMcHits());
+
+			// Off by default: a real forward track through a sector center
+			// swims fine, but no DC hits are computed for it.
+			assertTrue(panel.swim(1, 0, 0, 0, 2.0, 25.0, 0.0));
+			assertTrue(panel.manualDcHits().isEmpty());
+
+			// Once enabled, the same swim computes real DC hits.
+			panel.setShowFastMcHits(true);
+			assertTrue(panel.swim(1, 0, 0, 0, 2.0, 25.0, 0.0));
+			assertTrue(!panel.manualDcHits().isEmpty(), "a sector-center forward track should cross DC");
+
+			assertDoesNotThrow(panel::clearTrajectory);
+			assertTrue(panel.manualDcHits().isEmpty());
+		});
+	}
+
+	@Test
+	void fastMcHitsAccumulateAcrossBatchRunsAndClearEmptiesThem() throws Exception {
+		SwingUtilities.invokeAndWait(() -> {
+			SwimTestPanel3D panel = new SwimTestPanel3D(0f, 0f, 0f, 0f, 0f, 0f);
+			panel.setShowFastMcHits(true);
+
+			List<SwimSpec> batch = List.of(new SwimSpec(1, 0, 0, 0, 2.0, 25.0, 0.0));
+			panel.runBatch(batch, SurfaceChoice.fullPath());
+
+			assertEquals(1, panel.batchDcHits().size());
+			assertTrue(!panel.batchDcHits().get(0).isEmpty(), "a sector-center forward track should cross DC");
+
+			panel.runBatch(batch, SurfaceChoice.fullPath());
+			assertEquals(2, panel.batchDcHits().size(), "hits must accumulate across batch runs, like batchResults()");
+
+			assertDoesNotThrow(panel::clearBatch);
+			assertEquals(0, panel.batchDcHits().size());
+		});
+	}
 }
