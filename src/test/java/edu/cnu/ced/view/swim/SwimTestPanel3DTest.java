@@ -10,6 +10,7 @@ import javax.swing.SwingUtilities;
 
 import org.junit.jupiter.api.Test;
 
+import edu.cnu.ced.swim.FastMcHitFinder;
 import edu.cnu.ced.view.swim.SwimTestPanel3D.SurfaceChoice;
 import edu.cnu.ced.view.swim.SwimTestPanel3D.SurfaceType;
 
@@ -133,17 +134,21 @@ class SwimTestPanel3DTest {
 			assertTrue(!panel.showFastMcHits());
 
 			// Off by default: a real forward track through a sector center
-			// swims fine, but no DC hits are computed for it.
+			// swims fine, but no hits are computed for it.
 			assertTrue(panel.swim(1, 0, 0, 0, 2.0, 25.0, 0.0));
-			assertTrue(panel.manualDcHits().isEmpty());
+			assertEquals(FastMcHitFinder.Hits.EMPTY, panel.manualHits());
 
-			// Once enabled, the same swim computes real DC hits.
+			// Once enabled, the same swim computes real hits in every detector.
 			panel.setShowFastMcHits(true);
 			assertTrue(panel.swim(1, 0, 0, 0, 2.0, 25.0, 0.0));
-			assertTrue(!panel.manualDcHits().isEmpty(), "a sector-center forward track should cross DC");
+			FastMcHitFinder.Hits hits = panel.manualHits();
+			assertTrue(!hits.dc().isEmpty(), "a sector-center forward track should cross DC");
+			assertTrue(!hits.ftof().isEmpty(), "a sector-center forward track should cross FTOF");
+			assertTrue(!hits.pcal().isEmpty(), "a sector-center forward track should cross PCAL");
+			assertTrue(!hits.ecal().isEmpty(), "a sector-center forward track should cross ECAL");
 
 			assertDoesNotThrow(panel::clearTrajectory);
-			assertTrue(panel.manualDcHits().isEmpty());
+			assertEquals(FastMcHitFinder.Hits.EMPTY, panel.manualHits());
 		});
 	}
 
@@ -156,14 +161,14 @@ class SwimTestPanel3DTest {
 			List<SwimSpec> batch = List.of(new SwimSpec(1, 0, 0, 0, 2.0, 25.0, 0.0));
 			panel.runBatch(batch, SurfaceChoice.fullPath());
 
-			assertEquals(1, panel.batchDcHits().size());
-			assertTrue(!panel.batchDcHits().get(0).isEmpty(), "a sector-center forward track should cross DC");
+			assertEquals(1, panel.batchHits().size());
+			assertTrue(!panel.batchHits().get(0).dc().isEmpty(), "a sector-center forward track should cross DC");
 
 			panel.runBatch(batch, SurfaceChoice.fullPath());
-			assertEquals(2, panel.batchDcHits().size(), "hits must accumulate across batch runs, like batchResults()");
+			assertEquals(2, panel.batchHits().size(), "hits must accumulate across batch runs, like batchResults()");
 
 			assertDoesNotThrow(panel::clearBatch);
-			assertEquals(0, panel.batchDcHits().size());
+			assertEquals(0, panel.batchHits().size());
 		});
 	}
 }

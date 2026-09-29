@@ -12,8 +12,6 @@ import javax.swing.JLabel;
 import javax.swing.JPanel;
 import javax.swing.JTabbedPane;
 
-import org.jlab.geom.DetectorHit;
-
 import cnuphys.CLAS12Swim.geometry.Plane;
 import cnuphys.magfield.FieldProbe;
 
@@ -50,12 +48,9 @@ import edu.cnu.mdi.mdi3D.panel.Panel3D;
  * still deferred as a follow-up. What is here now, via {@link
  * FastMcHitFinder}: the same kind of "fast Monte Carlo" geometric hits
  * {@code ~/bCNU/fastmCED} shows -- where a swum trajectory actually
- * crosses DC's own sensing components -- for both a manual swim and
- * every batch result, gated on a single "Fast MC DC hits" toggle.
- * FTOF/PCAL/ECAL hits were investigated the same way but don't work
- * through coatjava's own {@code Layer#getHits} for those detectors'
- * component shape (see {@link FastMcHitFinder}'s own javadoc), so DC is
- * all that's offered for now.
+ * crosses DC/FTOF/PCAL/ECAL's own sensing components -- for both a
+ * manual swim and every batch result, gated on a single "Fast MC hits"
+ * toggle.
  * </p>
  */
 final class SwimTestPanel3D extends Panel3D {
@@ -88,13 +83,13 @@ final class SwimTestPanel3D extends Panel3D {
 	private volatile List<SwimBatchResult> batchResults = List.of();
 	private volatile SwimBatchShowMode batchShowMode = SwimBatchShowMode.ALL;
 
-	// Fast MC DC hit-finding (see FastMcHitFinder): computed at swim time,
+	// Fast MC hit-finding (see FastMcHitFinder): computed at swim time,
 	// only when showFastMcHits is checked -- not retroactively for
 	// whatever's already displayed when the checkbox is toggled.
 	private final FastMcHitFinder hitFinder = new FastMcHitFinder();
 	private volatile boolean showFastMcHits;
-	private volatile List<DetectorHit> manualDcHits = List.of();
-	private volatile List<List<DetectorHit>> batchDcHits = List.of();
+	private volatile FastMcHitFinder.Hits manualHits = FastMcHitFinder.Hits.EMPTY;
+	private volatile List<FastMcHitFinder.Hits> batchHits = List.of();
 
 	SwimTestPanel3D(float angleX, float angleY, float angleZ, float xDist, float yDist, float zDist) {
 		super(angleX, angleY, angleZ, xDist, yDist, zDist);
@@ -126,7 +121,7 @@ final class SwimTestPanel3D extends Panel3D {
 	protected JComponent addNorth() {
 		JPanel north = new JPanel(new FlowLayout(FlowLayout.CENTER, 20, 4));
 		north.add(new JLabel("Stand-alone swim test -- independent of any physics event."));
-		JCheckBox fastMcHits = new JCheckBox("Fast MC DC hits");
+		JCheckBox fastMcHits = new JCheckBox("Fast MC hits");
 		fastMcHits.setToolTipText("Computed at swim time -- check this before swimming, not after.");
 		fastMcHits.addActionListener(event -> {
 			setShowFastMcHits(fastMcHits.isSelected());
@@ -190,7 +185,7 @@ final class SwimTestPanel3D extends Panel3D {
 		vertexItem = new Sphere(this, (float) vx, (float) vy, (float) vz, VERTEX_RADIUS, VERTEX_COLOR);
 		addItem(vertexItem);
 
-		manualDcHits = showFastMcHits ? hitFinder.findDcHits(trajectory) : List.of();
+		manualHits = showFastMcHits ? hitFinder.findHits(trajectory) : FastMcHitFinder.Hits.EMPTY;
 
 		refresh();
 		return true;
@@ -240,7 +235,7 @@ final class SwimTestPanel3D extends Panel3D {
 			removeItem(vertexItem);
 			vertexItem = null;
 		}
-		manualDcHits = List.of();
+		manualHits = FastMcHitFinder.Hits.EMPTY;
 		refresh();
 	}
 
@@ -263,7 +258,7 @@ final class SwimTestPanel3D extends Panel3D {
 		FieldProbe probe = FieldProbe.factory();
 		double maxPath = ParticleSwimmer.DEFAULT_MAX_PATH_LENGTH_CM;
 		List<SwimBatchResult> appended = new ArrayList<>(batchResults);
-		List<List<DetectorHit>> appendedHits = new ArrayList<>(batchDcHits);
+		List<FastMcHitFinder.Hits> appendedHits = new ArrayList<>(batchHits);
 		int successes = 0;
 		for (SwimSpec spec : specs) {
 			SwimmableParticle particle = new SwimmableParticle(0, spec.charge(), spec.vx(), spec.vy(), spec.vz(),
@@ -283,12 +278,12 @@ final class SwimTestPanel3D extends Panel3D {
 			if (!outcome.trajectory().isEmpty()) {
 				appended.add(new SwimBatchResult(outcome.trajectory(), spec.charge(), outcome.success()));
 				if (showFastMcHits) {
-					appendedHits.add(hitFinder.findDcHits(outcome.trajectory()));
+					appendedHits.add(hitFinder.findHits(outcome.trajectory()));
 				}
 			}
 		}
 		batchResults = List.copyOf(appended);
-		batchDcHits = List.copyOf(appendedHits);
+		batchHits = List.copyOf(appendedHits);
 		refresh();
 		return successes;
 	}
@@ -296,7 +291,7 @@ final class SwimTestPanel3D extends Panel3D {
 	/** Empties the accumulated batch results. Leaves the reference-surface visual aid and the manual trajectory alone. */
 	void clearBatch() {
 		batchResults = List.of();
-		batchDcHits = List.of();
+		batchHits = List.of();
 		refresh();
 	}
 
@@ -314,7 +309,7 @@ final class SwimTestPanel3D extends Panel3D {
 		return batchShowMode;
 	}
 
-	/** Sets whether a swim (manual or batch) computes Fast MC DC hits, without needing the checkbox. */
+	/** Sets whether a swim (manual or batch) computes Fast MC hits, without needing the checkbox. */
 	void setShowFastMcHits(boolean showFastMcHits) {
 		this.showFastMcHits = showFastMcHits;
 	}
@@ -323,12 +318,12 @@ final class SwimTestPanel3D extends Panel3D {
 		return showFastMcHits;
 	}
 
-	List<DetectorHit> manualDcHits() {
-		return manualDcHits;
+	FastMcHitFinder.Hits manualHits() {
+		return manualHits;
 	}
 
-	List<List<DetectorHit>> batchDcHits() {
-		return batchDcHits;
+	List<FastMcHitFinder.Hits> batchHits() {
+		return batchHits;
 	}
 
 	/** Which stopping condition a swim uses. */
